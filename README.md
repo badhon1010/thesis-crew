@@ -1,75 +1,79 @@
-# React + TypeScript + Vite
+Markdown
+# 🎓 ThesisCrew – Academic Research & Supervisor Collaboration Platform
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+ThesisCrew is a modern, full-stack web application designed to streamline the thesis and research management process for university students and faculty supervisors. It bridges the gap between students looking for research opportunities and professors posting research directions.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## ✨ Features
 
-## React Compiler
+### 👨‍🎓 For Students
+* **Research Topic Discovery:** Browse and search through published research topics with skill-tag filtering.
+* **Smart Profile Management:** Update personal academic details (CGPA, Student ID, Department) and manage technical skill tags.
+* **Real-time Dashboard:** Track active projects, upcoming deadlines, pending requests, and recent activities with a live clock.
+* **Application Tracker:** Monitor the status of your research topic applications.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 👨‍🏫 For Supervisors (Teachers)
+* **CRUD Operations on Topics:** Create, view, edit, and delete research topics seamlessly.
+* **Draft & Publish System:** Save research topics as drafts or publish them instantly for students to view.
+* **Supervisor Workspace:** Monitor enrolled teams, pending student requests, and completed projects.
 
-## Expanding the ESLint configuration
+### ⚙️ General Features
+* **Authentication:** Secure Firebase Authentication (Email/Password & Role-based access).
+* **Dark & Light Mode:** Fully optimized toggleable themes with custom dark slate aesthetics (`#0b0f19` / `#111622`).
+* **Real-time Synchronization:** Powered by Google Cloud Firestore for instant data updates.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+---
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## 🛠️ Tech Stack
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+* **Frontend:** React, TypeScript, Tailwind CSS, Vite, Lucide Icons
+* **Backend / Database:** Firebase Authentication, Cloud Firestore
+* **Routing:** React Router DOM
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+---
 
-```
+## 🚀 Getting Started Locally
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Follow these steps to set up and run the project on your local machine:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### 1. Clone the Repository
+```bash
+git clone [https://github.com/badhon1010/thesis-crew.git]
+cd thesis-crew
+2. Install Dependencies
+Bash
+npm install
+3. Environment Variables Setup
+Create a .env file in the root directory of your project and add your Firebase configuration details:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Code snippet
+VITE_FIREBASE_API_KEY=your_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
+4. Run the Development Server
+Bash
+npm run dev
+Open http://localhost:5173 in your browser to view the application.
 
-```
+📂 Project Structure
+Plaintext
+src/
+├── components/          # Reusable UI components (Layouts, Sidebar, ThemeToggle)
+├── firebase/            # Firebase configuration and Firestore helper functions
+├── pages/
+│   ├── student/         # Student Dashboard, Research Topics, Profile, Applications
+│   └── teacher/         # Teacher Dashboard, Create Topic, Edit Topic
+├── routes/              # Application routing configuration (AppRoutes.tsx)
+├── index.css            # Global CSS and Tailwind configurations
+└── main.tsx             # Application entry point
+
+👨‍💻 Author
+Badhon Saha
+
+Department of Computer Science and Engineering (CSE)
+
+GitHub: @badhon1010
