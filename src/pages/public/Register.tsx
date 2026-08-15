@@ -72,8 +72,8 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fcfcfd] text-slate-900 selection:bg-indigo-500 selection:text-white dark:bg-[#070b19] dark:text-slate-100 animate-slideIn">
-      <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur-xl dark:border-slate-800/60 dark:bg-[#070b19]/80">
+    <div className="min-h-screen bg-[#fcfcfd] text-slate-900 selection:bg-indigo-500 selection:text-white dark:bg-[#000000] dark:text-slate-100 animate-slideIn">
+      <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur-xl dark:border-[#2A2A2A]/60 dark:bg-[#121212]/80">
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6 lg:px-8">
           <Link to="/">
             <div className="flex items-center gap-3">
@@ -112,7 +112,7 @@ export default function Register() {
           </p>
         </div>
 
-        <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-[#0f172a]/60 sm:p-8">
+        <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#121212] sm:p-8">
           <p className="text-sm font-semibold text-slate-900 dark:text-white">
             I am joining as a...
           </p>
@@ -137,7 +137,7 @@ export default function Register() {
                 className={`relative rounded-xl border p-4 text-left transition-all ${
                   role === item.value
                     ? "border-indigo-600 bg-indigo-50 text-slate-900 dark:border-indigo-500 dark:bg-indigo-500/15 dark:text-white shadow-sm"
-                    : "border-slate-200 bg-white text-slate-900 hover:border-slate-300 dark:border-slate-800 dark:bg-[#070b19] dark:text-slate-300 dark:hover:border-slate-700"
+                    : "border-slate-200 bg-white text-slate-900 hover:border-slate-300 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-slate-300 dark:hover:border-slate-700"
                 }`}
               >
                 {role === item.value && (
@@ -154,7 +154,7 @@ export default function Register() {
             ))}
           </div>
 
-          <div className="my-8 h-px bg-slate-100 dark:bg-slate-800" />
+          <div className="my-8 h-px bg-slate-100 dark:bg-[#2A2A2A]" />
 
           {error && (
             <div className="mb-6 p-3.5 bg-red-50 text-red-600 text-sm rounded-xl border border-red-200 dark:bg-red-500/10 dark:border-red-500/20 dark:text-red-400">
@@ -304,7 +304,7 @@ function Field({
         value={value}
         onChange={onChange}
         required={required}
-        className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:border-slate-800 dark:bg-[#070b19] dark:text-white dark:placeholder:text-slate-500"
+        className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
       />
     </div>
   );

@@ -4,7 +4,7 @@ import { Eye, EyeOff, FlaskConical, ArrowRight, ArrowLeft } from "lucide-react";
 import { ThemeToggle } from "../../components/common/ThemeToggle";
 import { auth } from "../../firebase/auth";
 import { db } from "../../firebase/firestore";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 
 export default function Login() {
@@ -31,12 +31,23 @@ export default function Login() {
 
       if (userDocSnap.exists()) {
         const actualRole = userDocSnap.data().role;
+        
+        // রোল ম্যাচ করছে কি না তা চেক করা হচ্ছে
+        if (actualRole !== role) {
+          setError(`Access Denied! This account is registered as a ${actualRole}.`);
+          await signOut(auth); // লগআউট করে দেওয়া হচ্ছে
+          setLoading(false);
+          return;
+        }
+
+        // রোল ঠিক থাকলে নির্দিষ্ট ড্যাশবোর্ডে যাবে
         if (actualRole === "teacher") {
           navigate("/teacher/dashboard");
         } else {
           navigate("/student/dashboard");
         }
       } else {
+        // ডেটাবেসে কিছু না পেলে যেটা সিলেক্ট করেছে সেখানেই যাবে
         if (role === "teacher") {
           navigate("/teacher/dashboard");
         } else {
@@ -52,11 +63,11 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fcfcfd] text-slate-900 selection:bg-indigo-500 selection:text-white dark:bg-[#070b19] dark:text-slate-100 animate-slideIn">
+    
+    <div className="min-h-screen bg-[#fcfcfd] text-slate-900 selection:bg-indigo-500 selection:text-white dark:bg-[#000000] dark:text-slate-100 animate-slideIn">
       <div className="grid min-h-screen lg:grid-cols-[1fr_0.9fr]">
         
-        {/* বাম পাশের ব্র্যান্ডিং সেকশন */}
-        <section className="relative hidden border-r border-slate-200/80 bg-slate-50/50 lg:flex dark:border-slate-800/80 dark:bg-[#090e1f]">
+        <section className="relative hidden border-r border-slate-200/80 bg-slate-50/50 lg:flex dark:border-[#2A2A2A]/80 dark:bg-[#121212]">
           <div className="flex w-full items-center justify-center px-12 xl:px-20">
             <div className="w-full max-w-xl">
               <Link to="/" className="inline-flex items-center gap-3">
@@ -82,8 +93,7 @@ export default function Login() {
           </div>
         </section>
 
-        {/* ডান পাশের লগইন ফর্ম সেকশন */}
-        <section className="relative flex min-h-screen items-center justify-center bg-white px-6 py-12 dark:bg-[#070b19]">
+        <section className="relative flex min-h-screen items-center justify-center bg-white px-6 py-12 dark:bg-[#000000]">
           <div className="absolute right-6 top-6">
             <ThemeToggle />
           </div>
@@ -105,19 +115,19 @@ export default function Login() {
 
             <form onSubmit={handleLogin} className="mt-8 space-y-5">
               
-              {/* রোল সিলেকশন বাটন */}
+              {/* Role Selection Buttons */}
               <div className="grid grid-cols-2 gap-3 mb-6">
                 <button
                   type="button"
                   onClick={() => setRole("student")}
-                  className={`py-3 px-4 rounded-xl border text-sm font-semibold transition-all ${role === 'student' ? 'border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500 shadow-sm' : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800/40'}`}
+                  className={`py-3 px-4 rounded-xl border text-sm font-semibold transition-all ${role === 'student' ? 'border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500 shadow-sm' : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-[#2A2A2A] dark:text-slate-400 dark:hover:bg-[#181818]'}`}
                 >
                   Student
                 </button>
                 <button
                   type="button"
                   onClick={() => setRole("teacher")}
-                  className={`py-3 px-4 rounded-xl border text-sm font-semibold transition-all ${role === 'teacher' ? 'border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500 shadow-sm' : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800/40'}`}
+                  className={`py-3 px-4 rounded-xl border text-sm font-semibold transition-all ${role === 'teacher' ? 'border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500 shadow-sm' : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-[#2A2A2A] dark:text-slate-400 dark:hover:bg-[#181818]'}`}
                 >
                   Supervisor
                 </button>
@@ -129,7 +139,7 @@ export default function Login() {
                 </div>
               )}
 
-              {/* ইমেইল */}
+              {/* Email */}
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-800 dark:text-slate-200">
                   Email address
@@ -140,11 +150,11 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@university.edu"
-                  className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:border-slate-800 dark:bg-[#0f172a] dark:text-white dark:placeholder:text-slate-500"
+                  className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
                 />
               </div>
 
-              {/* পাসওয়ার্ড */}
+              {/* Password */}
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-800 dark:text-slate-200">
                   Password
@@ -156,7 +166,7 @@ export default function Login() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your password"
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 pr-11 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:border-slate-800 dark:bg-[#0f172a] dark:text-white dark:placeholder:text-slate-500"
+                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 pr-11 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
                   />
                   <button
                     type="button"
@@ -168,7 +178,7 @@ export default function Login() {
                 </div>
               </div>
 
-              {/* সাবমিট বাটন */}
+              {/* Submit Button */}
               <button
                 type="submit"
                 disabled={loading}

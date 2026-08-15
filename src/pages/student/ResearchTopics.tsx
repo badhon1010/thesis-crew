@@ -11,7 +11,7 @@ export default function StudentResearchTopics() {
   useEffect(() => {
     async function loadTopics() {
       try {
-        // ফায়ারবেস থেকে শুধু published টপিকগুলো নিয়ে আসবে
+        // Fetch published research topics from Firestore
         const data = await getPublishedResearchTopics();
         setTopics(data);
       } catch (error) {
@@ -34,7 +34,7 @@ export default function StudentResearchTopics() {
     <DashboardLayout role="student">
       <div className="mx-auto max-w-5xl px-2 sm:px-0">
         
-        {/* হেডার সেকশন */}
+        {/* Header Section */}
         <div className="mb-10">
           <p className="text-xs font-semibold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
             Research discovery
@@ -47,7 +47,7 @@ export default function StudentResearchTopics() {
           </p>
         </div>
 
-        {/* সার্চ এবং ফিল্টার */}
+        {/* Search and Filter */}
         <div className="mb-10 flex flex-col gap-4 sm:flex-row">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -55,22 +55,22 @@ export default function StudentResearchTopics() {
               placeholder="Search research topics..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none transition focus:border-indigo-500 dark:border-[#1e2433] dark:bg-[#111622] dark:text-white dark:focus:border-indigo-500"
+              className="h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none transition focus:border-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:focus:border-indigo-500"
             />
           </div>
 
-          <button className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-medium transition hover:bg-slate-50 dark:border-[#1e2433] dark:bg-[#111622] dark:text-white dark:hover:bg-[#1a2133]">
+          <button className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-medium transition hover:bg-slate-50 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:hover:bg-[#1a2133]">
             <Filter className="h-4 w-4 text-slate-400" />
             Category
           </button>
 
-          <button className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-medium transition hover:bg-slate-50 dark:border-[#1e2433] dark:bg-[#111622] dark:text-white dark:hover:bg-[#1a2133]">
+          <button className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-medium transition hover:bg-slate-50 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:hover:bg-[#1a2133]">
             <SlidersHorizontal className="h-4 w-4 text-slate-400" />
             Best match
           </button>
         </div>
 
-        {/* টপিকস লিস্ট */}
+        {/* Research Topics List */}
         <div className="grid gap-5 lg:grid-cols-2">
           {loading ? (
             <div className="col-span-2 p-12 text-center text-sm text-slate-500">Loading research topics...</div>
@@ -80,7 +80,7 @@ export default function StudentResearchTopics() {
             filteredTopics.map((topic) => (
               <article
                 key={topic.id}
-                className="group rounded-2xl border border-slate-200 bg-white p-6 transition-colors hover:border-indigo-200 dark:border-[#1e2433] dark:bg-[#111622] dark:hover:border-slate-700"
+                className="group rounded-2xl border border-slate-200 bg-white p-6 transition-colors hover:border-indigo-200 dark:border-[#2A2A2A] dark:bg-[#181818] dark:hover:border-slate-700"
               >
                 <div className="flex items-start justify-between gap-5">
                   <div className="flex gap-4">
@@ -89,7 +89,7 @@ export default function StudentResearchTopics() {
                     </div>
                     <div>
                       <h2 className="font-semibold text-slate-900 dark:text-white">{topic.title}</h2>
-                      {/* ডাটাবেজ থেকে আসা আসল টিচারের নাম */}
+                      {/* Name of the actual supervisor from the database */}
                       <p className="mt-1 text-xs text-slate-500">Supervised by {topic.supervisorName || "Unknown Supervisor"}</p>
                     </div>
                   </div>
@@ -115,7 +115,7 @@ export default function StudentResearchTopics() {
                   ))}
                 </div>
 
-                <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-5 dark:border-[#1e2433]">
+                <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-5 dark:border-[#2A2A2A]">
                   <p className="text-xs font-medium text-slate-400">Deadline · {topic.applicationDeadline || "Not set"}</p>
                   <button className="text-sm font-medium text-indigo-600 transition hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300">
                     View details →

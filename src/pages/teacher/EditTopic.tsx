@@ -6,7 +6,7 @@ import { getResearchTopicById, updateResearchTopic, type ResearchTopicInput } fr
 
 export default function EditTopic() {
   const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>(); // URL থেকে আইডি নিবে
+  const { id } = useParams<{ id: string }>(); // Take the topic ID from the URL parameters
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -20,7 +20,7 @@ export default function EditTopic() {
     researchObjectives: "",
   });
 
-  // পেজ লোড হলে ডাটাবেজ থেকে ডাটা নিয়ে আসা
+  // Fetch topic data when the page loads
   useEffect(() => {
     async function fetchTopic() {
       if (!id) return;
@@ -31,7 +31,7 @@ export default function EditTopic() {
             title: topic.title,
             category: topic.category,
             description: topic.description,
-            requiredSkills: topic.requiredSkills.join(", "), // অ্যারে থেকে স্ট্রিং
+            requiredSkills: topic.requiredSkills.join(", "), // Convert array to string
             maxTeamSize: topic.maxTeamSize,
             applicationDeadline: topic.applicationDeadline,
             researchObjectives: topic.researchObjectives,
@@ -148,7 +148,7 @@ export default function EditTopic() {
                   value={formData.applicationDeadline}
                   onChange={handleChange}
                   onClick={(e) => {
-                    // যেকোনো জায়গায় ক্লিক করলেই ক্যালেন্ডার পপআপ ওপেন হবে
+                    // When any part of the input is clicked, open the calendar popup
                     try {
                       (e.target as HTMLInputElement).showPicker();
                     } catch (error) {
@@ -157,7 +157,7 @@ export default function EditTopic() {
                   }}
                   className="w-full cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#1e2433] dark:bg-[#0b0f19] dark:text-white dark:[color-scheme:dark] [&::-webkit-calendar-picker-indicator]:hidden"
                 />
-                {/* আমাদের কাস্টম ক্যালেন্ডার আইকন */}
+                {/* Our custom calendar icon */}
                 <Calendar className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               </div>
             </div>

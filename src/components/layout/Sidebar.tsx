@@ -42,7 +42,7 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
 
   return (
     <>
-      {/* মোবাইল ওভারলে */}
+      {/* Mobile Overlay */}
       {isOpen && (
         <div
           onClick={onClose}
@@ -50,13 +50,13 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
         />
       )}
 
-      {/* সাইডবার ড্রয়ার */}
+      {/* Sidebar drawer */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-slate-200/80 bg-white transition-transform duration-300 ease-in-out dark:border-slate-800/80 dark:bg-[#070b19] lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-slate-200/80 bg-white transition-transform duration-300 ease-in-out dark:border-[#2A2A2A] dark:bg-[#121212] lg:translate-x-0 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        {/* লোগো এবং ক্লোজ বাটন */}
+        {/* Logo and Close Button */}
         <div className="flex h-20 items-center justify-between px-8 border-b border-slate-100 dark:border-slate-800/50">
           <Link to="/" className="flex items-center gap-3 transition-opacity hover:opacity-80">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 text-white shadow-lg shadow-indigo-500/25">
@@ -75,7 +75,7 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
           </button>
         </div>
 
-        {/* মেনু লিংকস */}
+        {/* Menu Links */}
         <nav className="flex-1 space-y-2 px-4 py-6">
           {links.map((link) => {
             const isActive = location.pathname === link.path;
@@ -105,7 +105,7 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
           })}
         </nav>
 
-        {/* লগআউট সেকশন */}
+        {/* Logout Section */}
         <div className="border-t border-slate-100 p-4 dark:border-slate-800/80">
           <button
             onClick={handleLogout}

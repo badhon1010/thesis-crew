@@ -30,7 +30,7 @@ export default function StudentProfile() {
     skills: [],
   });
 
-  // ফায়ারবেস থেকে কারেন্ট ইউজারের ডাটা ফেচ করা
+  // Fetch user profile data on component mount
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -68,10 +68,10 @@ export default function StudentProfile() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // স্কিল অ্যাড করা (Enter চাপলে বা Add বাটনে ক্লিক করলে)
+  //Add skills
   const handleAddSkill = (e?: React.KeyboardEvent | React.MouseEvent) => {
     if (e && 'key' in e && e.key !== 'Enter') return;
-    e?.preventDefault(); // ফর্ম সাবমিট হওয়া ঠেকানোর জন্য
+    e?.preventDefault(); // Prevent form submission
     
     const trimmedSkill = skillInput.trim();
     if (trimmedSkill && !formData.skills.includes(trimmedSkill)) {
@@ -83,7 +83,7 @@ export default function StudentProfile() {
     }
   };
 
-  // স্কিল রিমুভ করা
+  // Remove skill
   const removeSkill = (skillToRemove: string) => {
     setFormData((prev) => ({
       ...prev,
@@ -91,7 +91,7 @@ export default function StudentProfile() {
     }));
   };
 
-  // প্রোফাইল আপডেট করা
+  // Update profile
   const handleSaveProfile = async () => {
     if (!userUid) return alert("You must be logged in!");
     setSaving(true);
@@ -129,7 +129,7 @@ export default function StudentProfile() {
     <DashboardLayout role="student">
       <div className="mx-auto max-w-4xl px-2 sm:px-0">
         
-        {/* হেডার */}
+        {/* Header */}
         <div className="mb-10 flex items-center gap-5">
           <div className="flex h-20 w-20 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
             <UserCircle className="h-12 w-12" />
@@ -145,9 +145,9 @@ export default function StudentProfile() {
         </div>
 
         <div className="space-y-6">
-          {/* বেসিক ইনফরমেশন কার্ড */}
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 dark:border-[#1e2433] dark:bg-[#111622]">
-            <h2 className="mb-6 text-lg font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-4 dark:border-[#1e2433]">
+          {/* Basic Information Card */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 dark:border-[#2A2A2A] dark:bg-[#181818]">
+            <h2 className="mb-6 text-lg font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-4 dark:border-[#2A2A2A]">
               Basic Information
             </h2>
             <div className="grid gap-6 sm:grid-cols-2">
@@ -158,7 +158,7 @@ export default function StudentProfile() {
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#1e2433] dark:bg-[#0b0f19] dark:text-white dark:placeholder:text-slate-500"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
                 />
               </div>
               <div>
@@ -168,7 +168,7 @@ export default function StudentProfile() {
                   name="studentId"
                   value={formData.studentId}
                   onChange={handleChange}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#1e2433] dark:bg-[#0b0f19] dark:text-white dark:placeholder:text-slate-500"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
                 />
               </div>
               <div>
@@ -178,7 +178,7 @@ export default function StudentProfile() {
                   name="department"
                   value={formData.department}
                   onChange={handleChange}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#1e2433] dark:bg-[#0b0f19] dark:text-white dark:placeholder:text-slate-500"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
                 />
               </div>
               <div>
@@ -188,15 +188,15 @@ export default function StudentProfile() {
                   name="cgpa"
                   value={formData.cgpa}
                   onChange={handleChange}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#1e2433] dark:bg-[#0b0f19] dark:text-white dark:placeholder:text-slate-500"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
                 />
               </div>
             </div>
           </section>
 
-          {/* রিসার্চ ও স্কিলস কার্ড */}
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 dark:border-[#1e2433] dark:bg-[#111622]">
-            <h2 className="mb-6 text-lg font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-4 dark:border-[#1e2433]">
+          {/* Research & Skills Card */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 dark:border-[#2A2A2A] dark:bg-[#181818]">
+            <h2 className="mb-6 text-lg font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-4 dark:border-[#2A2A2A]">
               Research & Skills
             </h2>
             <div className="grid gap-6">
@@ -208,14 +208,14 @@ export default function StudentProfile() {
                   value={formData.researchInterests}
                   onChange={handleChange}
                   placeholder="e.g., Artificial Intelligence, IoT, Web Development"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#1e2433] dark:bg-[#0b0f19] dark:text-white dark:placeholder:text-slate-500"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
                 />
               </div>
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-900 dark:text-slate-300">Technical Skills</label>
                 
-                {/* স্কিল অ্যাড করার ফিল্ড */}
+                {/* Add Skill Field */}
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -223,20 +223,20 @@ export default function StudentProfile() {
                     onChange={(e) => setSkillInput(e.target.value)}
                     onKeyDown={handleAddSkill}
                     placeholder="Type a skill and press Enter..."
-                    className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#1e2433] dark:bg-[#0b0f19] dark:text-white dark:placeholder:text-slate-500"
+                    className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
                   />
                   <button
                     type="button"
                     onClick={handleAddSkill}
-                    className="inline-flex items-center justify-center rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-[#1e2433] dark:text-slate-300 dark:hover:bg-[#2a3143]"
+                    className="inline-flex items-center justify-center rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 dark:bg-[#2A2A2A] dark:text-slate-300 dark:hover:bg-[#2a3143]"
                   >
                     <Plus className="h-5 w-5" />
                   </button>
                 </div>
 
-                {/* স্কিল ব্যাজ দেখানোর জায়গা */}
+                {/* Skill Tags Display */}
                 {formData.skills.length > 0 && (
-                  <div className="mt-4 flex flex-wrap gap-2 rounded-xl border border-slate-100 bg-slate-50 p-4 dark:border-[#1e2433] dark:bg-[#0b0f19]">
+                  <div className="mt-4 flex flex-wrap gap-2 rounded-xl border border-slate-100 bg-slate-50 p-4 dark:border-[#2A2A2A] dark:bg-[#181818]">
                     {formData.skills.map((skill) => (
                       <span
                         key={skill}
@@ -258,7 +258,7 @@ export default function StudentProfile() {
             </div>
           </section>
 
-          {/* সেভ বাটন */}
+          {/* Save Button */}
           <div className="flex justify-end pt-4">
             <button
               type="button"

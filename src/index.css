@@ -20,7 +20,7 @@ body {
   color: #f1f5f9 !important;
 }
 
-/* অ্যানিমেশন */
+/* Slide In Animation */
 @keyframes slideInFromRight {
   from {
     opacity: 0;
@@ -36,7 +36,7 @@ body {
   animation: slideInFromRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* স্ক্রলবার */
+/* Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
 }

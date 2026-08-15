@@ -38,7 +38,7 @@ export default function CreateTopic() {
     setIsSubmitting(true);
 
     try {
-      // users কালেকশন থেকে আসল নাম নিয়ে আসা
+      // Fetch the actual name from the users collection
       const userDoc = await getDoc(doc(db, "users", currentUser.uid));
       const realName = userDoc.exists() && userDoc.data().name 
         ? userDoc.data().name 
@@ -54,7 +54,7 @@ export default function CreateTopic() {
         researchObjectives: formData.researchObjectives,
         
         supervisorId: currentUser.uid, 
-        supervisorName: realName, // ডাটাবেজে আসল নাম সেভ হবে
+        supervisorName: realName, // The actual name will be saved in the database
         status,
       };
 
@@ -72,7 +72,7 @@ export default function CreateTopic() {
     <DashboardLayout role="teacher">
       <div className="mx-auto max-w-4xl px-2 sm:px-0">
         
-        {/* হেডার */}
+        {/* Header */}
         <div className="mb-10">
           <button 
             onClick={() => navigate(-1)}
@@ -80,7 +80,7 @@ export default function CreateTopic() {
           >
             <ArrowLeft className="h-4 w-4" /> Back to Dashboard
           </button>
-          
+          <br></br>
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3.5 py-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-600 dark:bg-indigo-400" />
             Topic Creation
@@ -94,8 +94,8 @@ export default function CreateTopic() {
           </p>
         </div>
 
-        {/* ফর্ম - স্ক্রিনশটের মত ডার্ক ম্যাট কার্ড */}
-        <form className="space-y-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 dark:border-[#1e2433] dark:bg-[#111622]">
+        {/* Form - Dark Material Card */}
+        <form className="space-y-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 dark:border-[#2A2A2A] dark:bg-[#121212]">
           
           <div className="grid gap-6 sm:grid-cols-2">
             <div className="sm:col-span-2">
@@ -106,7 +106,7 @@ export default function CreateTopic() {
                 value={formData.title}
                 onChange={handleChange}
                 placeholder="e.g., AI-Based Fall Detection System"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#1e2433] dark:bg-[#0b0f19] dark:text-white dark:placeholder:text-slate-500"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
                 required
               />
             </div>
@@ -119,7 +119,7 @@ export default function CreateTopic() {
                 value={formData.category}
                 onChange={handleChange}
                 placeholder="e.g., Artificial Intelligence"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#1e2433] dark:bg-[#0b0f19] dark:text-white dark:placeholder:text-slate-500"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
               />
             </div>
 
@@ -131,7 +131,7 @@ export default function CreateTopic() {
                 value={formData.requiredSkills}
                 onChange={handleChange}
                 placeholder="e.g., Python, Machine Learning"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#1e2433] dark:bg-[#0b0f19] dark:text-white dark:placeholder:text-slate-500"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
               />
             </div>
 
@@ -141,7 +141,7 @@ export default function CreateTopic() {
                 name="maxTeamSize"
                 value={formData.maxTeamSize}
                 onChange={handleChange}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#1e2433] dark:bg-[#0b0f19] dark:text-white"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white"
               >
                 {[1, 2, 3, 4, 5].map(num => (
                   <option key={num} value={num}>{num} Members</option>
@@ -166,7 +166,7 @@ export default function CreateTopic() {
                       console.error(error);
                     }
                   }}
-                  className="w-full cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#1e2433] dark:bg-[#0b0f19] dark:text-white dark:[color-scheme:dark] [&::-webkit-calendar-picker-indicator]:hidden"
+                  className="w-full cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:[color-scheme:dark] [&::-webkit-calendar-picker-indicator]:hidden"
                 />
                 <Calendar className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               </div>
@@ -180,24 +180,24 @@ export default function CreateTopic() {
                 onChange={handleChange}
                 rows={5}
                 placeholder="Briefly describe the research problem and goals..."
-                className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#1e2433] dark:bg-[#0b0f19] dark:text-white dark:placeholder:text-slate-500"
+                className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
                 required
               />
             </div>
           </div>
 
-          {/* অ্যাকশন বাটনস */}
-          <div className="flex flex-col-reverse justify-end gap-4 border-t border-slate-100 pt-8 sm:flex-row dark:border-[#1e2433]">
+          {/* Action Buttons */}
+          <div className="flex flex-col-reverse justify-end gap-4 border-t border-slate-100 pt-8 sm:flex-row dark:border-[#2A2A2A]">
             <button
               type="button"
               onClick={(e) => handleSubmit(e, "draft")}
               disabled={isSubmitting}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50 dark:border-[#1e2433] dark:bg-[#0b0f19] dark:text-slate-300 dark:hover:bg-[#1a2133]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-slate-300 dark:hover:bg-[#2A2A2A]"
             >
               <Save className="h-4 w-4" /> Save Draft
             </button>
 
-            {/* স্ক্রিনশটের মত গ্লোয়িং বাটন */}
+            {/* Publish Button */}
             <button
               type="button"
               onClick={(e) => handleSubmit(e, "published")}

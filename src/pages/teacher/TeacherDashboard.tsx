@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { Link, } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { BookOpen, Users, Clock3, CheckCircle2, Plus, Edit, Trash2 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 
-// ফায়ারবেস ইমপোর্ট
+// Firebase imports
 import { auth } from "@/firebase/auth";
 import { doc, getDoc, getFirestore } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
@@ -15,11 +15,11 @@ export default function TeacherDashboard() {
   const [topics, setTopics] = useState<ResearchTopic[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // রিয়েল-টাইম এবং ইউজারের স্টেট
+  // Real-time and user state
   const [currentTime, setCurrentTime] = useState(new Date());
   const [userName, setUserName] = useState("Supervisor");
 
-  // রিয়েল-টাইম ঘড়ি আপডেট
+  // Real-time clock update
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
@@ -28,17 +28,17 @@ export default function TeacherDashboard() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // users ডাটাবেজ থেকে আসল নাম আনা
+        // Fetch the actual name from the users collection
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists() && userDoc.data().name) {
           const fullName = userDoc.data().name;
-          setUserName(fullName.split(" ")[0]); // শুধু নামের প্রথম অংশ দেখাবে
+          setUserName(fullName.split(" ")[0]); // Use the first name
         } else {
           const fallbackName = user.displayName?.split(" ")[0] || user.email?.split("@")[0] || "Teacher";
           setUserName(fallbackName.charAt(0).toUpperCase() + fallbackName.slice(1));
         }
 
-        // টিচারের টপিক আনা
+        // Fetch the teacher's research topics
         try {
           const data = await getTeacherResearchTopics(user.uid);
           setTopics(data);
@@ -54,28 +54,13 @@ export default function TeacherDashboard() {
 
     return () => unsubscribe();
   }, []);
-  
-  // ডাটাবেজ থেকে পাবলিশ করা টপিকগুলো আনা
-  useEffect(() => {
-    async function loadTopics() {
-      try {
-        const data = await getTeacherResearchTopics("demo-teacher-id");
-        setTopics(data);
-      } catch (error) {
-        console.error("Failed to load research topics:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadTopics();
-  }, []);
 
-  // ডিলিট হ্যান্ডলার
+  // Handle topic deletion
   const handleDelete = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this topic?")) {
       try {
         await deleteResearchTopic(id);
-        setTopics(topics.filter((topic) => topic.id !== id)); // UI থেকে সাথে সাথে রিমুভ
+        setTopics(topics.filter((topic) => topic.id !== id)); // Update the state to remove the deleted topic
       } catch (error) {
         console.error("Failed to delete topic:", error);
         alert("Failed to delete topic.");
@@ -98,7 +83,7 @@ export default function TeacherDashboard() {
     <DashboardLayout role="teacher">
       <div className="mx-auto max-w-5xl px-2 sm:px-0">
         
-        {/* টপ হেডার ও রিয়েল-টাইম ক্লক */}
+        {/* Top Header and Real-time Clock */}
         <div className="mb-10 flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
           <div>
             <div className="mb-4 flex items-center gap-3">
@@ -131,7 +116,7 @@ export default function TeacherDashboard() {
           </Link>
         </div>
 
-        {/* স্ট্যাটিস্টিক্স মেট্রিক কার্ডস */}
+        {/* Statistics Metric Cards */}
         <div className="mb-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard icon={BookOpen} value={String(topics.length).padStart(2, "0")} label="Active Topics" trend="+2 this month" />
           <StatCard icon={Users} value="24" label="Enrolled Students" trend="Active teams" />
@@ -139,29 +124,29 @@ export default function TeacherDashboard() {
           <StatCard icon={CheckCircle2} value="03" label="Completed Projects" trend="Successfully closed" />
         </div>
 
-        {/* মেইন কনটেন্ট গ্রিড */}
+        {/* Main Content Grid */}
         <div className="grid gap-6 lg:grid-cols-[1.4fr_.8fr]">
           
-          {/* রিসার্চ টপিক লিস্ট */}
-          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-[#1e2433] dark:bg-[#111622] overflow-hidden">
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5 dark:border-[#1e2433]">
+          {/* Research Topic List */}
+          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818] overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5 dark:border-[#2A2A2A]">
               <div>
                 <h2 className="font-bold text-slate-900 dark:text-white">My research topics</h2>
                 <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Your currently published projects and guidelines.</p>
               </div>
-              <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600 dark:bg-[#1e2433] dark:text-indigo-400">
+              <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
                 {topics.length} Total
               </span>
             </div>
 
-            <div className="divide-y divide-slate-100 dark:divide-[#1e2433]">
+            <div className="divide-y divide-slate-100 dark:divide-[#2A2A2A]">
               {loading ? (
                 <div className="px-6 py-12 text-center text-sm text-slate-500 dark:text-slate-400">Loading topics...</div>
               ) : topics.length === 0 ? (
                 <div className="px-6 py-12 text-center text-sm text-slate-500 dark:text-slate-400">No research topics found.</div>
               ) : (
                 topics.map((topic) => (
-                  <div key={topic.id} className="group p-6 transition-colors hover:bg-slate-50 dark:hover:bg-[#1a2133]">
+                  <div key={topic.id} className="group p-6 transition-colors hover:bg-slate-50 dark:hover:bg-[#222222]">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <h3 className="text-base font-bold text-slate-900 dark:text-white">{topic.title}</h3>
@@ -172,7 +157,7 @@ export default function TeacherDashboard() {
                         </div>
                       </div>
                       
-                      {/* এডিট এবং ডিলিট অ্যাকশন বাটন */}
+                      {/* Edit and Delete Action Buttons */}
                       <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
                         <Link
                           to={`/teacher/topics/edit/${topic.id}`}
@@ -200,9 +185,9 @@ export default function TeacherDashboard() {
             </div>
           </section>
 
-          {/* পেন্ডিং স্টুডেন্ট রিকোয়েস্ট */}
-          <section className="h-fit rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-[#1e2433] dark:bg-[#111622] overflow-hidden">
-            <div className="border-b border-slate-100 px-6 py-5 dark:border-[#1e2433]">
+          {/* Pending Requests */}
+          <section className="h-fit rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818] overflow-hidden">
+            <div className="border-b border-slate-100 px-6 py-5 dark:border-[#2A2A2A]">
               <h2 className="font-bold text-slate-900 dark:text-white">Pending requests</h2>
               <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Students waiting for supervisor review.</p>
             </div>
@@ -212,9 +197,9 @@ export default function TeacherDashboard() {
                 ["Sarah Ahmed", "Python · Machine Learning", "92%"],
                 ["Tanvir Hasan", "IoT · C++ Embedded", "84%"],
               ].map(([name, skills, match]) => (
-                <div key={name} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-4 transition-all hover:border-slate-200 dark:border-[#1e2433] dark:bg-[#0b0f19] dark:hover:border-slate-700">
+                <div key={name} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-4 transition-all hover:border-slate-200 dark:border-[#2A2A2A] dark:bg-[#121212] dark:hover:border-[#3a3a3a]">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 font-bold text-indigo-600 dark:bg-[#1e2433] dark:text-indigo-400">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 font-bold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
                       {name.split(" ").map((n) => n[0]).join("")}
                     </div>
                     <div className="min-w-0">
@@ -240,9 +225,9 @@ export default function TeacherDashboard() {
 
 function StatCard({ icon: Icon, value, label, trend }: any) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:border-slate-300 dark:border-[#1e2433] dark:bg-[#111622]">
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:border-slate-300 dark:border-[#2A2A2A] dark:bg-[#181818]">
       <div className="flex items-center justify-between">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-[#1e2433] dark:text-indigo-400">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
           <Icon className="h-5 w-5" />
         </div>
         <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{trend}</span>
@@ -252,5 +237,3 @@ function StatCard({ icon: Icon, value, label, trend }: any) {
     </div>
   );
 }
-
-
