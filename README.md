@@ -72,8 +72,6 @@ src/
 └── main.tsx             # Application entry point
 
 👨‍💻 Author
-Badhon Saha
+Thesis Crew
 
 Department of Computer Science and Engineering (CSE)
-
-GitHub: @badhon1010
