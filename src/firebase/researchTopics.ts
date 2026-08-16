@@ -83,7 +83,6 @@ export async function getResearchTopicById(id: string): Promise<ResearchTopic | 
   return null;
 }
 
-// ২. টপিক আপডেট করা
 export async function updateResearchTopic(id: string, data: Partial<ResearchTopicInput>): Promise<void> {
   const docRef = doc(db, "researchTopics", id);
   await updateDoc(docRef, {
@@ -92,7 +91,6 @@ export async function updateResearchTopic(id: string, data: Partial<ResearchTopi
   });
 }
 
-// ৩. টপিক ডিলিট করা
 export async function deleteResearchTopic(id: string): Promise<void> {
   const docRef = doc(db, "researchTopics", id);
   await deleteDoc(docRef);

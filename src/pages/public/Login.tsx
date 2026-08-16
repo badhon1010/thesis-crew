@@ -32,22 +32,22 @@ export default function Login() {
       if (userDocSnap.exists()) {
         const actualRole = userDocSnap.data().role;
         
-        // রোল ম্যাচ করছে কি না তা চেক করা হচ্ছে
+        //Role Match Check
         if (actualRole !== role) {
           setError(`Access Denied! This account is registered as a ${actualRole}.`);
-          await signOut(auth); // লগআউট করে দেওয়া হচ্ছে
+          await signOut(auth); // Log out the user
           setLoading(false);
           return;
         }
 
-        // রোল ঠিক থাকলে নির্দিষ্ট ড্যাশবোর্ডে যাবে
+        // Role is correct, navigate to the appropriate dashboard
         if (actualRole === "teacher") {
           navigate("/teacher/dashboard");
         } else {
           navigate("/student/dashboard");
         }
       } else {
-        // ডেটাবেসে কিছু না পেলে যেটা সিলেক্ট করেছে সেখানেই যাবে
+        // If no data is found in the database, navigate based on the selected role
         if (role === "teacher") {
           navigate("/teacher/dashboard");
         } else {

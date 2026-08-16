@@ -72,6 +72,7 @@ src/
 └── main.tsx             # Application entry point
 
 👨‍💻 Author
-Thesis Crew
+
+Team Zero
 
 Department of Computer Science and Engineering (CSE)
