@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { BookOpen, Users, Clock3, CheckCircle2, Plus, Edit, Trash2 } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { BookOpen, Users, Clock3, CheckCircle2, Plus, Edit, Trash2, ArrowRight, Eye } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 
@@ -12,6 +12,7 @@ import { getTeacherResearchTopics, deleteResearchTopic, type ResearchTopic } fro
 const db = getFirestore();
 
 export default function TeacherDashboard() {
+  const navigate = useNavigate();
   const [topics, setTopics] = useState<ResearchTopic[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -30,6 +31,9 @@ export default function TeacherDashboard() {
 
   const showToast = (type: "success" | "error", message: string) => {
     setToast({ show: true, type, message });
+    setTimeout(() => {
+      setToast((prev) => ({ ...prev, show: false }));
+    }, 3000);
   };
 
   useEffect(() => {
@@ -40,11 +44,10 @@ export default function TeacherDashboard() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Fetch the actual name from the users collection
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists() && userDoc.data().name) {
           const fullName = userDoc.data().name;
-          setUserName(fullName.split(" ")[0]); // Use the first name
+          setUserName(fullName.split(" ")[0]);
         } else {
           const fallbackName = user.displayName?.split(" ")[0] || user.email?.split("@")[0] || "Teacher";
           setUserName(fallbackName.charAt(0).toUpperCase() + fallbackName.slice(1));
@@ -67,13 +70,23 @@ export default function TeacherDashboard() {
     return () => unsubscribe();
   }, []);
 
+  // Limit topics shown on the dashboard to a maximum of 3 items
+  const sortedTopics = useMemo(() => {
+    return [...topics]
+      .sort((a, b) => {
+        if (!a.applicationDeadline) return 1;
+        if (!b.applicationDeadline) return -1;
+        return new Date(a.applicationDeadline).getTime() - new Date(b.applicationDeadline).getTime();
+      })
+      .slice(0, 3);
+  }, [topics]);
+
   const handleDelete = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this topic?")) {
       try {
         await deleteResearchTopic(id);
-        setTopics(topics.filter((topic) => topic.id !== id)); // Update state
+        setTopics((prev) => prev.filter((topic) => topic.id !== id));
         showToast("success", "Research topic deleted successfully!");
-        setTimeout(() => {} ,3000);
       } catch (error) {
         console.error("Failed to delete topic:", error);
         showToast("error", "Failed to delete research topic. Please try again.");
@@ -100,6 +113,7 @@ export default function TeacherDashboard() {
           show={toast.show}
           type={toast.type}
           message={toast.message}
+          duration={3000}
           onClose={() => setToast((prev) => ({ ...prev, show: false }))}
         />
 
@@ -144,37 +158,61 @@ export default function TeacherDashboard() {
 
         <div className="grid gap-6 lg:grid-cols-[1.4fr_.8fr]">
           
-          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818] overflow-hidden">
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5 dark:border-[#2A2A2A]">
               <div>
                 <h2 className="font-bold text-slate-900 dark:text-white">My research topics</h2>
-                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Your currently published projects and guidelines.</p>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Showing top 3 upcoming deadline topics.</p>
               </div>
-              <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
-                {topics.length} Total
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
+                  {topics.length} Total
+                </span>
+                <button
+                  onClick={() => navigate("/teacher/topics")}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 transition-colors hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+                >
+                  View All <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
 
             <div className="divide-y divide-slate-100 dark:divide-[#2A2A2A]">
               {loading ? (
                 <div className="px-6 py-12 text-center text-sm text-slate-500 dark:text-slate-400">Loading topics...</div>
-              ) : topics.length === 0 ? (
+              ) : sortedTopics.length === 0 ? (
                 <div className="px-6 py-12 text-center text-sm text-slate-500 dark:text-slate-400">No research topics found.</div>
               ) : (
-                topics.map((topic) => (
+                sortedTopics.map((topic) => (
                   <div key={topic.id} className="group p-6 transition-colors hover:bg-slate-50 dark:hover:bg-[#222222]">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <h3 className="text-base font-bold text-slate-900 dark:text-white">{topic.title}</h3>
-                        <div className="mt-1.5 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                           <span className="font-semibold text-indigo-600 dark:text-indigo-400">{topic.category}</span>
                           <span>•</span>
                           <span>Max Team Size: {topic.maxTeamSize}</span>
+                          {topic.applicationDeadline && (
+                            <>
+                              <span>•</span>
+                              <span className="inline-flex items-center gap-1 font-medium text-amber-600 dark:text-amber-400">
+                                <Clock3 className="h-3 w-3" />
+                                Deadline: {new Date(topic.applicationDeadline).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                       
-                      {/* Edit and Delete Action Buttons */}
+                      {/* Action Buttons: View Details, Edit, Delete */}
                       <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                        <Link
+                          to={`/teacher/topics/details/${topic.id}`}
+                          className="rounded-lg bg-slate-100 p-1.5 text-slate-600 transition-colors hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                          title="View Details"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Link>
                         <Link
                           to={`/teacher/topics/edit/${topic.id}`}
                           className="rounded-lg bg-indigo-50 p-1.5 text-indigo-600 transition-colors hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
@@ -202,10 +240,18 @@ export default function TeacherDashboard() {
           </section>
 
           {/* Pending Requests */}
-          <section className="h-fit rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818] overflow-hidden">
-            <div className="border-b border-slate-100 px-6 py-5 dark:border-[#2A2A2A]">
-              <h2 className="font-bold text-slate-900 dark:text-white">Pending requests</h2>
-              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Students waiting for supervisor review.</p>
+          <section className="h-fit overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5 dark:border-[#2A2A2A]">
+              <div>
+                <h2 className="font-bold text-slate-900 dark:text-white">Pending requests</h2>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Students waiting for supervisor review.</p>
+              </div>
+              <button
+                onClick={() => navigate("/teacher/requests")}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 transition-colors hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+              >
+                View All <ArrowRight className="h-3.5 w-3.5" />
+              </button>
             </div>
 
             <div className="space-y-3 p-6">
