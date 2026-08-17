@@ -3,9 +3,9 @@ import {
   BookOpen,
   LayoutDashboard,
   LogOut,
-  Settings,
   FlaskConical,
   X,
+  SquarePen,
 } from "lucide-react";
 import { auth } from "../../firebase/auth";
 import { signOut } from "firebase/auth";
@@ -37,7 +37,7 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
         ]
       : [
           { name: "Dashboard", path: "/teacher/dashboard", icon: LayoutDashboard },
-          { name: "Create Topic", path: "/teacher/topics/create", icon: Settings },
+          { name: "Create Research Topic", path: "/teacher/topics/create", icon: SquarePen },
         ];
 
   return (

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, Save, Send, Calendar } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { ToastAlert } from "@/components/common/ToastAlert";
 import { createResearchTopic, type ResearchTopicInput } from "@/firebase/researchTopics";
 import { auth } from "@/firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
@@ -10,6 +11,7 @@ import { db } from "@/firebase/firestore";
 export default function CreateTopic() {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [toastConfig, setToastConfig] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -28,17 +30,20 @@ export default function CreateTopic() {
 
   const handleSubmit = async (e: React.FormEvent, status: "draft" | "published") => {
     e.preventDefault();
-    if (!formData.title || !formData.description) return alert("Title and Description are required!");
+    if (!formData.title || !formData.description) {
+      setToastConfig({ message: "Title and Description are required!", type: "error" });
+      return;
+    }
 
     const currentUser = auth.currentUser;
     if (!currentUser) {
-      return alert("You must be logged in to create a topic.");
+      setToastConfig({ message: "You must be logged in to create a topic.", type: "error" });
+      return;
     }
 
     setIsSubmitting(true);
 
     try {
-      // Fetch the actual name from the users collection
       const userDoc = await getDoc(doc(db, "users", currentUser.uid));
       const realName = userDoc.exists() && userDoc.data().name 
         ? userDoc.data().name 
@@ -54,24 +59,42 @@ export default function CreateTopic() {
         researchObjectives: formData.researchObjectives,
         
         supervisorId: currentUser.uid, 
-        supervisorName: realName, // The actual name will be saved in the database
+        supervisorName: realName,
         status,
       };
 
       await createResearchTopic(newTopic);
-      navigate("/teacher/dashboard"); 
+      setToastConfig({
+        message: status === "published" ? "Topic published successfully!" : "Draft saved successfully!",
+        type: "success",
+      });
     } catch (error) {
       console.error("Error creating topic:", error);
-      alert("Failed to create topic. Please try again.");
+      setToastConfig({ message: "Failed to create topic. Please try again.", type: "error" });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleToastClose = () => {
+    if (toastConfig?.type === "success") {
+      navigate("/teacher/dashboard");
+    }
+    setToastConfig(null);
+  };
+
   return (
     <DashboardLayout role="teacher">
+      {toastConfig && (
+        <ToastAlert
+          message={toastConfig.message}
+          type={toastConfig.type}
+          onClose={handleToastClose}
+          duration={3000}
+        />
+      )}
+
       <div className="mx-auto max-w-4xl px-2 sm:px-0">
-        
         {/* Header */}
         <div className="mb-10">
           <button 
@@ -80,7 +103,7 @@ export default function CreateTopic() {
           >
             <ArrowLeft className="h-4 w-4" /> Back to Dashboard
           </button>
-          <br></br>
+          <br />
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3.5 py-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-600 dark:bg-indigo-400" />
             Topic Creation
@@ -94,9 +117,8 @@ export default function CreateTopic() {
           </p>
         </div>
 
-        {/* Form - Dark Material Card */}
+        {/* Form */}
         <form className="space-y-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 dark:border-[#2A2A2A] dark:bg-[#121212]">
-          
           <div className="grid gap-6 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="mb-2 block text-sm font-semibold text-slate-900 dark:text-slate-300">Project Title</label>
@@ -143,8 +165,10 @@ export default function CreateTopic() {
                 onChange={handleChange}
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white"
               >
-                {[1, 2, 3, 4, 5].map(num => (
-                  <option key={num} value={num}>{num} Members</option>
+                {[1, 2, 3, 4, 5].map((num) => (
+                  <option key={num} value={num}>
+                    {num} Members
+                  </option>
                 ))}
               </select>
             </div>
@@ -197,7 +221,6 @@ export default function CreateTopic() {
               <Save className="h-4 w-4" /> Save Draft
             </button>
 
-            {/* Publish Button */}
             <button
               type="button"
               onClick={(e) => handleSubmit(e, "published")}
@@ -208,7 +231,6 @@ export default function CreateTopic() {
               Publish Topic
             </button>
           </div>
-
         </form>
       </div>
     </DashboardLayout>

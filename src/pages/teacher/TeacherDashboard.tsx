@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { BookOpen, Users, Clock3, CheckCircle2, Plus, Edit, Trash2 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { ToastAlert } from "@/components/common/ToastAlert";
 
-// Firebase imports
 import { auth } from "@/firebase/auth";
 import { doc, getDoc, getFirestore } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
@@ -15,11 +15,23 @@ export default function TeacherDashboard() {
   const [topics, setTopics] = useState<ResearchTopic[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Real-time and user state
   const [currentTime, setCurrentTime] = useState(new Date());
   const [userName, setUserName] = useState("Supervisor");
 
-  // Real-time clock update
+  const [toast, setToast] = useState<{
+    show: boolean;
+    type: "success" | "error";
+    message: string;
+  }>({
+    show: false,
+    type: "success",
+    message: "",
+  });
+
+  const showToast = (type: "success" | "error", message: string) => {
+    setToast({ show: true, type, message });
+  };
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
@@ -38,12 +50,12 @@ export default function TeacherDashboard() {
           setUserName(fallbackName.charAt(0).toUpperCase() + fallbackName.slice(1));
         }
 
-        // Fetch the teacher's research topics
         try {
           const data = await getTeacherResearchTopics(user.uid);
           setTopics(data);
         } catch (error) {
           console.error("Failed to load research topics:", error);
+          showToast("error", "Failed to load research topics.");
         } finally {
           setLoading(false);
         }
@@ -55,15 +67,16 @@ export default function TeacherDashboard() {
     return () => unsubscribe();
   }, []);
 
-  // Handle topic deletion
   const handleDelete = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this topic?")) {
       try {
         await deleteResearchTopic(id);
-        setTopics(topics.filter((topic) => topic.id !== id)); // Update the state to remove the deleted topic
+        setTopics(topics.filter((topic) => topic.id !== id)); // Update state
+        showToast("success", "Research topic deleted successfully!");
+        setTimeout(() => {} ,3000);
       } catch (error) {
         console.error("Failed to delete topic:", error);
-        alert("Failed to delete topic.");
+        showToast("error", "Failed to delete research topic. Please try again.");
       }
     }
   };
@@ -83,7 +96,13 @@ export default function TeacherDashboard() {
     <DashboardLayout role="teacher">
       <div className="mx-auto max-w-5xl px-2 sm:px-0">
         
-        {/* Top Header and Real-time Clock */}
+        <ToastAlert
+          show={toast.show}
+          type={toast.type}
+          message={toast.message}
+          onClose={() => setToast((prev) => ({ ...prev, show: false }))}
+        />
+
         <div className="mb-10 flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
           <div>
             <div className="mb-4 flex items-center gap-3">
@@ -116,7 +135,6 @@ export default function TeacherDashboard() {
           </Link>
         </div>
 
-        {/* Statistics Metric Cards */}
         <div className="mb-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard icon={BookOpen} value={String(topics.length).padStart(2, "0")} label="Active Topics" trend="+2 this month" />
           <StatCard icon={Users} value="24" label="Enrolled Students" trend="Active teams" />
@@ -124,10 +142,8 @@ export default function TeacherDashboard() {
           <StatCard icon={CheckCircle2} value="03" label="Completed Projects" trend="Successfully closed" />
         </div>
 
-        {/* Main Content Grid */}
         <div className="grid gap-6 lg:grid-cols-[1.4fr_.8fr]">
           
-          {/* Research Topic List */}
           <section className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818] overflow-hidden">
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5 dark:border-[#2A2A2A]">
               <div>

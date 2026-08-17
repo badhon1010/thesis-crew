@@ -1,14 +1,29 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Loader2, Save, Calendar } from "lucide-react";
+import { ToastAlert } from "@/components/common/ToastAlert";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { getResearchTopicById, updateResearchTopic, type ResearchTopicInput } from "@/firebase/researchTopics";
 
 export default function EditTopic() {
   const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>(); // Take the topic ID from the URL parameters
+  const { id } = useParams<{ id: string }>();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [toast, setToast] = useState<{
+    show: boolean;
+    type: "success" | "error";
+    message: string;
+  }>({
+    show: false,
+    type: "success",
+    message: "",
+  });
+
+  const showToast = (type: "success" | "error", message: string) => {
+    setToast({ show: true, type, message });
+  };
 
   const [formData, setFormData] = useState({
     title: "",
@@ -20,7 +35,6 @@ export default function EditTopic() {
     researchObjectives: "",
   });
 
-  // Fetch topic data when the page loads
   useEffect(() => {
     async function fetchTopic() {
       if (!id) return;
@@ -31,17 +45,18 @@ export default function EditTopic() {
             title: topic.title,
             category: topic.category,
             description: topic.description,
-            requiredSkills: topic.requiredSkills.join(", "), // Convert array to string
+            requiredSkills: topic.requiredSkills.join(", "),
             maxTeamSize: topic.maxTeamSize,
             applicationDeadline: topic.applicationDeadline,
             researchObjectives: topic.researchObjectives,
           });
         } else {
-          alert("Topic not found!");
-          navigate("/teacher/dashboard");
+          showToast("error", "Topic not found!");
+          setTimeout(() => navigate("/teacher/dashboard"), 1500);
         }
       } catch (error) {
         console.error("Error fetching topic:", error);
+        showToast("error", "Failed to fetch research topic details.");
       } finally {
         setIsLoading(false);
       }
@@ -56,7 +71,10 @@ export default function EditTopic() {
 
   const handleSubmit = async (e: React.FormEvent, status: "draft" | "published") => {
     e.preventDefault();
-    if (!id || !formData.title || !formData.description) return alert("Title and Description are required!");
+    if (!id || !formData.title || !formData.description) {
+      showToast("error", "Title and Description are required!");
+      return;
+    }
 
     setIsSubmitting(true);
 
@@ -73,10 +91,15 @@ export default function EditTopic() {
       };
 
       await updateResearchTopic(id, updatedData);
-      navigate("/teacher/dashboard"); 
+      showToast("success", "Research topic updated successfully!");
+      
+      // Auto-navigate after 3 seconds when the toast disappears
+      setTimeout(() => {
+        navigate("/teacher/dashboard");
+      }, 3000);
     } catch (error) {
       console.error("Error updating topic:", error);
-      alert("Failed to update topic. Please try again.");
+      showToast("error", "Failed to update research topic. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -95,6 +118,15 @@ export default function EditTopic() {
   return (
     <DashboardLayout role="teacher">
       <div className="mx-auto max-w-4xl px-2 sm:px-0">
+        
+        <ToastAlert
+          show={toast.show}
+          type={toast.type}
+          message={toast.message}
+          duration={3000}
+          onClose={() => setToast((prev) => ({ ...prev, show: false }))}
+        />
+
         <div className="mb-10">
           <button 
             onClick={() => navigate(-1)}
@@ -148,7 +180,6 @@ export default function EditTopic() {
                   value={formData.applicationDeadline}
                   onChange={handleChange}
                   onClick={(e) => {
-                    // When any part of the input is clicked, open the calendar popup
                     try {
                       (e.target as HTMLInputElement).showPicker();
                     } catch (error) {
@@ -157,7 +188,6 @@ export default function EditTopic() {
                   }}
                   className="w-full cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#1e2433] dark:bg-[#0b0f19] dark:text-white dark:[color-scheme:dark] [&::-webkit-calendar-picker-indicator]:hidden"
                 />
-                {/* Our custom calendar icon */}
                 <Calendar className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               </div>
             </div>

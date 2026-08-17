@@ -2,6 +2,8 @@ import { ArrowLeft, ArrowRight, Check, FlaskConical } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ThemeToggle } from "../../components/common/ThemeToggle";
+import { ToastAlert } from "../../components/common/ToastAlert";
+import { validateUiuEmail } from "../../utils/emailValidation";
 import { auth } from "../../firebase/auth";
 import { db } from "../../firebase/firestore";
 import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
@@ -21,9 +23,10 @@ export default function Register() {
   const [cgpa, setCgpa] = useState("");
   const [researchInterests, setResearchInterests] = useState("");
   const [researchAreas, setResearchAreas] = useState("");
-  
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [toastMessage, setToastMessage] = useState("");
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +34,12 @@ export default function Register() {
 
     if (password !== confirmPassword) {
       setError("Passwords do not match!");
+      return;
+    }
+
+    const emailCheck = validateUiuEmail(email, role);
+    if (!emailCheck.isValid) {
+      setError(emailCheck.message || "Invalid university email format.");
       return;
     }
 
@@ -61,8 +70,8 @@ export default function Register() {
       await setDoc(doc(db, "users", user.uid), userData);
       await signOut(auth);
 
-      alert("Account created successfully! Please log in.");
-      navigate("/login");
+      // Trigger 3-second success toast notification
+      setToastMessage("Account registered successfully! Redirecting...");
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Failed to create account. Please try again.");
@@ -71,8 +80,17 @@ export default function Register() {
     }
   };
 
+  const handleToastClose = () => {
+    setToastMessage("");
+    navigate("/login");
+  };
+
   return (
     <div className="min-h-screen bg-[#fcfcfd] text-slate-900 selection:bg-indigo-500 selection:text-white dark:bg-[#000000] dark:text-slate-100 animate-slideIn">
+      {toastMessage && (
+        <ToastAlert message={toastMessage} type="success" onClose={handleToastClose} duration={3000} />
+      )}
+
       <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur-xl dark:border-[#2A2A2A]/60 dark:bg-[#121212]/80">
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6 lg:px-8">
           <Link to="/">
@@ -174,7 +192,7 @@ export default function Register() {
 
               <Field
                 label="University email *"
-                placeholder="you@university.edu"
+                placeholder={role === "student" ? "student@bscse.uiu.ac.bd" : "faculty@cse.uiu.ac.bd"}
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
