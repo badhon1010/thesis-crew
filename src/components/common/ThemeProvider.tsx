@@ -12,13 +12,31 @@ const ThemeProviderContext = createContext<{
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
-    return (localStorage.getItem("theme") as Theme) || "light";
+    // Safe check to strictly get the value from localStorage
+    if (typeof window !== "undefined") {
+      const storedTheme = localStorage.getItem("theme") as Theme;
+      if (storedTheme) return storedTheme;
+      
+      // Optional: Fallback to system preference if localStorage is empty
+      if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        return "dark";
+      }
+    }
+    return "light";
   });
 
   useEffect(() => {
     const root = window.document.documentElement;
-    root.classList.remove("light", "dark");
-    root.classList.add(theme);
+
+    // Explicitly add/remove classes based on the exact theme state
+    if (theme === "dark") {
+      root.classList.add("dark");
+      root.classList.remove("light");
+    } else {
+      root.classList.add("light");
+      root.classList.remove("dark");
+    }
+    
     localStorage.setItem("theme", theme);
   }, [theme]);
 
