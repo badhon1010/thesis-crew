@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { BookOpen, Users, Clock3, CheckCircle2, Plus, Edit, Trash2, ArrowRight, Eye } from "lucide-react";
+import { BookOpen, Users, Clock3, CheckCircle2, Plus, Edit, Trash2, ArrowRight, Eye, type LucideIcon } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 
 import { auth } from "@/firebase/auth";
-import { doc, getDoc, getFirestore } from "firebase/firestore";
+import { collection, doc, getDoc, getFirestore, onSnapshot, query, where, type Unsubscribe } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getTeacherResearchTopics, deleteResearchTopic, type ResearchTopic } from "@/firebase/researchTopics";
 
@@ -14,6 +14,7 @@ const db = getFirestore();
 export default function TeacherDashboard() {
   const navigate = useNavigate();
   const [topics, setTopics] = useState<ResearchTopic[]>([]);
+  const [pendingRequestCount, setPendingRequestCount] = useState(0);
   const [loading, setLoading] = useState(true);
   
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -42,7 +43,9 @@ export default function TeacherDashboard() {
   }, []);
 
   useEffect(() => {
+    let unsubscribeRequests: Unsubscribe | undefined;
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      unsubscribeRequests?.();
       if (user) {
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists() && userDoc.data().name) {
@@ -62,12 +65,19 @@ export default function TeacherDashboard() {
         } finally {
           setLoading(false);
         }
+
+        unsubscribeRequests = onSnapshot(
+          query(collection(db, "joinRequests"), where("supervisorId", "==", user.uid)),
+          (snapshot) => setPendingRequestCount(snapshot.docs.filter((request) => request.data().status === "pending").length),
+          (error) => console.error("Failed to subscribe to pending requests:", error),
+        );
       } else {
+        setPendingRequestCount(0);
         setLoading(false);
       }
     });
 
-    return () => unsubscribe();
+    return () => { unsubscribe(); unsubscribeRequests?.(); };
   }, []);
 
   // Limit topics shown on the dashboard to a maximum of 3 items
@@ -152,7 +162,7 @@ export default function TeacherDashboard() {
         <div className="mb-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard icon={BookOpen} value={String(topics.length).padStart(2, "0")} label="Active Topics" trend="+2 this month" />
           <StatCard icon={Users} value="24" label="Enrolled Students" trend="Active teams" />
-          <StatCard icon={Clock3} value="06" label="Pending Requests" trend="Needs review" />
+          <StatCard icon={Clock3} value={String(pendingRequestCount).padStart(2, "0")} label="Pending Requests" trend="Live from Firestore" />
           <StatCard icon={CheckCircle2} value="03" label="Completed Projects" trend="Successfully closed" />
         </div>
 
@@ -254,28 +264,9 @@ export default function TeacherDashboard() {
               </button>
             </div>
 
-            <div className="space-y-3 p-6">
-              {[
-                ["Sarah Ahmed", "Python · Machine Learning", "92%"],
-                ["Tanvir Hasan", "IoT · C++ Embedded", "84%"],
-              ].map(([name, skills, match]) => (
-                <div key={name} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-4 transition-all hover:border-slate-200 dark:border-[#2A2A2A] dark:bg-[#121212] dark:hover:border-[#3a3a3a]">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 font-bold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
-                      {name.split(" ").map((n) => n[0]).join("")}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white">{name}</p>
-                      <p className="truncate text-xs text-slate-500 dark:text-slate-400">{skills}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="inline-block rounded-lg bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
-                      {match}
-                    </span>
-                  </div>
-                </div>
-              ))}
+            <div className="p-6 text-center">
+              <p className="text-sm font-medium text-slate-900 dark:text-white">{pendingRequestCount ? `${pendingRequestCount} student request${pendingRequestCount === 1 ? "" : "s"} waiting for review.` : "No student requests are waiting for review."}</p>
+              <Link to="/teacher/requests" className="mt-3 inline-flex text-xs font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">Open Team Requests →</Link>
             </div>
           </section>
 
@@ -285,7 +276,7 @@ export default function TeacherDashboard() {
   );
 }
 
-function StatCard({ icon: Icon, value, label, trend }: any) {
+function StatCard({ icon: Icon, value, label, trend }: { icon: LucideIcon; value: string; label: string; trend: string }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:border-slate-300 dark:border-[#2A2A2A] dark:bg-[#181818]">
       <div className="flex items-center justify-between">

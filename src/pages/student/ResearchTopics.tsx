@@ -1,26 +1,72 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { BookOpen, Filter, Search, SlidersHorizontal } from "lucide-react";
+import { onAuthStateChanged } from "firebase/auth";
+import { collection, doc, onSnapshot, query, where, type Unsubscribe } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { getPublishedResearchTopics, type ResearchTopic } from "@/firebase/researchTopics";
+import { auth } from "@/firebase/auth";
+import { db } from "@/firebase/firestore";
+import { type ResearchTopic } from "@/firebase/researchTopics";
+import { calculateSkillMatch } from "@/utils/skillMatching";
+import { isNewlyPublishedTopic } from "@/utils/topicStatus";
+
+interface StudentProfile {
+  name?: string;
+  email?: string;
+  department?: string;
+  cgpa?: string;
+  skills?: string[];
+}
 
 export default function StudentResearchTopics() {
   const [topics, setTopics] = useState<ResearchTopic[]>([]);
+  const [studentSkills, setStudentSkills] = useState<string[]>([]);
+  const [teamMemberCounts, setTeamMemberCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
-    async function loadTopics() {
-      try {
-        // Fetch published research topics from Firestore
-        const data = await getPublishedResearchTopics();
-        setTopics(data);
-      } catch (error) {
-        console.error("Failed to load topics:", error);
-      } finally {
+    let unsubscribeProfile: Unsubscribe | undefined;
+    let unsubscribeTeams: Unsubscribe | undefined;
+    const unsubscribeTopics = onSnapshot(
+      query(collection(db, "researchTopics"), where("status", "==", "published")),
+      (snapshot) => {
+        setTopics(snapshot.docs.map((topic) => ({
+          id: topic.id,
+          ...(topic.data() as Omit<ResearchTopic, "id">),
+        })));
         setLoading(false);
+      },
+      (error) => {
+        console.error("Failed to subscribe to research topics:", error);
+        setLoading(false);
+      },
+    );
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      unsubscribeProfile?.();
+      unsubscribeTeams?.();
+      if (!user) {
+        setStudentSkills([]);
+        return;
       }
-    }
-    loadTopics();
+      unsubscribeProfile = onSnapshot(doc(db, "users", user.uid), (snapshot) => {
+        const profile = snapshot.data() as StudentProfile | undefined;
+        setStudentSkills(profile?.skills ?? []);
+      }, (error) => console.error("Failed to subscribe to student profile:", error));
+      unsubscribeTeams = onSnapshot(collection(db, "teams"), (snapshot) => {
+        setTeamMemberCounts(Object.fromEntries(snapshot.docs.map((team) => [
+          team.id,
+          ((team.data().memberIds as string[] | undefined) ?? []).length,
+        ])));
+      }, (error) => console.error("Failed to subscribe to team capacity:", error));
+    });
+
+    return () => {
+      unsubscribeTopics();
+      unsubscribeAuth();
+      unsubscribeProfile?.();
+      unsubscribeTeams?.();
+    };
   }, []);
 
   const filteredTopics = topics.filter(
@@ -77,7 +123,10 @@ export default function StudentResearchTopics() {
           ) : filteredTopics.length === 0 ? (
             <div className="col-span-2 p-12 text-center text-sm text-slate-500">No published topics found matching your search.</div>
           ) : (
-            filteredTopics.map((topic) => (
+            filteredTopics.map((topic) => {
+              const memberCount = teamMemberCounts[topic.id] ?? 0;
+              const isFull = memberCount >= topic.maxTeamSize;
+              return (
               <article
                 key={topic.id}
                 className="group rounded-2xl border border-slate-200 bg-white p-6 transition-colors hover:border-indigo-200 dark:border-[#2A2A2A] dark:bg-[#181818] dark:hover:border-slate-700"
@@ -88,14 +137,17 @@ export default function StudentResearchTopics() {
                       <BookOpen className="h-5 w-5" />
                     </div>
                     <div>
-                      <h2 className="font-semibold text-slate-900 dark:text-white">{topic.title}</h2>
+                      <div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold text-slate-900 dark:text-white">{topic.title}</h2>{isNewlyPublishedTopic(topic) && <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white">NEW</span>}</div>
                       {/* Name of the actual supervisor from the database */}
                       <p className="mt-1 text-xs text-slate-500">Supervised by {topic.supervisorName || "Unknown Supervisor"}</p>
+                      <p className={`mt-2 text-xs font-medium ${isFull ? "text-rose-600 dark:text-rose-400" : "text-slate-500 dark:text-slate-400"}`}>{isFull ? "Team full" : `${memberCount}/${topic.maxTeamSize} members · ${topic.maxTeamSize - memberCount} spot${topic.maxTeamSize - memberCount === 1 ? "" : "s"} left`}</p>
                     </div>
                   </div>
 
                   <div className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-right dark:bg-emerald-950/30">
-                    <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">92%</p>
+                    <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                      {calculateSkillMatch(studentSkills, topic.requiredSkills).score}%
+                    </p>
                     <p className="text-[9px] font-medium text-emerald-600/70 dark:text-emerald-400/70">match</p>
                   </div>
                 </div>
@@ -117,12 +169,11 @@ export default function StudentResearchTopics() {
 
                 <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-5 dark:border-[#2A2A2A]">
                   <p className="text-xs font-medium text-slate-400">Deadline · {topic.applicationDeadline || "Not set"}</p>
-                  <button className="text-sm font-medium text-indigo-600 transition hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300">
-                    View details →
-                  </button>
+                  <Link to={`/student/research-topics/${topic.id}`} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-500">View details</Link>
                 </div>
               </article>
-            ))
+            );
+            })
           )}
         </div>
       </div>

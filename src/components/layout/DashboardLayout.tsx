@@ -3,6 +3,7 @@ import { Sidebar } from "./Sidebar";
 import { ThemeToggle } from "../common/ThemeToggle";
 import { Menu } from "lucide-react";
 import { Link } from "react-router-dom";
+import { StudentNotifications } from "../common/StudentNotifications";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -37,6 +38,7 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
 
           <div className="flex items-center gap-4">
             <ThemeToggle />
+            {role === "student" && <StudentNotifications />}
             
             {/* Profile Icon */}
             <Link 
