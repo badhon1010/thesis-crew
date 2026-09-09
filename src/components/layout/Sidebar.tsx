@@ -40,8 +40,9 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
       : [
           { name: "Dashboard", path: "/teacher/dashboard", icon: LayoutDashboard },
           { name: "Create Research Topic", path: "/teacher/topics/create", icon: SquarePen },
-          { name: "My Research Topics", path: "/teacher/topics", icon: SquareLibrary }
-          ,{ name: "Team Requests", path: "/teacher/requests", icon: Users }
+          { name: "My Research Topics", path: "/teacher/topics", icon: SquareLibrary },
+          { name: "Research Group", path: "/teacher/research-groups", icon: Users },
+          { name: "Team Requests", path: "/teacher/requests", icon: Users }
         ];
 
   return (

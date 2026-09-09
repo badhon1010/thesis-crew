@@ -153,3 +153,32 @@ export async function reviewJoinRequest(
     }
   });
 }
+
+export interface Team {
+  projectId: string;
+  topicTitle: string;
+  supervisorId: string;
+  memberIds: string[];
+  maxTeamSize: number;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
+/**
+ * Fetches all research groups (teams) for a given supervisor where
+ * the team has reached its maximum capacity (memberIds.length === maxTeamSize).
+ */
+export async function getFullCapacityTeams(supervisorId: string): Promise<Team[]> {
+  const { collection, query, where, getDocs } = await import("firebase/firestore");
+
+  const teamsQuery = query(
+    collection(db, "teams"),
+    where("supervisorId", "==", supervisorId)
+  );
+
+  const snapshot = await getDocs(teamsQuery);
+
+  return snapshot.docs
+    .map((doc) => doc.data() as Team)
+    .filter((team) => team.memberIds.length >= team.maxTeamSize);
+}
