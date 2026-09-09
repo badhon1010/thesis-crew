@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { Plus, Edit, Trash2, Clock3, ArrowLeft, Search, Eye, Filter } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Plus, Edit, Trash2, Clock3, ArrowLeft, Search, Filter } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 
@@ -9,6 +9,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { getTeacherResearchTopics, deleteResearchTopic, type ResearchTopic } from "@/firebase/researchTopics";
 
 export default function TeacherResearchTopics() {
+  const navigate = useNavigate();
   const [topics, setTopics] = useState<ResearchTopic[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -51,7 +52,8 @@ export default function TeacherResearchTopics() {
     return () => unsubscribe();
   }, []);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation(); // Prevents clicking delete from opening details page
     if (window.confirm("Are you sure you want to delete this topic?")) {
       try {
         await deleteResearchTopic(id);
@@ -145,11 +147,17 @@ export default function TeacherResearchTopics() {
               <div className="px-6 py-12 text-center text-sm text-slate-500">No research topics found.</div>
             ) : (
               filteredTopics.map((topic) => (
-                <div key={topic.id} className="p-6 transition-colors hover:bg-slate-50 dark:hover:bg-[#222222]">
+                <div
+                  key={topic.id}
+                  onClick={() => navigate(`/teacher/topics/details/${topic.id}`)}
+                  className="group cursor-pointer p-6 transition-colors hover:bg-slate-50 dark:hover:bg-[#222222]"
+                >
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-base font-bold text-slate-900 dark:text-white">{topic.title}</h3>
+                        <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">
+                          {topic.title}
+                        </h3>
                         {topic.status && (
                           <span
                             className={`rounded-full px-2 py-0.5 text-[10px] font-bold capitalize ${
@@ -183,21 +191,15 @@ export default function TeacherResearchTopics() {
 
                     <div className="flex items-center gap-2">
                       <Link
-                        to={`/teacher/topics/details/${topic.id}`}
-                        className="rounded-lg bg-slate-100 p-2 text-slate-600 transition-colors hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                        title="View Topic Details"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Link>
-                      <Link
                         to={`/teacher/topics/edit/${topic.id}`}
+                        onClick={(e) => e.stopPropagation()}
                         className="rounded-lg bg-indigo-50 p-2 text-indigo-600 transition-colors hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
                         title="Edit Topic"
                       >
                         <Edit className="h-4 w-4" />
                       </Link>
                       <button
-                        onClick={() => handleDelete(topic.id)}
+                        onClick={(e) => handleDelete(e, topic.id)}
                         className="rounded-lg bg-red-50 p-2 text-red-600 transition-colors hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
                         title="Delete Topic"
                       >
@@ -205,7 +207,7 @@ export default function TeacherResearchTopics() {
                       </button>
                     </div>
                   </div>
-                  <p className="mt-3 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+                  <p className="mt-3 text-xs leading-relaxed text-slate-600 dark:text-slate-400 line-clamp-2">
                     {topic.description}
                   </p>
                 </div>

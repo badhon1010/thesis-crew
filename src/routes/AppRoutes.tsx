@@ -9,6 +9,7 @@ import TeacherResearchTopics from "@/pages/teacher/TeacherResearchTopics";
 import CreateResearchTopic from "@/pages/teacher/CreateResearchTopic";
 import EditTopic from "@/pages/teacher/EditTopic";
 import TeacherJoinRequests from "@/pages/teacher/TeacherJoinRequests";
+import ResearchTopicDetails from "@/pages/teacher/ResearchTopicDetails"; // <--- Add this import
 import StudentProfile from "@/pages/student/StudentProfile";
 import StudentTopicDetails from "@/pages/student/StudentTopicDetails";
 
@@ -23,6 +24,7 @@ export function AppRoutes() {
       <Route path="/teacher/topics" element={<TeacherResearchTopics />} />
       <Route path="/teacher/topics/create" element={<CreateResearchTopic />} />
       <Route path="/teacher/topics/edit/:id" element={<EditTopic />} />
+      <Route path="/teacher/topics/details/:id" element={<ResearchTopicDetails />} /> {/* <--- Add this route */}
       <Route path="/teacher/requests" element={<TeacherJoinRequests />} />
 
       <Route path="/student/dashboard" element={<StudentDashboard />} />
