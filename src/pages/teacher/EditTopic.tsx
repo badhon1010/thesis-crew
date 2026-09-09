@@ -45,10 +45,10 @@ export default function EditTopic() {
             title: topic.title,
             category: topic.category,
             description: topic.description,
-            requiredSkills: topic.requiredSkills.join(", "),
+            requiredSkills: topic.requiredSkills ? topic.requiredSkills.join(", ") : "",
             maxTeamSize: topic.maxTeamSize,
-            applicationDeadline: topic.applicationDeadline,
-            researchObjectives: topic.researchObjectives,
+            applicationDeadline: topic.applicationDeadline || "",
+            researchObjectives: topic.researchObjectives || "",
           });
         } else {
           showToast("error", "Topic not found!");
@@ -93,7 +93,6 @@ export default function EditTopic() {
       await updateResearchTopic(id, updatedData);
       showToast("success", "Research topic updated successfully!");
       
-      // Auto-navigate after 3 seconds when the toast disappears
       setTimeout(() => {
         navigate("/teacher/dashboard");
       }, 3000);
@@ -129,23 +128,26 @@ export default function EditTopic() {
 
         <div className="mb-10">
           <button 
+            type="button"
             onClick={() => navigate(-1)}
-            className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors"
+            className="mb-6 inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-slate-500 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" /> Back to Dashboard
           </button>
           
-          <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400 mb-4">
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-600 dark:bg-amber-400 animate-pulse" />
-            Edit Mode
+          <div className="flex flex-col items-start gap-2">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-600 dark:bg-amber-400" />
+              Edit Mode
+            </div>
+            
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
+              Update Research Topic
+            </h1>
           </div>
-          
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
-            Update Research Topic
-          </h1>
         </div>
 
-        <form className="space-y-8 rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 dark:border-[#1e2433] dark:bg-[#111622] shadow-sm">
+        <form className="space-y-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 dark:border-[#1e2433] dark:bg-[#111622]">
           <div className="grid gap-6 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="mb-2 block text-sm font-semibold text-slate-900 dark:text-slate-300">Project Title</label>
