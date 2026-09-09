@@ -1,22 +1,23 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { 
-  ArrowLeft, 
-  Calendar, 
-  Users, 
-  CheckCircle2, 
-  Clock, 
-  Code2, 
-  FileText, 
+import {
+  ArrowLeft,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Code2,
+  FileText,
   UserCheck,
   Edit,
   Loader2,
   Mail,
-  BookOpen
+  BookOpen,
+  Eye
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { StudentProfileModal } from "@/components/common/StudentProfileModal";
+import { doc, getDoc, collection, query, where, getDocs, onSnapshot, type Unsubscribe } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
 
 interface ResearchTopic {
@@ -32,13 +33,10 @@ interface ResearchTopic {
   status?: string;
 }
 
-interface ApplicationRequest {
-  id: string;
+interface TeamMember {
   studentId: string;
   studentName: string;
   studentEmail?: string;
-  status: "pending" | "accepted" | "rejected";
-  appliedAt?: any;
 }
 
 export default function ResearchTopicDetails() {
@@ -46,8 +44,10 @@ export default function ResearchTopicDetails() {
   const navigate = useNavigate();
 
   const [topic, setTopic] = useState<ResearchTopic | null>(null);
-  const [requests, setRequests] = useState<ApplicationRequest[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [pendingRequestCount, setPendingRequestCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({
     show: false,
     type: "success",
@@ -56,6 +56,9 @@ export default function ResearchTopicDetails() {
 
   useEffect(() => {
     if (!id) return;
+
+    let unsubscribeJoinRequests: Unsubscribe | undefined;
+    let unsubscribeTeam: Unsubscribe | undefined;
 
     const fetchTopicData = async () => {
       try {
@@ -72,26 +75,70 @@ export default function ResearchTopicDetails() {
 
         setTopic({ id: topicSnap.id, ...topicSnap.data() } as ResearchTopic);
 
-        // Fetch Requests / Applications for this topic
-        const appsRef = collection(db, "applications");
-        const q = query(appsRef, where("topicId", "==", id));
-        const appsSnap = await getDocs(q);
+        // Subscribe to pending requests count in real-time
+        unsubscribeJoinRequests = onSnapshot(
+          query(collection(db, "joinRequests"), where("projectId", "==", id), where("status", "==", "pending")),
+          (snapshot) => {
+            setPendingRequestCount(snapshot.docs.length);
+          },
+          (error) => console.error("Failed to load pending requests:", error)
+        );
 
-        const appsList: ApplicationRequest[] = appsSnap.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        })) as ApplicationRequest[];
+        // Subscribe to team members in real-time
+        unsubscribeTeam = onSnapshot(
+          doc(db, "teams", id),
+          async (teamSnapshot) => {
+            if (!teamSnapshot.exists()) {
+              setTeamMembers([]);
+              setLoading(false);
+              return;
+            }
 
-        setRequests(appsList);
+            const teamData = teamSnapshot.data();
+            const memberIds = (teamData.memberIds as string[]) || [];
+
+            // Fetch accepted join requests for these members to get their details
+            if (memberIds.length > 0) {
+              const joinRequestsQuery = query(
+                collection(db, "joinRequests"),
+                where("projectId", "==", id),
+                where("status", "==", "accepted")
+              );
+              const joinRequestsSnap = await getDocs(joinRequestsQuery);
+
+              const members: TeamMember[] = joinRequestsSnap.docs.map((doc) => {
+                const data = doc.data();
+                return {
+                  studentId: data.studentId,
+                  studentName: data.studentName,
+                  studentEmail: data.studentEmail,
+                };
+              });
+
+              setTeamMembers(members);
+            } else {
+              setTeamMembers([]);
+            }
+            setLoading(false);
+          },
+          (error) => {
+            console.error("Failed to load team data:", error);
+            setLoading(false);
+          }
+        );
       } catch (error) {
         console.error("Error loading topic details:", error);
         setToast({ show: true, type: "error", message: "Failed to load topic details." });
-      } finally {
         setLoading(false);
       }
     };
 
     fetchTopicData();
+
+    return () => {
+      unsubscribeJoinRequests?.();
+      unsubscribeTeam?.();
+    };
   }, [id]);
 
   if (loading) {
@@ -120,9 +167,6 @@ export default function ResearchTopicDetails() {
     );
   }
 
-  const acceptedStudents = requests.filter((r) => r.status === "accepted");
-  const pendingRequests = requests.filter((r) => r.status === "pending");
-
   return (
     <DashboardLayout role="teacher">
       <ToastAlert
@@ -131,6 +175,12 @@ export default function ResearchTopicDetails() {
         message={toast.message}
         duration={3000}
         onClose={() => setToast((prev) => ({ ...prev, show: false }))}
+      />
+
+      <StudentProfileModal
+        isOpen={selectedStudentId !== null}
+        studentId={selectedStudentId || ""}
+        onClose={() => setSelectedStudentId(null)}
       />
 
       <div className="mx-auto max-w-5xl px-2 sm:px-0">
@@ -185,12 +235,12 @@ export default function ResearchTopicDetails() {
         <div className="mb-8 grid gap-4 sm:grid-cols-3">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
             <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400">
-              <Users className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-              <span className="text-xs font-semibold uppercase">Total Requests</span>
+              <Clock className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+              <span className="text-xs font-semibold uppercase">Pending Requests</span>
             </div>
-            <p className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white">{requests.length}</p>
+            <p className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white">{pendingRequestCount}</p>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              {pendingRequests.length} pending review
+              Awaiting review
             </p>
           </div>
 
@@ -200,7 +250,7 @@ export default function ResearchTopicDetails() {
               <span className="text-xs font-semibold uppercase">Accepted Members</span>
             </div>
             <p className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white">
-              {acceptedStudents.length} / {topic.maxTeamSize}
+              {teamMembers.length} / {topic.maxTeamSize}
             </p>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               Max team capacity: {topic.maxTeamSize}
@@ -282,40 +332,51 @@ export default function ResearchTopicDetails() {
                   Accepted Students
                 </h2>
                 <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
-                  {acceptedStudents.length}
+                  {teamMembers.length}
                 </span>
               </div>
 
-              {acceptedStudents.length === 0 ? (
+              {teamMembers.length === 0 ? (
                 <div className="py-8 text-center text-xs text-slate-500 dark:text-slate-400">
                   No students have been accepted for this topic yet.
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100 dark:divide-[#2A2A2A]">
-                  {acceptedStudents.map((student) => (
-                    <div key={student.id} className="py-3 first:pt-0 last:pb-0">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white">
-                        {student.studentName}
-                      </p>
-                      {student.studentEmail && (
-                        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                          <Mail className="h-3 w-3" />
-                          {student.studentEmail}
-                        </p>
-                      )}
+                  {teamMembers.map((member) => (
+                    <div key={member.studentId} className="py-3 first:pt-0 last:pb-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                            {member.studentName}
+                          </p>
+                          {member.studentEmail && (
+                            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                              <Mail className="h-3 w-3" />
+                              {member.studentEmail}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => setSelectedStudentId(member.studentId)}
+                          className="rounded-lg p-1.5 text-indigo-600 transition-colors hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
+                          title="View Profile"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
 
-              {pendingRequests.length > 0 && (
+              {pendingRequestCount > 0 && (
                 <div className="mt-6 border-t border-slate-100 pt-4 dark:border-[#2A2A2A]">
                   <Link
                     to="/teacher/requests"
                     className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-50 py-2.5 text-xs font-bold text-indigo-600 transition-colors hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
                   >
                     <Clock className="h-3.5 w-3.5" />
-                    Review {pendingRequests.length} Pending Request(s)
+                    Review {pendingRequestCount} Pending Request{pendingRequestCount === 1 ? "" : "s"}
                   </Link>
                 </div>
               )}

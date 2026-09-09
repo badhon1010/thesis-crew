@@ -7,6 +7,7 @@ import { ToastAlert } from "@/components/common/ToastAlert";
 import { auth } from "@/firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
 import { getTeacherResearchTopics, deleteResearchTopic, type ResearchTopic } from "@/firebase/researchTopics";
+import { getFullCapacityTeams } from "@/firebase/teamFormation";
 
 export default function TeacherResearchTopics() {
   const navigate = useNavigate();
@@ -36,8 +37,12 @@ export default function TeacherResearchTopics() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
-          const data = await getTeacherResearchTopics(user.uid);
-          setTopics(data);
+          const [data, fullTeams] = await Promise.all([
+            getTeacherResearchTopics(user.uid),
+            getFullCapacityTeams(user.uid),
+          ]);
+          const fullProjectIds = new Set(fullTeams.map((t) => t.projectId));
+          setTopics(data.filter((t) => !fullProjectIds.has(t.id)));
         } catch (error) {
           console.error("Failed to load research topics:", error);
           showToast("error", "Failed to load research topics.");
