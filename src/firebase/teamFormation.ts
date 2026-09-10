@@ -1,5 +1,4 @@
 import {
-  arrayUnion,
   doc,
   runTransaction,
   serverTimestamp,
@@ -8,9 +7,19 @@ import { db } from "./firestore";
 import type { ResearchTopic } from "./researchTopics";
 
 export type JoinRequestStatus = "pending" | "accepted" | "rejected";
+export type RequestType = "individual" | "group";
 
 export interface StudentRequestProfile {
   name?: string;
+  email?: string;
+  department?: string;
+  cgpa?: string;
+  skills?: string[];
+}
+
+export interface TeamMemberInfo {
+  name: string;
+  studentId: string;
   email?: string;
   department?: string;
   cgpa?: string;
@@ -32,6 +41,9 @@ export interface JoinRequest {
   message: string;
   maxTeamSize: number;
   status: JoinRequestStatus;
+  requestType: RequestType;
+  teamMembers?: TeamMemberInfo[];
+  teamLeaderId?: string;
   createdAt?: unknown;
   reviewedAt?: unknown;
   reviewedBy?: string;
@@ -70,6 +82,58 @@ export async function submitJoinRequest(
       message: message.trim().slice(0, 400),
       maxTeamSize: topic.maxTeamSize,
       status: "pending" satisfies JoinRequestStatus,
+      requestType: "individual" satisfies RequestType,
+      createdAt: serverTimestamp(),
+    });
+  });
+}
+
+/** Submit a group join request with multiple team members */
+export async function submitGroupJoinRequest(
+  topic: ResearchTopic,
+  leaderId: string,
+  leaderProfile: StudentRequestProfile,
+  teamMembers: TeamMemberInfo[],
+  message = "",
+) {
+  const joinRequestRef = doc(db, "joinRequests", requestId(topic.id, leaderId));
+
+  await runTransaction(db, async (transaction) => {
+    const existingRequest = await transaction.get(joinRequestRef);
+    if (existingRequest.exists()) {
+      throw new Error("You have already sent a request for this research topic.");
+    }
+
+    // Validate team size
+    const totalMembers = teamMembers.length;
+    if (totalMembers > topic.maxTeamSize) {
+      throw new Error(`Team size (${totalMembers}) exceeds the maximum allowed (${topic.maxTeamSize}).`);
+    }
+
+    // Check all team members for duplicate student IDs
+    const studentIds = teamMembers.map(m => m.studentId);
+    const uniqueIds = new Set(studentIds);
+    if (studentIds.length !== uniqueIds.size) {
+      throw new Error("Duplicate student IDs found in team members.");
+    }
+
+    transaction.set(joinRequestRef, {
+      projectId: topic.id,
+      topicTitle: topic.title,
+      supervisorId: topic.supervisorId,
+      studentId: leaderId,
+      studentName: leaderProfile.name || "Unnamed student",
+      studentEmail: leaderProfile.email || "",
+      studentDepartment: leaderProfile.department || "",
+      studentCgpa: leaderProfile.cgpa || "",
+      studentSkills: leaderProfile.skills || [],
+      topicRequiredSkills: topic.requiredSkills || [],
+      message: message.trim().slice(0, 400),
+      maxTeamSize: topic.maxTeamSize,
+      status: "pending" satisfies JoinRequestStatus,
+      requestType: "group" satisfies RequestType,
+      teamMembers,
+      teamLeaderId: leaderId,
       createdAt: serverTimestamp(),
     });
   });
@@ -92,7 +156,8 @@ export async function cancelJoinRequest(projectId: string, studentId: string) {
 }
 
 /**
- * Accepting a request adds the student to the topic's single shared team.
+ * Accepting a request adds the student(s) to the topic's single shared team.
+ * For group requests, all team members are added.
  * The transaction enforces the topic's maximum student capacity.
  */
 export async function reviewJoinRequest(
@@ -121,12 +186,28 @@ export async function reviewJoinRequest(
 
     const teamRef = doc(db, "teams", request.projectId);
     const teamSnapshot = await transaction.get(teamRef);
-    const memberIds = teamSnapshot.exists()
+    const existingMemberIds = teamSnapshot.exists()
       ? ((teamSnapshot.data().memberIds as string[] | undefined) ?? [])
       : [];
 
-    if (!memberIds.includes(request.studentId) && memberIds.length >= request.maxTeamSize) {
-      throw new Error("This team has reached its maximum size.");
+    // For group requests, add all team members
+    const newMemberIds: string[] = [];
+    if (request.requestType === "group" && request.teamMembers && request.teamMembers.length > 0) {
+      for (const member of request.teamMembers) {
+        if (!existingMemberIds.includes(member.studentId)) {
+          newMemberIds.push(member.studentId);
+        }
+      }
+    } else {
+      // Individual request
+      if (!existingMemberIds.includes(request.studentId)) {
+        newMemberIds.push(request.studentId);
+      }
+    }
+
+    // Check if adding new members would exceed capacity
+    if (existingMemberIds.length + newMemberIds.length > request.maxTeamSize) {
+      throw new Error("Adding this request would exceed the maximum team size.");
     }
 
     transaction.update(joinRequestRef, {
@@ -137,7 +218,7 @@ export async function reviewJoinRequest(
 
     if (teamSnapshot.exists()) {
       transaction.update(teamRef, {
-        memberIds: arrayUnion(request.studentId),
+        memberIds: [...existingMemberIds, ...newMemberIds],
         updatedAt: serverTimestamp(),
       });
     } else {
@@ -145,7 +226,7 @@ export async function reviewJoinRequest(
         projectId: request.projectId,
         topicTitle: request.topicTitle,
         supervisorId: request.supervisorId,
-        memberIds: [request.studentId],
+        memberIds: newMemberIds,
         maxTeamSize: request.maxTeamSize,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),

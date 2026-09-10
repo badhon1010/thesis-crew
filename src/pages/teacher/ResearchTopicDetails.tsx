@@ -106,16 +106,40 @@ export default function ResearchTopicDetails() {
               );
               const joinRequestsSnap = await getDocs(joinRequestsQuery);
 
-              const members: TeamMember[] = joinRequestsSnap.docs.map((doc) => {
+              const membersMap = new Map<string, TeamMember>();
+
+              joinRequestsSnap.docs.forEach((doc) => {
                 const data = doc.data();
-                return {
-                  studentId: data.studentId,
-                  studentName: data.studentName,
-                  studentEmail: data.studentEmail,
-                };
+                if (data.requestType === "group" && Array.isArray(data.teamMembers) && data.teamMembers.length > 0) {
+                  data.teamMembers.forEach((tm: { studentId: string; name: string; email?: string }) => {
+                    if (tm.studentId && !membersMap.has(tm.studentId)) {
+                      membersMap.set(tm.studentId, {
+                        studentId: tm.studentId,
+                        studentName: tm.name || "Unnamed student",
+                        studentEmail: tm.email,
+                      });
+                    }
+                  });
+                } else if (data.studentId && !membersMap.has(data.studentId)) {
+                  membersMap.set(data.studentId, {
+                    studentId: data.studentId,
+                    studentName: data.studentName || "Unnamed student",
+                    studentEmail: data.studentEmail,
+                  });
+                }
               });
 
-              setTeamMembers(members);
+              // Fallback for any team memberIds not found in join requests (e.g. direct members)
+              for (const memberId of memberIds) {
+                if (!membersMap.has(memberId)) {
+                  membersMap.set(memberId, {
+                    studentId: memberId,
+                    studentName: `Student (${memberId.slice(0, 6)})`,
+                  });
+                }
+              }
+
+              setTeamMembers(Array.from(membersMap.values()));
             } else {
               setTeamMembers([]);
             }
