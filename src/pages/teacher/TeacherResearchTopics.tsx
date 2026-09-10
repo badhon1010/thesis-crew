@@ -80,22 +80,54 @@ export default function TeacherResearchTopics() {
     return deadlineDate < today;
   };
 
-  const filteredTopics = topics.filter((t) => {
-    const matchesSearch =
-      t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.category.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredTopics = topics
+    .filter((t) => {
+      const matchesSearch =
+        t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.category.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const closed = isTopicClosed(t.applicationDeadline);
+      const closed = isTopicClosed(t.applicationDeadline);
 
-    let matchesStatus = true;
-    if (statusFilter === "open") {
-      matchesStatus = !closed;
-    } else if (statusFilter === "closed") {
-      matchesStatus = closed;
-    }
+      let matchesStatus = true;
+      if (statusFilter === "open") {
+        matchesStatus = !closed;
+      } else if (statusFilter === "closed") {
+        matchesStatus = closed;
+      }
 
-    return matchesSearch && matchesStatus;
-  });
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+
+      const aDeadline = a.applicationDeadline ? new Date(a.applicationDeadline) : null;
+      const bDeadline = b.applicationDeadline ? new Date(b.applicationDeadline) : null;
+
+      const aIsClosed = aDeadline ? aDeadline < now : false;
+      const bIsClosed = bDeadline ? bDeadline < now : false;
+
+      // No deadline topics go to the end
+      if (!aDeadline && !bDeadline) return 0;
+      if (!aDeadline) return 1;
+      if (!bDeadline) return -1;
+
+      // Open topics before closed topics
+      if (!aIsClosed && bIsClosed) return -1;
+      if (aIsClosed && !bIsClosed) return 1;
+
+      // Within open topics: sort by nearest deadline first (ascending)
+      if (!aIsClosed && !bIsClosed) {
+        return aDeadline.getTime() - bDeadline.getTime();
+      }
+
+      // Within closed topics: sort by most recent deadline first (descending)
+      if (aIsClosed && bIsClosed) {
+        return bDeadline.getTime() - aDeadline.getTime();
+      }
+
+      return 0;
+    });
 
   return (
     <DashboardLayout role="teacher">
