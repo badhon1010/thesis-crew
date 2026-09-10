@@ -129,7 +129,7 @@ export default function TeacherResearchGroups() {
             filteredGroups.map((group) => (
               <div
                 key={group.projectId}
-                onClick={() => navigate(`/teacher/topics/details/${group.projectId}`)}
+                onClick={() => navigate(`/teacher/research-groups/${group.projectId}`)}
                 className="group cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all hover:border-indigo-500/50 hover:shadow-md dark:border-[#2A2A2A] dark:bg-[#181818] dark:hover:border-indigo-500/50"
               >
                 <div className="border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-violet-50 px-6 py-4 dark:border-[#2A2A2A] dark:from-indigo-500/10 dark:to-violet-500/10">
