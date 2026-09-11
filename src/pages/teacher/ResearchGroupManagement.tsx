@@ -382,19 +382,15 @@ export default function ResearchGroupManagement() {
                 <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
                   {topic.category}
                 </span>
-                {topic.status && (
-                  <span
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-bold capitalize ${
-                      topic.status.toLowerCase() === "running"
-                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
-                        : topic.status.toLowerCase() === "completed"
-                        ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
-                        : "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300"
-                    }`}
-                  >
-                    {topic.status}
-                  </span>
-                )}
+                <span
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-bold capitalize ${
+                    publications.some((pub) => pub.status === "published")
+                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
+                      : "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
+                  }`}
+                >
+                  {publications.some((pub) => pub.status === "published") ? "Published" : "Ongoing"}
+                </span>
               </div>
               <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white">{topic.title}</h1>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
