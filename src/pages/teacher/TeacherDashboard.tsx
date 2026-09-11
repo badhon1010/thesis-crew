@@ -5,7 +5,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 
 import { auth } from "@/firebase/auth";
-import { collection, doc, getDoc, getFirestore, onSnapshot, query, where, type Unsubscribe } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, getFirestore, onSnapshot, query, where, type Unsubscribe } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import type { ResearchTopic } from "@/firebase/researchTopics";
 
@@ -16,6 +16,7 @@ export default function TeacherDashboard() {
   const [topics, setTopics] = useState<ResearchTopic[]>([]);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
   const [acceptedStudents, setAcceptedStudents] = useState(0);
+  const [publishedPapers, setPublishedPapers] = useState(0);
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState("Supervisor");
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -45,9 +46,11 @@ export default function TeacherDashboard() {
   useEffect(() => {
     let unsubscribeRequests: Unsubscribe | undefined;
     let unsubscribeTeams: Unsubscribe | undefined;
+    let unsubscribePublications: Unsubscribe | undefined;
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       unsubscribeRequests?.();
       unsubscribeTeams?.();
+      unsubscribePublications?.();
       if (user) {
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists() && userDoc.data().name) {
@@ -84,26 +87,63 @@ export default function TeacherDashboard() {
           (error) => console.error("Failed to subscribe to pending requests:", error),
         );
 
-        // Subscribe to teams to count accepted students
+        // Subscribe to full capacity teams to count unique students in research groups
         unsubscribeTeams = onSnapshot(
           query(collection(db, "teams"), where("supervisorId", "==", user.uid)),
-          (snapshot) => {
-            const totalStudents = snapshot.docs.reduce((sum, doc) => {
-              const data = doc.data();
-              return sum + (data.memberIds?.length || 0);
-            }, 0);
-            setAcceptedStudents(totalStudents);
+          async (snapshot) => {
+            // Get teams at full capacity
+            const fullCapacityTeams = snapshot.docs
+              .map((doc) => doc.data())
+              .filter((team: any) => team.memberIds?.length >= team.maxTeamSize);
+
+            // Get unique student IDs across all full capacity teams
+            const uniqueStudents = new Set<string>();
+            fullCapacityTeams.forEach((team: any) => {
+              if (team.memberIds) {
+                team.memberIds.forEach((id: string) => uniqueStudents.add(id));
+              }
+            });
+
+            setAcceptedStudents(uniqueStudents.size);
           },
           (error) => console.error("Failed to subscribe to teams:", error),
+        );
+
+        // Subscribe to publications across all research groups
+        unsubscribePublications = onSnapshot(
+          query(collection(db, "researchGroups")),
+          async (snapshot) => {
+            let totalPublished = 0;
+
+            // For each research group, check if it belongs to this supervisor
+            for (const groupDoc of snapshot.docs) {
+              const groupId = groupDoc.id;
+
+              // Check if this group belongs to this supervisor
+              const topicDoc = await getDoc(doc(db, "researchTopics", groupId));
+              if (topicDoc.exists() && topicDoc.data().supervisorId === user.uid) {
+                // Count published publications in this group
+                const pubsSnapshot = await getDocs(collection(db, "researchGroups", groupId, "publications"));
+                const published = pubsSnapshot.docs.filter(
+                  (pubDoc) => pubDoc.data().status === "published"
+                ).length;
+                totalPublished += published;
+              }
+            }
+
+            setPublishedPapers(totalPublished);
+          },
+          (error) => console.error("Failed to subscribe to publications:", error),
         );
       } else {
         setPendingRequestCount(0);
         setAcceptedStudents(0);
+        setPublishedPapers(0);
         setLoading(false);
       }
     });
 
-    return () => { unsubscribe(); unsubscribeRequests?.(); unsubscribeTeams?.(); };
+    return () => { unsubscribe(); unsubscribeRequests?.(); unsubscribeTeams?.(); unsubscribePublications?.(); };
   }, []);
 
   // Helper to check if deadline has passed
@@ -233,10 +273,10 @@ export default function TeacherDashboard() {
           />
           <StatCard
             icon={CheckCircle2}
-            value={String(topics.filter(t => t.status === "published").length).padStart(2, "0")}
-            label="Published Topics"
+            value={String(publishedPapers).padStart(2, "0")}
+            label="Published Papers"
             color="violet"
-            linkTo="/teacher/topics"
+            linkTo="/teacher/research-groups"
           />
         </div>
 
