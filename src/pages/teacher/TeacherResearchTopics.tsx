@@ -5,11 +5,8 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 
 import { auth } from "@/firebase/auth";
-import { getFirestore } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getTeacherResearchTopics, deleteResearchTopic, type ResearchTopic } from "@/firebase/researchTopics";
-
-const db = getFirestore();
 
 export default function TeacherResearchTopics() {
   const [topics, setTopics] = useState<ResearchTopic[]>([]);
