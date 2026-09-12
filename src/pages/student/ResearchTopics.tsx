@@ -175,7 +175,7 @@ export default function StudentResearchTopics() {
                       <div className="flex flex-wrap items-center gap-2">
                         <h2 className="font-semibold text-slate-900 dark:text-white">{topic.title}</h2>
                         {isNewlyPublishedTopic(topic) && !isClosed && <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white">NEW</span>}
-                        {isClosed && <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-bold tracking-wide text-rose-700 dark:bg-rose-500/20 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30">Application deadline over</span>}
+                        {isClosed && <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-bold tracking-wide text-rose-700 dark:bg-rose-500/20 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30">Closed</span>}
                         {isClosingSoon && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold tracking-wide text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30">Closing soon</span>}
                       </div>
                       {/* Name of the actual supervisor from the database */}

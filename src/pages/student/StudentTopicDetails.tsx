@@ -167,7 +167,35 @@ export default function StudentTopicDetails() {
     <Link to="/student/research-topics" className="mb-7 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 transition hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400"><ArrowLeft className="h-4 w-4" />All research topics</Link>
     <div className="grid gap-6 lg:grid-cols-[1.55fr_.8fr]"><main className="space-y-6"><section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818] sm:p-8"><div className="flex flex-wrap items-start justify-between gap-4"><div><span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">{topic.category}</span><h1 className="mt-4 text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">{topic.title}</h1></div><div className="rounded-xl bg-emerald-50 px-3 py-2 text-right dark:bg-emerald-950/30"><p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{match.score}%</p><p className="text-[10px] font-medium text-emerald-700/70 dark:text-emerald-300/70">skill match</p></div></div><p className="mt-6 whitespace-pre-line text-sm leading-7 text-slate-600 dark:text-slate-300">{topic.description}</p><div className="mt-7 grid gap-4 border-t border-slate-100 pt-6 sm:grid-cols-2 dark:border-[#2A2A2A]"><Detail icon={CalendarDays} label="Application deadline" value={formatDeadline(topic.applicationDeadline)} /><Detail icon={Users} label="Maximum team size" value={`${topic.maxTeamSize} student${topic.maxTeamSize === 1 ? "" : "s"}`} /><Detail icon={Users} label="Current team" value={teamFull ? `${teamMemberCount}/${topic.maxTeamSize} members · Full` : `${teamMemberCount}/${topic.maxTeamSize} members · ${topic.maxTeamSize - teamMemberCount} spot${topic.maxTeamSize - teamMemberCount === 1 ? "" : "s"} left`} /></div></section>
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]"><h2 className="text-lg font-bold text-slate-900 dark:text-white">Required skills</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Your matching skills are highlighted.</p><div className="mt-5 flex flex-wrap gap-2">{topic.requiredSkills?.length ? topic.requiredSkills.map((skill) => <span key={skill} className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${match.matchedSkills.includes(skill) ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"}`}>{match.matchedSkills.includes(skill) && "✓ "}{skill}</span>) : <span className="text-sm text-slate-500">No skills specified.</span>}</div></section>
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]"><h2 className="text-lg font-bold text-slate-900 dark:text-white">Research objectives</h2><p className="mt-4 whitespace-pre-line text-sm leading-7 text-slate-600 dark:text-slate-300">{topic.researchObjectives || "The supervisor has not added detailed objectives yet."}</p></section></main>
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]"><h2 className="text-lg font-bold text-slate-900 dark:text-white">Research objectives</h2><p className="mt-4 whitespace-pre-line text-sm leading-7 text-slate-600 dark:text-slate-300">{topic.researchObjectives || "The supervisor has not added detailed objectives yet."}</p></section>
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+        {match.score >= 80 ? (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+            <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+              Your skills match {match.score}%. We highly recommend you to apply for this research topic!
+            </p>
+          </div>
+        ) : match.score >= 50 ? (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-500/30 dark:bg-blue-500/10">
+            <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+              Your skills match {match.score}%. You have a solid foundation for this topic.
+            </p>
+          </div>
+        ) : match.score > 0 ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10">
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+              Your skills match {match.score}%. You might need to learn a few more skills, but it's a great learning opportunity.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-[#333333] dark:bg-[#121212]">
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+              Your current profile doesn't match the required skills yet, but if you're passionate, feel free to reach out to the supervisor!
+            </p>
+          </div>
+        )}
+      </section>
+      </main>
       <aside className="space-y-6"><section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]"><div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"><GraduationCap className="h-6 w-6" /></div><h2 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">Supervisor</h2><p className="mt-3 font-semibold text-slate-900 dark:text-white">{supervisor.name || topic.supervisorName || "Supervisor details unavailable"}</p><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{supervisor.designation || "Faculty supervisor"}</p><div className="mt-5 space-y-3 border-t border-slate-100 pt-5 text-sm dark:border-[#2A2A2A]"><p className="text-slate-600 dark:text-slate-300"><span className="font-medium text-slate-900 dark:text-white">Department: </span>{supervisor.department || "Not specified"}</p><p className="text-slate-600 dark:text-slate-300"><span className="font-medium text-slate-900 dark:text-white">Research areas: </span>{supervisor.researchAreas || "Not specified"}</p>{supervisor.email && <a href={`mailto:${supervisor.email}`} className="inline-flex items-center gap-2 font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"><Mail className="h-4 w-4" />{supervisor.email}</a>}</div></section>
       <section className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-6 dark:border-indigo-500/20 dark:bg-indigo-500/5">
         <h2 className="font-bold text-slate-900 dark:text-white">Interested in this topic?</h2>

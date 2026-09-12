@@ -363,7 +363,7 @@ export default function StudentGroupDetails() {
         onClose={() => setSelectedStudentId(null)}
       />
 
-      <div className="mx-auto max-w-7xl px-2 sm:px-4">
+      <div className="mx-auto max-w-5xl px-2 sm:px-0">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <button

@@ -82,19 +82,16 @@ export default function StudentMyGroups() {
           onClose={() => setToast((prev) => ({ ...prev, show: false }))}
         />
 
-        <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <div className="mb-10 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
-            <Link
-              to="/student/dashboard"
-              className="mb-2 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-indigo-600 dark:text-slate-400"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" /> Back to Dashboard
-            </Link>
-            <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white">
+            <p className="text-xs font-semibold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
+              Your Teams
+            </p>
+            <h1 className="mt-3 text-4xl font-semibold tracking-tighter text-slate-900 dark:text-white">
               My Research Groups
             </h1>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-              Teams that you are a member of
+            <p className="mt-3 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+              Manage and collaborate with the research teams you are a member of.
             </p>
           </div>
 
