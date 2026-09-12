@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -25,11 +25,13 @@ import { StudentProfileModal } from "@/components/common/StudentProfileModal";
 import {
   doc,
   getDoc,
+  addDoc,
   collection,
   query,
   where,
   getDocs,
   onSnapshot,
+  serverTimestamp,
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
@@ -59,7 +61,7 @@ interface Milestone {
   title: string;
   description: string;
   deadline: string;
-  status: "pending" | "in-progress" | "completed";
+  status: "planned" | "in-progress" | "completed";
   createdAt?: unknown;
 }
 
@@ -122,6 +124,15 @@ export default function ResearchGroupManagement() {
   const [publications, setPublications] = useState<Publication[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [isMilestoneModalOpen, setIsMilestoneModalOpen] = useState(false);
+  const [isSavingMilestone, setIsSavingMilestone] = useState(false);
+  const [milestoneError, setMilestoneError] = useState("");
+  const [milestoneForm, setMilestoneForm] = useState({
+    title: "",
+    description: "",
+    deadline: "",
+    status: "planned" as Milestone["status"],
+  });
 
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({
     show: false,
@@ -131,6 +142,51 @@ export default function ResearchGroupManagement() {
 
   const showToast = (type: "success" | "error", message: string) => {
     setToast({ show: true, type, message });
+  };
+
+  const resetMilestoneForm = () => {
+    setMilestoneForm({ title: "", description: "", deadline: "", status: "planned" });
+    setMilestoneError("");
+  };
+
+  const handleAddMilestone = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const title = milestoneForm.title.trim();
+    const description = milestoneForm.description.trim();
+    const deadline = milestoneForm.deadline.trim();
+
+    if (!title || !description || !deadline || !milestoneForm.status) {
+      setMilestoneError("Please complete all fields.");
+      return;
+    }
+
+    if (!id) {
+      setMilestoneError("Unable to identify the research group.");
+      return;
+    }
+
+    setIsSavingMilestone(true);
+    setMilestoneError("");
+
+    try {
+      await addDoc(collection(db, "researchGroups", id, "milestones"), {
+        title,
+        description,
+        deadline,
+        status: milestoneForm.status,
+        createdAt: serverTimestamp(),
+      });
+      setIsMilestoneModalOpen(false);
+      resetMilestoneForm();
+      showToast("success", "Milestone added successfully.");
+    } catch (error) {
+      console.error("Failed to add milestone:", error);
+      setMilestoneError("Failed to add milestone. Please try again.");
+      showToast("error", "Failed to add milestone.");
+    } finally {
+      setIsSavingMilestone(false);
+    }
   };
 
   useEffect(() => {
@@ -363,6 +419,98 @@ export default function ResearchGroupManagement() {
         onClose={() => setSelectedStudentId(null)}
       />
 
+      {isMilestoneModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-xl dark:border-[#2A2A2A] dark:bg-[#181818]">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Add Milestone</h2>
+              <button
+                type="button"
+                onClick={() => setIsMilestoneModalOpen(false)}
+                className="text-2xl leading-none text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                aria-label="Close"
+              >
+                &times;
+              </button>
+            </div>
+            <form onSubmit={handleAddMilestone} className="space-y-4">
+              <div>
+                <label htmlFor="milestone-title" className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  Title
+                </label>
+                <input
+                  id="milestone-title"
+                  type="text"
+                  value={milestoneForm.title}
+                  onChange={(event) => setMilestoneForm((form) => ({ ...form, title: event.target.value }))}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 dark:border-[#3A3A3A] dark:bg-[#0F0F0F] dark:text-white"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="milestone-description" className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  Description
+                </label>
+                <textarea
+                  id="milestone-description"
+                  value={milestoneForm.description}
+                  onChange={(event) => setMilestoneForm((form) => ({ ...form, description: event.target.value }))}
+                  rows={3}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 dark:border-[#3A3A3A] dark:bg-[#0F0F0F] dark:text-white"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="milestone-deadline" className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  Deadline
+                </label>
+                <input
+                  id="milestone-deadline"
+                  type="date"
+                  value={milestoneForm.deadline}
+                  onChange={(event) => setMilestoneForm((form) => ({ ...form, deadline: event.target.value }))}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 dark:border-[#3A3A3A] dark:bg-[#0F0F0F] dark:text-white"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="milestone-status" className="mb-1 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  Status
+                </label>
+                <select
+                  id="milestone-status"
+                  value={milestoneForm.status}
+                  onChange={(event) => setMilestoneForm((form) => ({ ...form, status: event.target.value as Milestone["status"] }))}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-500 dark:border-[#3A3A3A] dark:bg-[#0F0F0F] dark:text-white"
+                  required
+                >
+                  <option value="planned">Planned</option>
+                  <option value="in-progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </div>
+              {milestoneError && <p className="text-sm text-rose-600 dark:text-rose-400">{milestoneError}</p>}
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsMilestoneModalOpen(false)}
+                  className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingMilestone}
+                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSavingMilestone ? "Saving..." : "Add Milestone"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="mx-auto max-w-7xl px-2 sm:px-4">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
@@ -561,7 +709,13 @@ export default function ResearchGroupManagement() {
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Research Milestones</h2>
-              <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700">
+              <button
+                onClick={() => {
+                  setMilestoneError("");
+                  setIsMilestoneModalOpen(true);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+              >
                 <Plus className="h-4 w-4" /> Add Milestone
               </button>
             </div>
