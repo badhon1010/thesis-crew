@@ -33,6 +33,13 @@ export async function createResearchTopic(
     ...(topic.status === "published" ? { publishedAt: serverTimestamp() } : {}),
   });
 
+  // Auto-create "General" chat group
+  await addDoc(collection(db, "researchGroups", docRef.id, "conversations"), {
+    name: "General",
+    createdAt: serverTimestamp(),
+    hiddenBy: []
+  });
+
   return docRef.id;
 }
 

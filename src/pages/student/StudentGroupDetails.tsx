@@ -3,7 +3,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Users,
-  Target,
   FileText,
   Calendar,
   GitBranch,
@@ -18,9 +17,15 @@ import {
   Eye,
   Link as LinkIcon,
   Upload,
+  ChevronUp,
+  ChevronDown,
+  Minus,
+  MessageSquare,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
+import { GroupChat } from "@/components/chat/GroupChat";
+import { auth } from "@/firebase/auth";
 import { StudentProfileModal } from "@/components/common/StudentProfileModal";
 import {
   doc,
@@ -30,6 +35,7 @@ import {
   where,
   getDocs,
   onSnapshot,
+  updateDoc,
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
@@ -43,6 +49,7 @@ interface ResearchTopic {
   maxTeamSize: number;
   applicationDeadline?: string;
   researchObjectives?: string;
+  supervisorId?: string;
   supervisorName?: string;
   status?: string;
 }
@@ -106,7 +113,7 @@ interface Publication {
   createdAt?: unknown;
 }
 
-type TabType = "overview" | "milestones" | "tasks" | "documents" | "meetings" | "publications";
+type TabType = "overview" | "milestones" | "tasks" | "chat" | "documents" | "meetings" | "publications";
 
 export default function StudentGroupDetails() {
   const { id } = useParams<{ id: string }>();
@@ -122,6 +129,8 @@ export default function StudentGroupDetails() {
   const [publications, setPublications] = useState<Publication[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
 
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({
     show: false,
@@ -312,6 +321,37 @@ export default function StudentGroupDetails() {
     };
   };
 
+  const handleDragStart = (e: React.DragEvent, taskId: string) => {
+    setDraggedTaskId(taskId);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", taskId);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = async (e: React.DragEvent, newStatus: "todo" | "in-progress" | "completed") => {
+    e.preventDefault();
+    const taskId = draggedTaskId;
+    
+    if (!taskId || !id) return;
+    
+    const task = tasks.find(t => t.id === taskId);
+    if (task && task.status !== newStatus) {
+      try {
+        await updateDoc(doc(db, "researchGroups", id, "tasks", taskId), {
+          status: newStatus,
+        });
+      } catch (error) {
+        console.error("Error updating task status:", error);
+        showToast("error", "Failed to update task status");
+      }
+    }
+    setDraggedTaskId(null);
+  };
+
   if (loading) {
     return (
       <DashboardLayout role="student">
@@ -339,9 +379,10 @@ export default function StudentGroupDetails() {
   }
 
   const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
-    { id: "overview", label: "Overview", icon: <Target className="h-4 w-4" /> },
+    { id: "overview", label: "Overview", icon: <Eye className="h-4 w-4" /> },
     { id: "milestones", label: "Milestones", icon: <GitBranch className="h-4 w-4" /> },
     { id: "tasks", label: "Tasks", icon: <CheckCircle2 className="h-4 w-4" /> },
+    { id: "chat", label: "Group Chat", icon: <MessageSquare className="h-4 w-4" /> },
     { id: "documents", label: "Documents", icon: <FileText className="h-4 w-4" /> },
     { id: "meetings", label: "Meetings", icon: <Calendar className="h-4 w-4" /> },
     { id: "publications", label: "Publications", icon: <BookOpen className="h-4 w-4" /> },
@@ -619,94 +660,117 @@ export default function StudentGroupDetails() {
         {activeTab === "tasks" && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Tasks & Deliverables</h2>
-              <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700">
-                <Plus className="h-4 w-4" /> Add Task
-              </button>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Tasks Kanban Board</h2>
             </div>
 
-            {/* Task Stats */}
-            <div className="mb-6 grid grid-cols-4 gap-4">
-              <div className="rounded-lg bg-slate-50 p-4 dark:bg-[#0F0F0F]">
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total</p>
-                <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{getTaskStats().total}</p>
-              </div>
-              <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-500/10">
-                <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">To Do</p>
-                <p className="mt-1 text-2xl font-bold text-blue-900 dark:text-blue-100">{getTaskStats().todo}</p>
-              </div>
-              <div className="rounded-lg bg-amber-50 p-4 dark:bg-amber-500/10">
-                <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">In Progress</p>
-                <p className="mt-1 text-2xl font-bold text-amber-900 dark:text-amber-100">{getTaskStats().inProgress}</p>
-              </div>
-              <div className="rounded-lg bg-emerald-50 p-4 dark:bg-emerald-500/10">
-                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Completed</p>
-                <p className="mt-1 text-2xl font-bold text-emerald-900 dark:text-emerald-100">{getTaskStats().completed}</p>
-              </div>
-            </div>
+            {/* Kanban Columns Authentic Jira-style */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              {(["todo", "in-progress", "completed"] as const).map((status) => {
+                const columnTasks = tasks.filter((t) => t.status === status);
+                
+                let title = "TO DO";
+                let columnBg = "bg-blue-50 dark:bg-blue-900/10";
+                let headerColor = "text-blue-700 dark:text-blue-400";
+                let countBg = "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400";
+                
+                if (status === "in-progress") {
+                  title = "IN PROGRESS";
+                  columnBg = "bg-amber-50 dark:bg-amber-900/10";
+                  headerColor = "text-amber-700 dark:text-amber-400";
+                  countBg = "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400";
+                } else if (status === "completed") {
+                  title = "DONE";
+                  columnBg = "bg-emerald-50 dark:bg-emerald-900/10";
+                  headerColor = "text-emerald-700 dark:text-emerald-400";
+                  countBg = "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400";
+                }
 
-            <div className="space-y-3">
-              {tasks.length === 0 ? (
-                <div className="py-12 text-center">
-                  <CheckCircle2 className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
-                  <p className="mt-4 text-sm font-medium text-slate-900 dark:text-white">No tasks yet</p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Add tasks to organize and track work
-                  </p>
-                </div>
-              ) : (
-                tasks.map((task) => (
+                return (
                   <div
-                    key={task.id}
-                    className="flex items-start gap-4 rounded-xl border border-slate-200 p-4 dark:border-[#2A2A2A]"
+                    key={status}
+                    className={`flex flex-col rounded-lg ${columnBg} p-3 border border-transparent hover:border-slate-200 dark:hover:border-slate-800 transition-colors`}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, status)}
                   >
-                    <input
-                      type="checkbox"
-                      checked={task.status === "completed"}
-                      className="mt-1 h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                      readOnly
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <h3 className={`font-semibold ${task.status === "completed" ? "line-through text-slate-400" : "text-slate-900 dark:text-white"}`}>
-                            {task.title}
-                          </h3>
-                          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{task.description}</p>
-                          <div className="mt-2 flex items-center gap-4 text-xs">
-                            <span
-                              className={`rounded-full px-2 py-0.5 font-semibold ${
-                                task.priority === "high"
-                                  ? "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300"
-                                  : task.priority === "medium"
-                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
-                                  : "bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-300"
-                              }`}
-                            >
-                              {task.priority}
-                            </span>
-                            {task.dueDate && (
-                              <span className="text-slate-500 dark:text-slate-400">
-                                Due: {new Date(task.dueDate).toLocaleDateString()}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <button className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                          <button className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
+                    <div className="mb-3 flex items-center justify-between px-1 pt-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className={`text-xs font-bold ${headerColor}`}>{title}</h3>
+                        <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${countBg}`}>
+                          {columnTasks.length}
+                        </span>
                       </div>
                     </div>
+
+                    <div className="flex flex-1 flex-col gap-1.5 min-h-[250px] pb-1">
+                      {columnTasks.length === 0 ? (
+                        <div className="flex flex-1 items-center justify-center rounded-[3px] border-2 border-dashed border-slate-300/50 dark:border-slate-700">
+                          <p className="text-xs text-slate-400">Drop tasks here</p>
+                        </div>
+                      ) : (
+                        columnTasks.map((task) => {
+                          let PriorityIcon = ChevronDown;
+                          let priorityColor = "text-blue-500";
+                          
+                          if (task.priority === "high") {
+                            PriorityIcon = ChevronUp;
+                            priorityColor = "text-rose-500";
+                          } else if (task.priority === "medium") {
+                            PriorityIcon = Minus;
+                            priorityColor = "text-amber-500";
+                          }
+
+                          return (
+                            <div
+                              key={task.id}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, task.id)}
+                              className="group cursor-grab rounded-[3px] bg-white p-2.5 shadow-[0_1px_2px_rgba(9,30,66,0.25)] hover:bg-slate-50 active:cursor-grabbing dark:bg-[#222731] dark:shadow-[0_1px_2px_rgba(0,0,0,0.5)] dark:hover:bg-[#2c333f] border border-transparent hover:border-slate-200 dark:hover:border-slate-600 transition-colors"
+                            >
+                              <div className="mb-2">
+                                <h4 className={`text-[14px] leading-snug text-[#172b4d] dark:text-[#b6c2cf] ${status === "completed" ? "line-through opacity-70" : ""}`}>
+                                  {task.title}
+                                </h4>
+                              </div>
+
+                              <div className="flex items-center justify-between mt-3">
+                                <div className="flex items-center gap-2">
+                                  <div title={`Priority: ${task.priority}`} className="flex h-5 w-5 items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700">
+                                    <PriorityIcon className={`h-4 w-4 ${priorityColor}`} strokeWidth={3} />
+                                  </div>
+                                  <span className="text-[12px] font-medium text-[#5e6c84] dark:text-slate-400 hover:underline cursor-pointer">
+                                    {task.id.substring(0, 7).toUpperCase()}
+                                  </span>
+                                </div>
+                                
+                                {task.dueDate && (
+                                  <span className="text-[11px] text-[#5e6c84] dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-[3px]">
+                                    {new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
-                ))
-              )}
+                );
+              })}
             </div>
           </div>
+        )}
+
+        {activeTab === "chat" && (
+          <GroupChat 
+            groupId={id!} 
+            currentUserId={auth.currentUser?.uid || ""} 
+            currentUserName={teamMembers.find(m => m.studentEmail === auth.currentUser?.email)?.studentName || auth.currentUser?.displayName || "Student"} 
+            currentUserRole="student" 
+            members={[
+              ...(topic?.supervisorId ? [{ id: topic.supervisorId, name: topic.supervisorName || "Supervisor", role: "teacher" as const }] : []),
+              ...teamMembers.map(m => ({ id: m.studentId, name: m.studentName, role: "student" as const }))
+            ]}
+          />
         )}
 
         {activeTab === "documents" && (

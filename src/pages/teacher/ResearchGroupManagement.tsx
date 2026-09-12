@@ -18,10 +18,14 @@ import {
   Eye,
   Link as LinkIcon,
   Upload,
+  MessageSquare,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 import { StudentProfileModal } from "@/components/common/StudentProfileModal";
+import { TaskModal } from "@/components/ui/TaskModal";
+import { GroupChat } from "@/components/chat/GroupChat";
+import { auth } from "@/firebase/auth";
 import {
   doc,
   getDoc,
@@ -30,6 +34,10 @@ import {
   where,
   getDocs,
   onSnapshot,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  serverTimestamp,
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
@@ -43,6 +51,7 @@ interface ResearchTopic {
   maxTeamSize: number;
   applicationDeadline?: string;
   researchObjectives?: string;
+  supervisorId?: string;
   supervisorName?: string;
   status?: string;
 }
@@ -106,7 +115,7 @@ interface Publication {
   createdAt?: unknown;
 }
 
-type TabType = "overview" | "milestones" | "tasks" | "documents" | "meetings" | "publications";
+type TabType = "overview" | "milestones" | "tasks" | "chat" | "documents" | "meetings" | "publications";
 
 export default function ResearchGroupManagement() {
   const { id } = useParams<{ id: string }>();
@@ -122,6 +131,9 @@ export default function ResearchGroupManagement() {
   const [publications, setPublications] = useState<Publication[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({
     show: false,
@@ -312,6 +324,53 @@ export default function ResearchGroupManagement() {
     };
   };
 
+  const handleSaveTask = async (taskData: Omit<Task, "id">) => {
+    if (!id) return;
+    try {
+      if (editingTask) {
+        await updateDoc(doc(db, "researchGroups", id, "tasks", editingTask.id), {
+          ...taskData,
+        });
+        showToast("success", "Task updated successfully");
+      } else {
+        await addDoc(collection(db, "researchGroups", id, "tasks"), {
+          ...taskData,
+          createdAt: serverTimestamp(),
+        });
+        showToast("success", "Task created successfully");
+      }
+      setIsTaskModalOpen(false);
+      setEditingTask(null);
+    } catch (error) {
+      console.error("Error saving task:", error);
+      showToast("error", "Failed to save task");
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!id || !window.confirm("Are you sure you want to delete this task?")) return;
+    try {
+      await deleteDoc(doc(db, "researchGroups", id, "tasks", taskId));
+      showToast("success", "Task deleted successfully");
+    } catch (error) {
+      console.error("Error deleting task:", error);
+      showToast("error", "Failed to delete task");
+    }
+  };
+
+  const toggleTaskStatus = async (task: Task) => {
+    if (!id) return;
+    try {
+      const newStatus = task.status === "completed" ? "todo" : "completed";
+      await updateDoc(doc(db, "researchGroups", id, "tasks", task.id), {
+        status: newStatus,
+      });
+    } catch (error) {
+      console.error("Error updating task status:", error);
+      showToast("error", "Failed to update task status");
+    }
+  };
+
   if (loading) {
     return (
       <DashboardLayout role="teacher">
@@ -342,6 +401,7 @@ export default function ResearchGroupManagement() {
     { id: "overview", label: "Overview", icon: <Target className="h-4 w-4" /> },
     { id: "milestones", label: "Milestones", icon: <GitBranch className="h-4 w-4" /> },
     { id: "tasks", label: "Tasks", icon: <CheckCircle2 className="h-4 w-4" /> },
+    { id: "chat", label: "Group Chat", icon: <MessageSquare className="h-4 w-4" /> },
     { id: "documents", label: "Documents", icon: <FileText className="h-4 w-4" /> },
     { id: "meetings", label: "Meetings", icon: <Calendar className="h-4 w-4" /> },
     { id: "publications", label: "Publications", icon: <BookOpen className="h-4 w-4" /> },
@@ -361,6 +421,17 @@ export default function ResearchGroupManagement() {
         isOpen={selectedStudentId !== null}
         studentId={selectedStudentId || ""}
         onClose={() => setSelectedStudentId(null)}
+      />
+
+      <TaskModal
+        isOpen={isTaskModalOpen}
+        onClose={() => {
+          setIsTaskModalOpen(false);
+          setEditingTask(null);
+        }}
+        onSave={handleSaveTask}
+        editingTask={editingTask}
+        teamMembers={teamMembers}
       />
 
       <div className="mx-auto max-w-7xl px-2 sm:px-4">
@@ -557,6 +628,19 @@ export default function ResearchGroupManagement() {
           </div>
         )}
 
+        {activeTab === "chat" && (
+          <GroupChat 
+            groupId={id!} 
+            currentUserId={auth.currentUser?.uid || ""} 
+            currentUserName={topic?.supervisorName || auth.currentUser?.displayName || "Supervisor"} 
+            currentUserRole="teacher" 
+            members={[
+              ...(topic?.supervisorId ? [{ id: topic.supervisorId, name: topic.supervisorName || "Supervisor", role: "teacher" as const }] : []),
+              ...teamMembers.map(m => ({ id: m.studentId, name: m.studentName, role: "student" as const }))
+            ]}
+          />
+        )}
+
         {activeTab === "milestones" && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
             <div className="mb-6 flex items-center justify-between">
@@ -620,7 +704,13 @@ export default function ResearchGroupManagement() {
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Tasks & Deliverables</h2>
-              <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700">
+              <button
+                onClick={() => {
+                  setEditingTask(null);
+                  setIsTaskModalOpen(true);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+              >
                 <Plus className="h-4 w-4" /> Add Task
               </button>
             </div>
@@ -663,8 +753,8 @@ export default function ResearchGroupManagement() {
                     <input
                       type="checkbox"
                       checked={task.status === "completed"}
-                      className="mt-1 h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                      readOnly
+                      onChange={() => toggleTaskStatus(task)}
+                      className="mt-1 h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-4">
@@ -675,7 +765,7 @@ export default function ResearchGroupManagement() {
                           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{task.description}</p>
                           <div className="mt-2 flex items-center gap-4 text-xs">
                             <span
-                              className={`rounded-full px-2 py-0.5 font-semibold ${
+                              className={`rounded-full px-2 py-0.5 font-semibold capitalize ${
                                 task.priority === "high"
                                   ? "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300"
                                   : task.priority === "medium"
@@ -693,10 +783,19 @@ export default function ResearchGroupManagement() {
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <button className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
+                          <button
+                            onClick={() => {
+                              setEditingTask(task);
+                              setIsTaskModalOpen(true);
+                            }}
+                            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                          >
                             <Edit2 className="h-4 w-4" />
                           </button>
-                          <button className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10">
+                          <button
+                            onClick={() => handleDeleteTask(task.id)}
+                            className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                          >
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
