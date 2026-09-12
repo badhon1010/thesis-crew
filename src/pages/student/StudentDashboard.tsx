@@ -1,5 +1,95 @@
 // Updated by Sakib - Student Module Validation & Interface updates
+import React, { useState } from 'react';
 
+export const StudentDashboard: React.FC = () => {
+  // State for form inputs
+  const [title, setTitle] = useState('');
+  const [fileUrl, setFileUrl] = useState('');
+  
+  // State for visual errors and success message
+  const [errors, setErrors] = useState<{ title?: string; fileUrl?: string }>({});
+  const [successMessage, setSuccessMessage] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newErrors: { title?: string; fileUrl?: string } = {};
+
+    // Form Validation Logic
+    if (!title.trim()) {
+      newErrors.title = 'Submission title is required.';
+    }
+    if (!fileUrl.trim()) {
+      newErrors.fileUrl = 'Document URL or link is required.';
+    } else if (!fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
+      newErrors.fileUrl = 'Please enter a valid URL (must start with http:// or https://).';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      setSuccessMessage('');
+    } else {
+      setErrors({});
+      setSuccessMessage('Proposal submitted successfully!');
+      setTitle('');
+      setFileUrl('');
+    }
+  };
+
+  return (
+    <div style={{ padding: '24px', maxWidth: '600px', margin: '0 auto', fontFamily: 'sans-serif' }}>
+      <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px' }}>
+        Student Thesis & Project Submission
+      </h2>
+
+      {successMessage && (
+        <div style={{ padding: '12px', backgroundColor: '#d1fae5', color: '#065f46', borderRadius: '6px', marginBottom: '16px' }}>
+          {successMessage}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div>
+          <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>
+            Project/Thesis Title
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Enter project title"
+            style={{ width: '100%', padding: '8px', borderRadius: '4px', border: errors.title ? '1px solid #ef4444' : '1px solid #ccc' }}
+          />
+          {errors.title && (
+            <p style={{ color: '#ef4444', fontSize: '14px', marginTop: '4px' }}>{errors.title}</p>
+          )}
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>
+            Document Link (PDF / Drive)
+          </label>
+          <input
+            type="text"
+            value={fileUrl}
+            onChange={(e) => setFileUrl(e.target.value)}
+            placeholder="https://drive.google.com/..."
+            style={{ width: '100%', padding: '8px', borderRadius: '4px', border: errors.fileUrl ? '1px solid #ef4444' : '1px solid #ccc' }}
+          />
+          {errors.fileUrl && (
+            <p style={{ color: '#ef4444', fontSize: '14px', marginTop: '4px' }}>{errors.fileUrl}</p>
+          )}
+        </div>
+
+        <button
+          type="submit"
+          style={{ padding: '10px 16px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+        >
+          Submit Work
+        </button>
+      </form>
+    </div>
+  );
+};
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowUpRight, BookOpen, CalendarDays, Clock3, FileText, FolderKanban, Loader2, Sparkles } from "lucide-react";
