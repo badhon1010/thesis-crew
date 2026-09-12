@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { BookOpen, Filter, Search, SlidersHorizontal } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { getPublishedResearchTopics, type ResearchTopic } from "@/firebase/researchTopics";
@@ -117,9 +118,12 @@ export default function StudentResearchTopics() {
 
                 <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-5 dark:border-[#2A2A2A]">
                   <p className="text-xs font-medium text-slate-400">Deadline · {topic.applicationDeadline || "Not set"}</p>
-                  <button className="text-sm font-medium text-indigo-600 transition hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300">
+                  <Link
+                    to={`/student/research-topics/${topic.id}`}
+                    className="text-sm font-medium text-indigo-600 transition hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                  >
                     View details →
-                  </button>
+                  </Link>
                 </div>
               </article>
             ))
