@@ -20,6 +20,7 @@ export interface StudentRequestProfile {
 export interface TeamMemberInfo {
   name: string;
   studentId: string;
+  uid: string;
   email?: string;
   department?: string;
   cgpa?: string;
@@ -190,12 +191,18 @@ export async function reviewJoinRequest(
       ? ((teamSnapshot.data().memberIds as string[] | undefined) ?? [])
       : [];
 
-    // For group requests, add all team members
+    // For group requests, add leader and all team members
     const newMemberIds: string[] = [];
     if (request.requestType === "group" && request.teamMembers && request.teamMembers.length > 0) {
+      // Add the leader
+      if (!existingMemberIds.includes(request.studentId)) {
+        newMemberIds.push(request.studentId);
+      }
+      
+      // Add the other members
       for (const member of request.teamMembers) {
-        if (!existingMemberIds.includes(member.studentId)) {
-          newMemberIds.push(member.studentId);
+        if (!existingMemberIds.includes(member.uid)) {
+          newMemberIds.push(member.uid);
         }
       }
     } else {

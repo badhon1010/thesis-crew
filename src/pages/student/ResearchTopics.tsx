@@ -74,7 +74,36 @@ export default function StudentResearchTopics() {
       topic.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       topic.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
       topic.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  ).sort((a, b) => {
+    const now = new Date();
+    
+    // Parse deadlines (treat no deadline as far future)
+    const aDate = a.applicationDeadline ? new Date(a.applicationDeadline) : new Date(8640000000000000);
+    const bDate = b.applicationDeadline ? new Date(b.applicationDeadline) : new Date(8640000000000000);
+    
+    const aClosed = aDate < now;
+    const bClosed = bDate < now;
+
+    // 1. Closed topics at the end
+    if (aClosed && !bClosed) return 1;
+    if (!aClosed && bClosed) return -1;
+    
+    // 2. Both closed: sort by most recently closed first (descending)
+    if (aClosed && bClosed) {
+      return bDate.getTime() - aDate.getTime();
+    }
+    
+    // 3. Both open: Sort by skill match score first
+    const aMatch = calculateSkillMatch(studentSkills, a.requiredSkills).score;
+    const bMatch = calculateSkillMatch(studentSkills, b.requiredSkills).score;
+    
+    if (aMatch !== bMatch) {
+      return bMatch - aMatch;
+    }
+    
+    // 4. If scores are the same (including 0), sort by deadline (closest first)
+    return aDate.getTime() - bDate.getTime();
+  });
 
   return (
     <DashboardLayout role="student">
@@ -126,18 +155,29 @@ export default function StudentResearchTopics() {
             filteredTopics.map((topic) => {
               const memberCount = teamMemberCounts[topic.id] ?? 0;
               const isFull = memberCount >= topic.maxTeamSize;
+              
+              const now = new Date();
+              const topicDate = topic.applicationDeadline ? new Date(topic.applicationDeadline) : new Date(8640000000000000);
+              const isClosed = topicDate < now;
+              const isClosingSoon = !isClosed && (topicDate.getTime() - now.getTime() < 7 * 24 * 60 * 60 * 1000);
+              
               return (
               <article
                 key={topic.id}
-                className="group rounded-2xl border border-slate-200 bg-white p-6 transition-colors hover:border-indigo-200 dark:border-[#2A2A2A] dark:bg-[#181818] dark:hover:border-slate-700"
+                className={`group rounded-2xl border ${isClosed ? "border-rose-100 bg-rose-50/30 opacity-75 dark:border-rose-500/10 dark:bg-rose-500/5" : "border-slate-200 bg-white hover:border-indigo-200 dark:border-[#2A2A2A] dark:bg-[#181818] dark:hover:border-slate-700"} p-6 transition-colors`}
               >
                 <div className="flex items-start justify-between gap-5">
                   <div className="flex gap-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400">
+                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${isClosed ? "bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400" : "bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400"}`}>
                       <BookOpen className="h-5 w-5" />
                     </div>
                     <div>
-                      <div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold text-slate-900 dark:text-white">{topic.title}</h2>{isNewlyPublishedTopic(topic) && <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white">NEW</span>}</div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="font-semibold text-slate-900 dark:text-white">{topic.title}</h2>
+                        {isNewlyPublishedTopic(topic) && !isClosed && <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white">NEW</span>}
+                        {isClosed && <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-bold tracking-wide text-rose-700 dark:bg-rose-500/20 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30">Application deadline over</span>}
+                        {isClosingSoon && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold tracking-wide text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30">Closing soon</span>}
+                      </div>
                       {/* Name of the actual supervisor from the database */}
                       <p className="mt-1 text-xs text-slate-500">Supervised by {topic.supervisorName || "Unknown Supervisor"}</p>
                       <p className={`mt-2 text-xs font-medium ${isFull ? "text-rose-600 dark:text-rose-400" : "text-slate-500 dark:text-slate-400"}`}>{isFull ? "Team full" : `${memberCount}/${topic.maxTeamSize} members · ${topic.maxTeamSize - memberCount} spot${topic.maxTeamSize - memberCount === 1 ? "" : "s"} left`}</p>

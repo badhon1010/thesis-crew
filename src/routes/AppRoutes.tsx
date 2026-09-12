@@ -14,6 +14,8 @@ import ResearchTopicDetails from "@/pages/teacher/ResearchTopicDetails";
 import ResearchGroupManagement from "@/pages/teacher/ResearchGroupManagement";
 import StudentProfile from "@/pages/student/StudentProfile";
 import StudentTopicDetails from "@/pages/student/StudentTopicDetails";
+import StudentMyGroups from "@/pages/student/StudentMyGroups";
+import StudentGroupDetails from "@/pages/student/StudentGroupDetails";
 
 export function AppRoutes() {
   return (
@@ -35,6 +37,8 @@ export function AppRoutes() {
       <Route path="/student/research-topics" element={<ResearchTopics />} />
       <Route path="/student/research-topics/:id" element={<StudentTopicDetails />} />
       <Route path="/student/profile" element={<StudentProfile />} />
+      <Route path="/student/my-groups" element={<StudentMyGroups />} />
+      <Route path="/student/my-groups/:id" element={<StudentGroupDetails />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

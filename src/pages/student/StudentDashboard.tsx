@@ -67,7 +67,31 @@ export default function StudentDashboard() {
 
   const recommendedTopics = useMemo<RecommendedTopic[]>(() => topics
     .map((topic) => ({ ...topic, matchScore: getMatchScore(topic, profile) }))
-    .sort((a, b) => b.matchScore - a.matchScore || a.title.localeCompare(b.title)), [profile, topics]);
+    .sort((a, b) => {
+      const now = new Date();
+      const aDate = a.applicationDeadline ? new Date(a.applicationDeadline) : new Date(8640000000000000);
+      const bDate = b.applicationDeadline ? new Date(b.applicationDeadline) : new Date(8640000000000000);
+      
+      const aClosed = aDate < now;
+      const bClosed = bDate < now;
+      
+      // 1. Closed topics at the end
+      if (aClosed && !bClosed) return 1;
+      if (!aClosed && bClosed) return -1;
+      
+      // 2. Both closed: sort by most recently closed first (descending)
+      if (aClosed && bClosed) {
+        return bDate.getTime() - aDate.getTime();
+      }
+      
+      // 3. Both open: sort by match score
+      if (a.matchScore !== b.matchScore) {
+        return b.matchScore - a.matchScore;
+      }
+      
+      // 4. Match score same: sort by closest deadline
+      return aDate.getTime() - bDate.getTime();
+    }), [profile, topics]);
   const upcomingDeadlines = useMemo(() => [...topics]
     .filter((topic) => topic.applicationDeadline && new Date(topic.applicationDeadline).getTime() >= currentTime.getTime())
     .sort((a, b) => new Date(a.applicationDeadline).getTime() - new Date(b.applicationDeadline).getTime())

@@ -265,11 +265,24 @@ export default function TeacherJoinRequests() {
             <div className="divide-y divide-slate-100 dark:divide-[#2A2A2A]">
               {groupRequests.map((request) => {
                 const busy = reviewingId === request.id;
-                const teamMembers = request.teamMembers || [];
-                const teamSize = teamMembers.length;
+                
+                // Construct a complete list of team members, including the leader
+                const leaderMember = {
+                  studentId: request.studentId,
+                  uid: request.teamLeaderId || request.studentId, // Ensure uid fallback
+                  name: request.studentName,
+                  email: request.studentEmail,
+                  department: request.studentDepartment,
+                  cgpa: request.studentCgpa,
+                  skills: request.studentSkills,
+                };
+                
+                const otherMembers = request.teamMembers || [];
+                const fullTeamMembers = [leaderMember, ...otherMembers];
+                const teamSize = fullTeamMembers.length;
 
                 // Calculate average skill match across all team members
-                const allSkills = teamMembers.flatMap(m => m.skills || []);
+                const allSkills = fullTeamMembers.flatMap(m => m.skills || []);
                 const avgMatch = calculateSkillMatch(allSkills, request.topicRequiredSkills);
 
                 return (
@@ -285,7 +298,7 @@ export default function TeacherJoinRequests() {
                               Group Request ({teamSize} member{teamSize === 1 ? "" : "s"})
                             </p>
                             <button
-                              onClick={() => setSelectedGroupMembers(teamMembers)}
+                              onClick={() => setSelectedGroupMembers(fullTeamMembers)}
                               className="rounded-lg p-1 text-violet-600 transition-colors hover:bg-violet-50 dark:text-violet-400 dark:hover:bg-violet-500/10"
                               title="View All Members"
                             >
@@ -308,7 +321,7 @@ export default function TeacherJoinRequests() {
                           <div className="mt-4">
                             <p className="mb-2 text-xs font-semibold text-slate-700 dark:text-slate-300">Team Members:</p>
                             <div className="space-y-2">
-                              {teamMembers.map((member, index) => (
+                              {fullTeamMembers.map((member, index) => (
                                 <div key={member.studentId} className="flex items-center gap-2 rounded-lg bg-slate-50 p-2 dark:bg-[#121212]">
                                   <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-xs font-bold text-violet-600 dark:bg-violet-500/20 dark:text-violet-400">
                                     {member.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
