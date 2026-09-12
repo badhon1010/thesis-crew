@@ -1,3 +1,5 @@
+// Updated by Sakib - Student Module Validation & Interface updates
+
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowUpRight, BookOpen, CalendarDays, Clock3, FileText, FolderKanban, Loader2, Sparkles } from "lucide-react";
