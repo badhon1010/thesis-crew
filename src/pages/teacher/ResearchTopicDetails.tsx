@@ -12,12 +12,13 @@ import {
   Loader2,
   Mail,
   BookOpen,
-  Eye
+  Eye,
+  Trash2,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 import { StudentProfileModal } from "@/components/common/StudentProfileModal";
-import { doc, getDoc, collection, query, where, getDocs, onSnapshot, type Unsubscribe } from "firebase/firestore";
+import { doc, getDoc, updateDoc, arrayRemove, collection, query, where, getDocs, onSnapshot, type Unsubscribe } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
 
 interface ResearchTopic {
@@ -48,6 +49,7 @@ export default function ResearchTopicDetails() {
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [removingStudentId, setRemovingStudentId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({
     show: false,
     type: "success",
@@ -106,40 +108,63 @@ export default function ResearchTopicDetails() {
               );
               const joinRequestsSnap = await getDocs(joinRequestsQuery);
 
-              const membersMap = new Map<string, TeamMember>();
+              // Map every identifier a member could be known by (their own studentId,
+              // a team-leader id, or a uid used on group sub-members) to their real details.
+              // This avoids the same person being resolved twice under different ids,
+              // and avoids falling back to a coded placeholder name when a real match exists.
+              const identityMap = new Map<string, TeamMember>();
+              const registerIdentity = (idValue: string | undefined, member: TeamMember) => {
+                if (idValue && !identityMap.has(idValue)) {
+                  identityMap.set(idValue, member);
+                }
+              };
 
               joinRequestsSnap.docs.forEach((doc) => {
                 const data = doc.data();
+
+                // Always register the requester (team leader for group requests,
+                // or the sole applicant for individual requests) under every id
+                // they might be referenced by elsewhere.
+                const leaderMember: TeamMember = {
+                  studentId: data.studentId,
+                  studentName: data.studentName || "Unnamed student",
+                  studentEmail: data.studentEmail,
+                };
+                registerIdentity(data.studentId, leaderMember);
+                registerIdentity(data.teamLeaderId, leaderMember);
+
+                // Register any additional teammates for group requests
                 if (data.requestType === "group" && Array.isArray(data.teamMembers) && data.teamMembers.length > 0) {
-                  data.teamMembers.forEach((tm: { studentId: string; name: string; email?: string }) => {
-                    if (tm.studentId && !membersMap.has(tm.studentId)) {
-                      membersMap.set(tm.studentId, {
-                        studentId: tm.studentId,
-                        studentName: tm.name || "Unnamed student",
-                        studentEmail: tm.email,
-                      });
-                    }
-                  });
-                } else if (data.studentId && !membersMap.has(data.studentId)) {
-                  membersMap.set(data.studentId, {
-                    studentId: data.studentId,
-                    studentName: data.studentName || "Unnamed student",
-                    studentEmail: data.studentEmail,
+                  data.teamMembers.forEach((tm: { studentId?: string; uid?: string; name: string; email?: string }) => {
+                    const groupMember: TeamMember = {
+                      studentId: tm.studentId || tm.uid || "",
+                      studentName: tm.name || "Unnamed student",
+                      studentEmail: tm.email,
+                    };
+                    registerIdentity(tm.studentId, groupMember);
+                    registerIdentity(tm.uid, groupMember);
                   });
                 }
               });
 
-              // Fallback for any team memberIds not found in join requests (e.g. direct members)
-              for (const memberId of memberIds) {
-                if (!membersMap.has(memberId)) {
-                  membersMap.set(memberId, {
+              // The team's memberIds array is the source of truth for who is actually
+              // on the team and how many members there are. Resolve each one against
+              // the identity map, deduping by the member's canonical studentId so the
+              // same person can never appear twice.
+              const resolvedMembers = new Map<string, TeamMember>();
+              memberIds.forEach((memberId) => {
+                const known = identityMap.get(memberId);
+                if (known) {
+                  resolvedMembers.set(known.studentId || memberId, known);
+                } else if (!resolvedMembers.has(memberId)) {
+                  resolvedMembers.set(memberId, {
                     studentId: memberId,
                     studentName: `Student (${memberId.slice(0, 6)})`,
                   });
                 }
-              }
+              });
 
-              setTeamMembers(Array.from(membersMap.values()));
+              setTeamMembers(Array.from(resolvedMembers.values()));
             } else {
               setTeamMembers([]);
             }
@@ -164,6 +189,34 @@ export default function ResearchTopicDetails() {
       unsubscribeTeam?.();
     };
   }, [id]);
+
+  const handleRemoveStudent = async (studentId: string, studentName: string) => {
+    if (!id) return;
+    const confirmed = window.confirm(`Remove ${studentName} from this research team? This cannot be undone.`);
+    if (!confirmed) return;
+
+    setRemovingStudentId(studentId);
+    try {
+      await updateDoc(doc(db, "teams", id), {
+        memberIds: arrayRemove(studentId),
+      });
+      setToast({ show: true, type: "success", message: `${studentName} was removed from the team.` });
+    } catch (error) {
+      console.error("Failed to remove student from team:", error);
+      setToast({ show: true, type: "error", message: "Could not remove the student. Please try again." });
+    } finally {
+      setRemovingStudentId(null);
+    }
+  };
+
+  // Helper to check if deadline has passed (same logic as TeacherResearchTopics.tsx)
+  const isTopicClosed = (deadline?: string) => {
+    if (!deadline) return false;
+    const deadlineDate = new Date(deadline);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return deadlineDate < today;
+  };
 
   if (loading) {
     return (
@@ -231,19 +284,15 @@ export default function ResearchTopicDetails() {
             <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
               {topic.category}
             </span>
-            {topic.status && (
-              <span
-                className={`rounded-full px-2.5 py-0.5 text-xs font-bold capitalize ${
-                  topic.status.toLowerCase() === "running"
-                    ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
-                    : topic.status.toLowerCase() === "completed"
-                    ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400"
-                    : "bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400"
-                }`}
-              >
-                {topic.status}
-              </span>
-            )}
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-bold capitalize ${
+                isTopicClosed(topic.applicationDeadline)
+                  ? "bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400"
+                  : "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
+              }`}
+            >
+              {isTopicClosed(topic.applicationDeadline) ? "Closed" : "Open"}
+            </span>
           </div>
 
           <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white sm:text-3xl">
@@ -380,13 +429,27 @@ export default function ResearchTopicDetails() {
                             </p>
                           )}
                         </div>
-                        <button
-                          onClick={() => setSelectedStudentId(member.studentId)}
-                          className="rounded-lg p-1.5 text-indigo-600 transition-colors hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
-                          title="View Profile"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            onClick={() => setSelectedStudentId(member.studentId)}
+                            className="rounded-lg p-1.5 text-indigo-600 transition-colors hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
+                            title="View Profile"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleRemoveStudent(member.studentId, member.studentName)}
+                            disabled={removingStudentId === member.studentId}
+                            className="rounded-lg p-1.5 text-rose-600 transition-colors hover:bg-rose-50 disabled:opacity-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                            title="Remove Student"
+                          >
+                            {removingStudentId === member.studentId ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
