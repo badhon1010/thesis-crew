@@ -27,6 +27,7 @@ import { ToastAlert } from "@/components/common/ToastAlert";
 import { GroupChat } from "@/components/chat/GroupChat";
 import { auth } from "@/firebase/auth";
 import { StudentProfileModal } from "@/components/common/StudentProfileModal";
+import { MilestoneModal } from "@/components/ui/MilestoneModal";
 import {
   doc,
   getDoc,
@@ -36,6 +37,9 @@ import {
   getDocs,
   onSnapshot,
   updateDoc,
+  addDoc,
+  deleteDoc,
+  serverTimestamp,
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
@@ -66,7 +70,7 @@ interface Milestone {
   title: string;
   description: string;
   deadline: string;
-  status: "pending" | "in-progress" | "completed";
+  status: "planned" | "in-progress" | "completed";
   createdAt?: unknown;
 }
 
@@ -129,6 +133,8 @@ export default function StudentGroupDetails() {
   const [publications, setPublications] = useState<Publication[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [isMilestoneModalOpen, setIsMilestoneModalOpen] = useState(false);
+  const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
 
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
 
@@ -352,6 +358,41 @@ export default function StudentGroupDetails() {
     setDraggedTaskId(null);
   };
 
+  const handleSaveMilestone = async (milestoneData: Omit<Milestone, "id">) => {
+    if (!id) return;
+    try {
+      if (editingMilestone) {
+        await updateDoc(doc(db, "researchGroups", id, "milestones", editingMilestone.id), {
+          ...milestoneData,
+        });
+        showToast("success", "Milestone updated successfully.");
+      } else {
+        await addDoc(collection(db, "researchGroups", id, "milestones"), {
+          ...milestoneData,
+          createdAt: serverTimestamp(),
+        });
+        showToast("success", "Milestone added successfully.");
+      }
+      setIsMilestoneModalOpen(false);
+      setEditingMilestone(null);
+    } catch (error) {
+      console.error("Failed to save milestone:", error);
+      showToast("error", "Failed to save milestone.");
+    }
+  };
+
+  const handleDeleteMilestone = async (milestoneId: string) => {
+    if (!id) return;
+    if (!confirm("Are you sure you want to delete this milestone?")) return;
+    try {
+      await deleteDoc(doc(db, "researchGroups", id, "milestones", milestoneId));
+      showToast("success", "Milestone deleted successfully.");
+    } catch (error) {
+      console.error("Failed to delete milestone:", error);
+      showToast("error", "Failed to delete milestone.");
+    }
+  };
+
   if (loading) {
     return (
       <DashboardLayout role="student">
@@ -402,6 +443,16 @@ export default function StudentGroupDetails() {
         isOpen={selectedStudentId !== null}
         studentId={selectedStudentId || ""}
         onClose={() => setSelectedStudentId(null)}
+      />
+
+      <MilestoneModal
+        isOpen={isMilestoneModalOpen}
+        onClose={() => {
+          setIsMilestoneModalOpen(false);
+          setEditingMilestone(null);
+        }}
+        onSave={handleSaveMilestone}
+        initialData={editingMilestone}
       />
 
       <div className="mx-auto max-w-5xl px-2 sm:px-0">
@@ -602,7 +653,14 @@ export default function StudentGroupDetails() {
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Research Milestones</h2>
-              <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingMilestone(null);
+                  setIsMilestoneModalOpen(true);
+                }}
+                className="relative z-10 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+              >
                 <Plus className="h-4 w-4" /> Add Milestone
               </button>
             </div>
@@ -641,10 +699,19 @@ export default function StudentGroupDetails() {
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <button className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
+                          <button
+                            onClick={() => {
+                              setEditingMilestone(milestone);
+                              setIsMilestoneModalOpen(true);
+                            }}
+                            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                          >
                             <Edit2 className="h-4 w-4" />
                           </button>
-                          <button className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10">
+                          <button
+                            onClick={() => handleDeleteMilestone(milestone.id)}
+                            className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                          >
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
