@@ -130,129 +130,59 @@ export default function TeacherResearchGroups() {
               <div
                 key={group.projectId}
                 onClick={() => navigate(`/teacher/research-groups/${group.projectId}`)}
-                className="group relative cursor-pointer overflow-hidden rounded-2xl border-2 border-slate-200 bg-white transition-all hover:-translate-y-1 hover:border-indigo-500 hover:shadow-2xl dark:border-[#2A2A2A] dark:bg-[#181818] dark:hover:border-indigo-400"
+                className="group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:border-indigo-500/30 hover:shadow-lg dark:border-white/5 dark:bg-[#151515] dark:hover:border-indigo-500/30"
               >
-                {/* Header */}
-                <div className="border-b-2 border-slate-100 bg-white px-6 py-5 dark:border-[#2A2A2A] dark:bg-[#181818]">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="mb-2 flex items-center gap-2">
-                        <span className="flex items-center gap-1.5 rounded-lg bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          ACTIVE
-                        </span>
-                        <span className="text-xs text-slate-400 dark:text-slate-500">•</span>
-                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                          {group.memberIds.length} members
-                        </span>
-                      </div>
-                      <h3 className="text-lg font-bold text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">
-                        {group.topicTitle}
-                      </h3>
+                <div>
+                  <div className="mb-4 flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                      ACTIVE
+                    </span>
+                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                      {group.memberIds.length}/{group.maxTeamSize} Capacity
+                    </span>
+                  </div>
+                  
+                  <h3 className="mb-3 text-xl font-bold text-slate-900 group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">
+                    {group.topicTitle}
+                  </h3>
+                  
+                  <div className="mb-6 flex flex-wrap items-center gap-4 text-xs font-medium text-slate-500 dark:text-slate-400">
+                    <div className="flex items-center gap-1.5">
+                      <TrendingUp className="h-4 w-4 text-indigo-500" />
+                      <span>{Math.floor(Math.random() * 30) + 50}% Progress</span>
                     </div>
-                    <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl border-2 border-indigo-200 bg-indigo-50 transition-all group-hover:border-indigo-500 group-hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:group-hover:border-indigo-400 dark:group-hover:bg-indigo-500/20">
-                      <Users className="h-7 w-7 text-indigo-600 dark:text-indigo-400" />
+                    <div className="flex items-center gap-1.5">
+                      <FileText className="h-4 w-4 text-violet-500" />
+                      <span>{Math.floor(Math.random() * 15) + 5} Files</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Content Body */}
-                <div className="p-6">
-                  {/* Stats Grid */}
-                  <div className="mb-5 grid grid-cols-3 gap-3">
-                    {/* Team Size */}
-                    <div className="rounded-xl border-2 border-indigo-100 bg-indigo-50 p-3.5 dark:border-indigo-500/20 dark:bg-indigo-500/10">
-                      <div className="mb-2 flex items-center gap-1.5">
-                        <Users className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                        <span className="text-xs font-bold text-indigo-900 dark:text-indigo-300">Team</span>
+                <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-5 dark:border-white/5">
+                  <div className="flex -space-x-2.5">
+                    {Array.from({ length: Math.min(group.memberIds.length, 5) }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-xs font-medium shadow-sm dark:border-[#151515]"
+                        style={{
+                          backgroundColor: `hsl(${(i * 360) / 5}, 80%, 90%)`,
+                          color: `hsl(${(i * 360) / 5}, 70%, 40%)`,
+                        }}
+                      >
+                        {String.fromCharCode(65 + i)}
                       </div>
-                      <p className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">
-                        {group.memberIds.length}
-                      </p>
-                      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-600/70 dark:text-indigo-400/70">
-                        Members
-                      </p>
-                    </div>
-
-                    {/* Progress Indicator */}
-                    <div className="rounded-xl border-2 border-emerald-100 bg-emerald-50 p-3.5 dark:border-emerald-500/20 dark:bg-emerald-500/10">
-                      <div className="mb-2 flex items-center gap-1.5">
-                        <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                        <span className="text-xs font-bold text-emerald-900 dark:text-emerald-300">Progress</span>
+                    ))}
+                    {group.memberIds.length > 5 && (
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-50 text-xs font-medium text-slate-600 shadow-sm dark:border-[#151515] dark:bg-slate-800 dark:text-slate-400">
+                        +{group.memberIds.length - 5}
                       </div>
-                      <p className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
-                        {Math.floor(Math.random() * 30) + 50}%
-                      </p>
-                      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-600/70 dark:text-emerald-400/70">
-                        Complete
-                      </p>
-                    </div>
-
-                    {/* Documents */}
-                    <div className="rounded-xl border-2 border-violet-100 bg-violet-50 p-3.5 dark:border-violet-500/20 dark:bg-violet-500/10">
-                      <div className="mb-2 flex items-center gap-1.5">
-                        <FileText className="h-4 w-4 text-violet-600 dark:text-violet-400" />
-                        <span className="text-xs font-bold text-violet-900 dark:text-violet-300">Files</span>
-                      </div>
-                      <p className="text-2xl font-extrabold text-violet-600 dark:text-violet-400">
-                        {Math.floor(Math.random() * 15) + 5}
-                      </p>
-                      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-600/70 dark:text-violet-400/70">
-                        Documents
-                      </p>
-                    </div>
+                    )}
                   </div>
-
-                  {/* Member Avatars */}
-                  <div className="mb-5 rounded-xl border-2 border-slate-100 bg-slate-50 p-4 dark:border-[#2A2A2A] dark:bg-[#0F0F0F]">
-                    <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                      Team Members
-                    </p>
-                    <div className="flex items-center justify-between">
-                      <div className="flex -space-x-3">
-                        {Array.from({ length: Math.min(group.memberIds.length, 6) }).map((_, i) => (
-                          <div
-                            key={i}
-                            className="flex h-10 w-10 items-center justify-center rounded-full border-3 border-white bg-indigo-600 text-sm font-bold text-white shadow-md dark:border-[#181818]"
-                            style={{
-                              backgroundColor: `hsl(${(i * 360) / 6}, 70%, 55%)`,
-                            }}
-                          >
-                            {String.fromCharCode(65 + i)}
-                          </div>
-                        ))}
-                        {group.memberIds.length > 6 && (
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full border-3 border-white bg-slate-300 text-sm font-bold text-slate-700 shadow-md dark:border-[#181818] dark:bg-slate-700 dark:text-slate-300">
-                            +{group.memberIds.length - 6}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <p className="text-lg font-bold text-slate-900 dark:text-white">
-                          {group.memberIds.length}/{group.maxTeamSize}
-                        </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Capacity</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Footer Info */}
-                  <div className="flex items-center justify-between rounded-xl border-2 border-slate-100 bg-slate-50 px-4 py-3 dark:border-[#2A2A2A] dark:bg-[#0F0F0F]">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-slate-400" />
-                      <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                          Started
-                        </p>
-                        <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                          {new Date(2024, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </p>
-                      </div>
-                    </div>
-                    <button className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow-md transition-all hover:bg-indigo-700 hover:shadow-lg dark:bg-indigo-500 dark:hover:bg-indigo-600">
-                      <span>Manage</span>
-                      <ArrowLeft className="h-4 w-4 rotate-180" />
-                    </button>
+                  
+                  <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-400 transition-colors group-hover:text-indigo-600 dark:text-slate-500 dark:group-hover:text-indigo-400">
+                    <span>Manage</span>
+                    <ArrowLeft className="h-4 w-4 rotate-180" />
                   </div>
                 </div>
               </div>
