@@ -24,8 +24,11 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 import { StudentProfileModal } from "@/components/common/StudentProfileModal";
 import { TaskModal } from "@/components/ui/TaskModal";
+import { DocumentModal } from "@/components/ui/DocumentModal";
 import { GroupChat } from "@/components/chat/GroupChat";
 import { auth } from "@/firebase/auth";
+import { storage } from "@/firebase/storage";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import {
   doc,
   getDoc,
@@ -90,6 +93,8 @@ interface Document {
   url: string;
   uploadedBy: string;
   uploadedAt?: unknown;
+  isLink?: boolean;
+  storagePath?: string;
 }
 
 interface Meeting {
@@ -134,6 +139,7 @@ export default function ResearchGroupManagement() {
 
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
 
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({
     show: false,
@@ -371,6 +377,56 @@ export default function ResearchGroupManagement() {
     }
   };
 
+  const handleSaveDocument = async (data: { title: string; type: string; url: string; file: File | null; isLink: boolean }) => {
+    if (!id || !auth.currentUser) return;
+    try {
+      let documentUrl = data.url;
+      let storagePath = null;
+
+      if (!data.isLink && data.file) {
+        console.log("Starting Firebase Storage upload for:", data.file.name, "Size:", data.file.size);
+        storagePath = `researchGroups/${id}/documents/${Date.now()}_${data.file.name}`;
+        const fileRef = ref(storage, storagePath);
+        console.log("FileRef created, uploading bytes...");
+        const uploadResult = await uploadBytes(fileRef, data.file);
+        console.log("Upload bytes finished. Result:", uploadResult);
+        documentUrl = await getDownloadURL(uploadResult.ref);
+        console.log("Got download URL:", documentUrl);
+      }
+
+      console.log("Saving document to Firestore...");
+      await addDoc(collection(db, "researchGroups", id, "documents"), {
+        title: data.title,
+        type: data.type,
+        url: documentUrl,
+        isLink: data.isLink,
+        storagePath,
+        uploadedBy: auth.currentUser.displayName || "Teacher",
+        uploadedAt: serverTimestamp(),
+      });
+      
+      showToast("success", "Resource added successfully");
+    } catch (error) {
+      console.error("Error saving document:", error);
+      throw error;
+    }
+  };
+
+  const handleDeleteDocument = async (docData: Document) => {
+    if (!id || !window.confirm("Are you sure you want to delete this resource?")) return;
+    try {
+      if (!docData.isLink && docData.storagePath) {
+        const fileRef = ref(storage, docData.storagePath);
+        await deleteObject(fileRef).catch(e => console.error("Error deleting from storage", e));
+      }
+      await deleteDoc(doc(db, "researchGroups", id, "documents", docData.id));
+      showToast("success", "Resource deleted successfully");
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      showToast("error", "Failed to delete resource");
+    }
+  };
+
   if (loading) {
     return (
       <DashboardLayout role="teacher">
@@ -432,6 +488,12 @@ export default function ResearchGroupManagement() {
         onSave={handleSaveTask}
         editingTask={editingTask}
         teamMembers={teamMembers}
+      />
+
+      <DocumentModal
+        isOpen={isDocumentModalOpen}
+        onClose={() => setIsDocumentModalOpen(false)}
+        onSave={handleSaveDocument}
       />
 
       <div className="mx-auto max-w-7xl px-2 sm:px-4">
@@ -812,8 +874,11 @@ export default function ResearchGroupManagement() {
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Documents & Resources</h2>
-              <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700">
-                <Upload className="h-4 w-4" /> Upload Document
+              <button 
+                onClick={() => setIsDocumentModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+              >
+                <Upload className="h-4 w-4" /> Add Resource
               </button>
             </div>
             <div className="space-y-3">
@@ -843,12 +908,12 @@ export default function ResearchGroupManagement() {
                             : "bg-slate-100 text-slate-600 dark:bg-slate-500/20 dark:text-slate-400"
                         }`}
                       >
-                        <FileText className="h-5 w-5" />
+                        {doc.isLink ? <LinkIcon className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
                       </div>
                       <div>
                         <h3 className="font-semibold text-slate-900 dark:text-white">{doc.title}</h3>
                         <p className="mt-0.5 text-xs capitalize text-slate-500 dark:text-slate-400">
-                          {doc.type} • Uploaded by {doc.uploadedBy}
+                          {doc.type} • {doc.isLink ? 'Shared' : 'Uploaded'} by {doc.uploadedBy}
                         </p>
                       </div>
                     </div>
@@ -859,9 +924,12 @@ export default function ResearchGroupManagement() {
                         rel="noopener noreferrer"
                         className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
                       >
-                        <LinkIcon className="h-4 w-4" />
+                        <Eye className="h-4 w-4" />
                       </a>
-                      <button className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10">
+                      <button 
+                        onClick={() => handleDeleteDocument(doc)}
+                        className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                      >
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
