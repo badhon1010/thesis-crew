@@ -4,10 +4,11 @@ import { db } from "./firestore";
 export interface AppNotification {
   id: string;
   recipientId: string;
-  type: "new_topic";
+  type: "new_topic" | "task_update" | "milestone_completed";
   title: string;
   message: string;
-  topicId: string;
+  groupId?: string;
+  topicId?: string;
   read: boolean;
   createdAt?: unknown;
 }
@@ -33,4 +34,32 @@ export async function notifyStudentsOfNewTopic(topicId: string, topicTitle: stri
     });
     await batch.commit();
   }
+}
+
+export async function notifyTeacherOfTaskUpdate(teacherId: string, groupId: string, taskTitle: string, newStatus: string, studentName: string) {
+  const batch = writeBatch(db);
+  batch.set(doc(db, "notifications", `task-update_${groupId}_${Date.now()}_${teacherId}`), {
+    recipientId: teacherId,
+    type: "task_update" satisfies AppNotification["type"],
+    title: "Task Status Updated",
+    message: `${studentName} moved task "${taskTitle}" to ${newStatus}.`,
+    groupId,
+    read: false,
+    createdAt: serverTimestamp(),
+  });
+  await batch.commit();
+}
+
+export async function notifyTeacherOfMilestoneCompletion(teacherId: string, groupId: string, milestoneTitle: string) {
+  const batch = writeBatch(db);
+  batch.set(doc(db, "notifications", `milestone-complete_${groupId}_${Date.now()}_${teacherId}`), {
+    recipientId: teacherId,
+    type: "milestone_completed" satisfies AppNotification["type"],
+    title: "Milestone Completed",
+    message: `Milestone "${milestoneTitle}" has been fully completed!`,
+    groupId,
+    read: false,
+    createdAt: serverTimestamp(),
+  });
+  await batch.commit();
 }

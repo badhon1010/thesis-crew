@@ -38,7 +38,7 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
 
           <div className="flex items-center gap-4">
             <ThemeToggle />
-            {role === "student" && <StudentNotifications />}
+            <StudentNotifications role={role} />
             
             {/* Profile Icon */}
             <Link 

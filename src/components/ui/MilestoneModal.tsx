@@ -14,9 +14,10 @@ interface MilestoneModalProps {
   onClose: () => void;
   onSave: (milestone: Omit<Milestone, "id">) => Promise<void>;
   initialData?: Milestone | null;
+  existingMilestones?: Milestone[];
 }
 
-export function MilestoneModal({ isOpen, onClose, onSave, initialData }: MilestoneModalProps) {
+export function MilestoneModal({ isOpen, onClose, onSave, initialData, existingMilestones }: MilestoneModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [deadline, setDeadline] = useState("");
@@ -41,6 +42,19 @@ export function MilestoneModal({ isOpen, onClose, onSave, initialData }: Milesto
     }
   }, [isOpen, initialData]);
 
+  // Calculate min deadline for new milestone
+  const minDeadlineDate = React.useMemo(() => {
+    if (initialData) return undefined;
+    const safeMilestones = existingMilestones as Milestone[] || [];
+    const otherMilestones = safeMilestones.filter(m => m.id !== initialData?.id);
+    if (otherMilestones.length === 0) return undefined;
+    
+    const latest = Math.max(...otherMilestones.map(m => new Date(m.deadline).getTime()));
+    const nextDay = new Date(latest);
+    nextDay.setDate(nextDay.getDate() + 1);
+    return nextDay.toISOString().split('T')[0];
+  }, [existingMilestones, initialData]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -48,6 +62,24 @@ export function MilestoneModal({ isOpen, onClose, onSave, initialData }: Milesto
     if (!title.trim() || !description.trim() || !deadline) {
       setError("Please complete all fields.");
       return;
+    }
+
+    // Validate overlapping/sequential deadlines
+    const currentDeadline = new Date(deadline);
+    currentDeadline.setHours(0, 0, 0, 0);
+    
+    const safeMilestones = existingMilestones as Milestone[] || [];
+    const otherMilestones = safeMilestones.filter(m => m.id !== initialData?.id);
+    if (otherMilestones.length > 0) {
+      const latestExistingDeadline = new Date(
+        Math.max(...otherMilestones.map(m => new Date(m.deadline).getTime()))
+      );
+      latestExistingDeadline.setHours(0, 0, 0, 0);
+      
+      if (currentDeadline <= latestExistingDeadline) {
+        setError(`Deadline must be after the last milestone's deadline (${latestExistingDeadline.toLocaleDateString()}).`);
+        return;
+      }
     }
 
     try {
@@ -124,13 +156,14 @@ export function MilestoneModal({ isOpen, onClose, onSave, initialData }: Milesto
               <input
                 type="date"
                 value={deadline}
+                min={minDeadlineDate}
                 onClick={(e) => {
                   if (typeof e.currentTarget.showPicker === 'function') {
                     e.currentTarget.showPicker();
                   }
                 }}
                 onChange={(e) => setDeadline(e.target.value)}
-                className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
                 required
               />
             </div>

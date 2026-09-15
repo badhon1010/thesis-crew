@@ -1,5 +1,8 @@
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Users, CheckCircle2, Calendar, TrendingUp, FileText, ArrowRight } from "lucide-react";
+import { collection, query, onSnapshot } from "firebase/firestore";
+import { db } from "@/firebase/firestore";
 import type { Team } from "@/firebase/teamFormation";
 import type { ResearchTopic } from "@/firebase/researchTopics";
 
@@ -12,21 +15,119 @@ interface GroupCardProps {
   role: "teacher" | "student";
 }
 
+const avatarColors = [
+  "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300",
+  "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
+  "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
+  "bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300",
+  "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300",
+  "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
+];
+
 export function GroupCard({ group, role }: GroupCardProps) {
   const navigate = useNavigate();
   
-  // A consistent pseudo-random number based on the project ID string so it doesn't jump around on re-renders
-  const hashString = (str: string) => {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return Math.abs(hash);
-  };
-  
-  const hash = hashString(group.projectId);
-  const progress = (hash % 50) + 50; // 50 to 99
-  const filesCount = (hash % 20) + 5; // 5 to 24
+  const [progress, setProgress] = useState(0);
+  const [filesCount, setFilesCount] = useState(0);
+  const [hasUnread, setHasUnread] = useState(false);
+
+  useEffect(() => {
+    if (!group.projectId) return;
+
+    // Helper to check and update unread status
+    const checkUnread = (items: any[], dateField: string, tabId: string, currentUnreadStatus: boolean) => {
+      if (currentUnreadStatus) return true; // Already unread, no need to check further
+      
+      const stored = localStorage.getItem(`group_${group.projectId}_lastViewed`);
+      const lastViewed = stored ? JSON.parse(stored) : {};
+      const lastTime = lastViewed[tabId] || 0;
+
+      let max = 0;
+      items.forEach(item => {
+        const t = item[dateField];
+        let millis = 0;
+        if (t && t.toMillis) millis = t.toMillis();
+        else if (t instanceof Date) millis = t.getTime();
+        else if (typeof t === "string") millis = new Date(t).getTime();
+        if (millis > max) max = millis;
+      });
+
+      if (max > lastTime) {
+        setHasUnread(true);
+        return true;
+      }
+      return false;
+    };
+
+    let unreadFlag = false;
+
+    // Fetch Milestones
+    const unsubscribeMilestones = onSnapshot(
+      query(collection(db, "researchGroups", group.projectId, "milestones")),
+      (snapshot) => {
+        const docs = snapshot.docs.map(d => d.data());
+        if (snapshot.empty) {
+          setProgress(0);
+        } else {
+          const total = docs.length;
+          const completed = docs.filter((doc) => doc.status === "completed").length;
+          setProgress(Math.round((completed / total) * 100));
+        }
+        unreadFlag = checkUnread(docs, "createdAt", "milestones", unreadFlag);
+      }
+    );
+
+    // Fetch Documents
+    const unsubscribeDocuments = onSnapshot(
+      query(collection(db, "researchGroups", group.projectId, "documents")),
+      (snapshot) => {
+        const docs = snapshot.docs.map(d => d.data());
+        setFilesCount(docs.length);
+        unreadFlag = checkUnread(docs, "createdAt", "documents", unreadFlag);
+      }
+    );
+
+    // Fetch Tasks
+    const unsubscribeTasks = onSnapshot(
+      query(collection(db, "researchGroups", group.projectId, "tasks")),
+      (snapshot) => {
+        unreadFlag = checkUnread(snapshot.docs.map(d => d.data()), "createdAt", "tasks", unreadFlag);
+      }
+    );
+
+    // Fetch Conversations (Chat)
+    const unsubscribeConversations = onSnapshot(
+      query(collection(db, "researchGroups", group.projectId, "conversations")),
+      (snapshot) => {
+        unreadFlag = checkUnread(snapshot.docs.map(d => d.data()), "updatedAt", "chat", unreadFlag);
+      }
+    );
+
+    // Fetch Meetings
+    const unsubscribeMeetings = onSnapshot(
+      query(collection(db, "researchGroups", group.projectId, "meetings")),
+      (snapshot) => {
+        unreadFlag = checkUnread(snapshot.docs.map(d => d.data()), "createdAt", "meetings", unreadFlag);
+      }
+    );
+
+    // Fetch Publications
+    const unsubscribePublications = onSnapshot(
+      query(collection(db, "researchGroups", group.projectId, "publications")),
+      (snapshot) => {
+        unreadFlag = checkUnread(snapshot.docs.map(d => d.data()), "createdAt", "publications", unreadFlag);
+      }
+    );
+
+    return () => {
+      unsubscribeMilestones();
+      unsubscribeDocuments();
+      unsubscribeTasks();
+      unsubscribeConversations();
+      unsubscribeMeetings();
+      unsubscribePublications();
+    };
+  }, [group.projectId]);
   
   // Safely parse timestamp if it exists, otherwise fallback
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -66,6 +167,12 @@ export function GroupCard({ group, role }: GroupCardProps) {
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                   {group.memberIds.length} members
                 </span>
+                {hasUnread && (
+                  <span className="ml-auto flex items-center gap-1.5 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-600 dark:bg-red-500/10 dark:text-red-400">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500"></span>
+                    New
+                  </span>
+                )}
               </div>
               <h3 className="line-clamp-2 text-lg font-bold leading-tight text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">
                 {group.topicTitle}
@@ -122,10 +229,7 @@ export function GroupCard({ group, role }: GroupCardProps) {
                 {Array.from({ length: Math.min(group.memberIds.length, 6) }).map((_, i) => (
                   <div
                     key={i}
-                    className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-indigo-600 text-xs font-bold text-white shadow-sm ring-2 ring-transparent transition-transform hover:z-10 hover:-translate-y-1 hover:ring-indigo-200 dark:border-[#181818] dark:hover:ring-indigo-500/30"
-                    style={{
-                      backgroundColor: `hsl(${(i * 360) / 6}, 70%, 55%)`,
-                    }}
+                    className={`flex h-9 w-9 items-center justify-center rounded-full border-2 border-white text-xs font-bold shadow-sm ring-2 ring-transparent transition-transform hover:z-10 hover:-translate-y-1 hover:ring-indigo-200 dark:border-[#181818] dark:hover:ring-indigo-500/30 ${avatarColors[i % avatarColors.length]}`}
                   >
                     {String.fromCharCode(65 + i)}
                   </div>

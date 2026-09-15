@@ -16,6 +16,7 @@ interface Task {
   status: "todo" | "in-progress" | "completed";
   priority: "low" | "medium" | "high";
   dueDate?: string;
+  milestoneId?: string;
 }
 
 interface TaskModalProps {
@@ -24,17 +25,56 @@ interface TaskModalProps {
   onSave: (task: Omit<Task, "id">) => Promise<void>;
   editingTask?: Task | null;
   teamMembers: TeamMember[];
+  milestones: { id: string; title: string; deadline?: string }[];
 }
 
-export function TaskModal({ isOpen, onClose, onSave, editingTask, teamMembers }: TaskModalProps) {
+export function TaskModal({ isOpen, onClose, onSave, editingTask, teamMembers, milestones }: TaskModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assignedTo, setAssignedTo] = useState<string[]>([]);
   const [status, setStatus] = useState<"todo" | "in-progress" | "completed">("todo");
   const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
   const [dueDate, setDueDate] = useState("");
+  const [milestoneId, setMilestoneId] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  const { minTaskDate, maxTaskDate } = React.useMemo(() => {
+    if (!milestoneId || milestones.length === 0) {
+      return { minTaskDate: undefined, maxTaskDate: undefined };
+    }
+    const selectedMilestone = milestones.find(m => m.id === milestoneId);
+    if (!selectedMilestone || !selectedMilestone.deadline) {
+      return { minTaskDate: undefined, maxTaskDate: undefined };
+    }
+    
+    const max = selectedMilestone.deadline;
+    
+    const sortedMilestones = [...milestones].sort((a, b) => {
+      const dateA = a.deadline ? new Date(a.deadline).getTime() : 0;
+      const dateB = b.deadline ? new Date(b.deadline).getTime() : 0;
+      return dateA - dateB;
+    });
+    
+    let min = undefined;
+    const currentIndex = sortedMilestones.findIndex(m => m.id === milestoneId);
+    if (currentIndex > 0) {
+      const prevMilestone = sortedMilestones[currentIndex - 1];
+      if (prevMilestone && prevMilestone.deadline) {
+        const prevDeadline = new Date(prevMilestone.deadline);
+        prevDeadline.setDate(prevDeadline.getDate() + 1);
+        min = prevDeadline.toISOString().split('T')[0];
+      }
+    } else {
+      // First milestone: set min to today to disable past dates
+      const today = new Date();
+      // adjust to local timezone date string
+      const tzOffset = today.getTimezoneOffset() * 60000;
+      min = new Date(today.getTime() - tzOffset).toISOString().split('T')[0];
+    }
+    
+    return { minTaskDate: min, maxTaskDate: max };
+  }, [milestoneId, milestones]);
 
   useEffect(() => {
     if (editingTask) {
@@ -44,6 +84,7 @@ export function TaskModal({ isOpen, onClose, onSave, editingTask, teamMembers }:
       setStatus(editingTask.status);
       setPriority(editingTask.priority);
       setDueDate(editingTask.dueDate || "");
+      setMilestoneId(editingTask.milestoneId || "");
     } else {
       setTitle("");
       setDescription("");
@@ -51,6 +92,7 @@ export function TaskModal({ isOpen, onClose, onSave, editingTask, teamMembers }:
       setStatus("todo");
       setPriority("medium");
       setDueDate("");
+      setMilestoneId("");
     }
     setError("");
   }, [editingTask, isOpen]);
@@ -63,8 +105,53 @@ export function TaskModal({ isOpen, onClose, onSave, editingTask, teamMembers }:
       setError("Title is required");
       return;
     }
-    if (!dueDate) {
-      setError("Due Date is required");
+    if (!title.trim() || !dueDate) {
+      setError("Title and Due Date are required");
+      return;
+    }
+
+    if (!milestoneId) {
+      setError("Please select a milestone");
+      return;
+    }
+    
+    // Check if task deadline is within the milestone's timeframe
+    const selectedMilestone = milestones.find(m => m.id === milestoneId);
+    if (selectedMilestone && selectedMilestone.deadline) {
+      const taskDate = new Date(dueDate);
+      const milestoneDate = new Date(selectedMilestone.deadline);
+      taskDate.setHours(0, 0, 0, 0);
+      milestoneDate.setHours(0, 0, 0, 0);
+      
+      if (taskDate > milestoneDate) {
+        setError(`Task deadline cannot be later than its milestone's deadline (${milestoneDate.toLocaleDateString()})`);
+        return;
+      }
+      
+      // Determine the start date of this milestone (which is the deadline of the previous milestone)
+      const sortedMilestones = [...milestones].sort((a, b) => {
+        const dateA = a.deadline ? new Date(a.deadline).getTime() : 0;
+        const dateB = b.deadline ? new Date(b.deadline).getTime() : 0;
+        return dateA - dateB;
+      });
+      
+      const currentIndex = sortedMilestones.findIndex(m => m.id === milestoneId);
+      if (currentIndex > 0) {
+        const prevMilestone = sortedMilestones[currentIndex - 1];
+        if (prevMilestone && prevMilestone.deadline) {
+          const prevDeadline = new Date(prevMilestone.deadline);
+          prevDeadline.setHours(0, 0, 0, 0);
+          
+          if (taskDate <= prevDeadline) {
+            setError(`Task deadline must be after the previous milestone's deadline (${prevDeadline.toLocaleDateString()})`);
+            return;
+          }
+        }
+      }
+    }
+
+    if (assignedTo.length === 0) {
+      setError("Please assign the task to at least one team member.");
       return;
     }
 
@@ -77,7 +164,8 @@ export function TaskModal({ isOpen, onClose, onSave, editingTask, teamMembers }:
         assignedTo,
         status,
         priority,
-        dueDate,
+        dueDate: dueDate || undefined,
+        milestoneId,
       });
       onClose();
     } catch (err) {
@@ -146,6 +234,25 @@ export function TaskModal({ isOpen, onClose, onSave, editingTask, teamMembers }:
               />
             </div>
 
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                Link to Milestone <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={milestoneId}
+                onChange={(e) => setMilestoneId(e.target.value)}
+                required
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
+              >
+                <option value="">Select a milestone</option>
+                {milestones.map((milestone) => (
+                  <option key={milestone.id} value={milestone.id}>
+                    {milestone.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
@@ -165,17 +272,21 @@ export function TaskModal({ isOpen, onClose, onSave, editingTask, teamMembers }:
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
                   Due Date <span className="text-rose-500">*</span>
+                  {!milestoneId && <span className="ml-2 text-xs font-normal text-slate-500">(Select a milestone first)</span>}
                 </label>
                 <input
                   type="date"
                   value={dueDate}
+                  min={minTaskDate}
+                  max={maxTaskDate}
+                  disabled={!milestoneId}
                   onClick={(e) => {
-                    if (typeof e.currentTarget.showPicker === 'function') {
+                    if (typeof e.currentTarget.showPicker === 'function' && milestoneId) {
                       e.currentTarget.showPicker();
                     }
                   }}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
+                  className={`w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400 ${!milestoneId ? 'bg-slate-100 cursor-not-allowed dark:bg-[#1A1A1A] text-slate-400' : 'bg-white cursor-pointer dark:bg-[#0F0F0F] text-slate-900'}`}
                   required
                 />
               </div>
@@ -198,7 +309,7 @@ export function TaskModal({ isOpen, onClose, onSave, editingTask, teamMembers }:
 
             <div>
               <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                Assign to (Optional)
+                Assign to <span className="text-rose-500">*</span>
               </label>
               <div className="space-y-2 max-h-40 overflow-y-auto rounded-xl border border-slate-200 p-2 dark:border-[#333] dark:bg-[#0F0F0F]">
                 {teamMembers.length === 0 ? (
