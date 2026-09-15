@@ -23,6 +23,7 @@ import {
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 import { StudentProfileModal } from "@/components/common/StudentProfileModal";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { TaskModal } from "@/components/ui/TaskModal";
 import { MilestoneModal } from "@/components/ui/MilestoneModal";
 import { GroupChat } from "@/components/chat/GroupChat";
@@ -134,9 +135,11 @@ export default function ResearchGroupManagement() {
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [isMilestoneModalOpen, setIsMilestoneModalOpen] = useState(false);
   const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
+  const [deleteMilestoneId, setDeleteMilestoneId] = useState<string | null>(null);
 
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
 
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({
     show: false,
@@ -175,15 +178,16 @@ export default function ResearchGroupManagement() {
     }
   };
 
-  const handleDeleteMilestone = async (milestoneId: string) => {
-    if (!id) return;
-    if (!confirm("Are you sure you want to delete this milestone?")) return;
+  const handleDeleteMilestone = async () => {
+    if (!id || !deleteMilestoneId) return;
     try {
-      await deleteDoc(doc(db, "researchGroups", id, "milestones", milestoneId));
+      await deleteDoc(doc(db, "researchGroups", id, "milestones", deleteMilestoneId));
       showToast("success", "Milestone deleted successfully.");
     } catch (error) {
       console.error("Failed to delete milestone:", error);
       showToast("error", "Failed to delete milestone.");
+    } finally {
+      setDeleteMilestoneId(null);
     }
   };
 
@@ -389,14 +393,16 @@ export default function ResearchGroupManagement() {
     }
   };
 
-  const handleDeleteTask = async (taskId: string) => {
-    if (!id || !window.confirm("Are you sure you want to delete this task?")) return;
+  const handleDeleteTask = async () => {
+    if (!id || !deleteTaskId) return;
     try {
-      await deleteDoc(doc(db, "researchGroups", id, "tasks", taskId));
+      await deleteDoc(doc(db, "researchGroups", id, "tasks", deleteTaskId));
       showToast("success", "Task deleted successfully");
     } catch (error) {
       console.error("Error deleting task:", error);
       showToast("error", "Failed to delete task");
+    } finally {
+      setDeleteTaskId(null);
     }
   };
 
@@ -474,6 +480,7 @@ export default function ResearchGroupManagement() {
         onSave={handleSaveTask}
         editingTask={editingTask}
         teamMembers={teamMembers}
+        milestones={milestones}
       />
       <MilestoneModal
         isOpen={isMilestoneModalOpen}
@@ -752,7 +759,7 @@ export default function ResearchGroupManagement() {
                             <Edit2 className="h-4 w-4" />
                           </button>
                           <button
-                            onClick={() => handleDeleteMilestone(milestone.id)}
+                            onClick={() => setDeleteMilestoneId(milestone.id || null)}
                             className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -860,7 +867,7 @@ export default function ResearchGroupManagement() {
                             <Edit2 className="h-4 w-4" />
                           </button>
                           <button
-                            onClick={() => handleDeleteTask(task.id)}
+                            onClick={() => setDeleteTaskId(task.id || null)}
                             className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -1061,6 +1068,24 @@ export default function ResearchGroupManagement() {
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={!!deleteMilestoneId}
+        onClose={() => setDeleteMilestoneId(null)}
+        onConfirm={handleDeleteMilestone}
+        title="Delete Milestone"
+        message="Are you sure you want to delete this milestone? This action cannot be undone and will also delete any associated tasks."
+        confirmText="Delete"
+      />
+
+      <ConfirmModal
+        isOpen={!!deleteTaskId}
+        onClose={() => setDeleteTaskId(null)}
+        onConfirm={handleDeleteTask}
+        title="Delete Task"
+        message="Are you sure you want to delete this task? This action cannot be undone."
+        confirmText="Delete"
+      />
     </DashboardLayout>
   );
 }

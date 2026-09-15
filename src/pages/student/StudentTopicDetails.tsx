@@ -155,12 +155,7 @@ export default function StudentTopicDetails() {
   // Check deadline
   const isDeadlinePassed = topic.applicationDeadline ? new Date(topic.applicationDeadline) < new Date() : false;
   
-  let buttonLabel = "Join team";
-  if (requestStatus === "pending") buttonLabel = "Request pending";
-  else if (requestStatus === "accepted") buttonLabel = "You joined this team";
-  else if (requestStatus === "rejected") buttonLabel = "Request declined";
-  else if (teamFull) buttonLabel = "Team is full";
-  else if (isDeadlinePassed) buttonLabel = "Deadline passed";
+  if (requestStatus === "pending") {}
 
   return <DashboardLayout role="student"><div className="mx-auto max-w-5xl px-2 sm:px-0">
     {toast && <ToastAlert type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
