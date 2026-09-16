@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Users, ArrowLeft, Search, CheckCircle2, Calendar, TrendingUp, FileText } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Users, ArrowLeft, Search } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
+import { GroupCard } from "@/components/common/GroupCard";
 
 import { auth } from "@/firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
@@ -14,7 +15,6 @@ interface ResearchGroupWithTopic extends Team {
 }
 
 export default function TeacherResearchGroups() {
-  const navigate = useNavigate();
   const [groups, setGroups] = useState<ResearchGroupWithTopic[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -127,6 +127,7 @@ export default function TeacherResearchGroups() {
             </div>
           ) : (
             filteredGroups.map((group) => (
+<<<<<<< HEAD
               <div
                 key={group.projectId}
                 onClick={() => navigate(`/teacher/research-groups/${group.projectId}`)}
@@ -186,6 +187,9 @@ export default function TeacherResearchGroups() {
                   </div>
                 </div>
               </div>
+=======
+              <GroupCard key={group.projectId} group={group} role="teacher" />
+>>>>>>> student
             ))
           )}
         </div>

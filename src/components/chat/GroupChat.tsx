@@ -155,6 +155,9 @@ export function GroupChat({ groupId, currentUserId, currentUserName, currentUser
         senderRole: currentUserRole,
         createdAt: serverTimestamp(),
       });
+      await updateDoc(doc(db, "researchGroups", groupId, "conversations", activeConversationId), {
+        updatedAt: serverTimestamp(),
+      });
     } catch (error) {
       console.error("Error sending message:", error);
       setNewMessage(messageText); // Restore if failed
