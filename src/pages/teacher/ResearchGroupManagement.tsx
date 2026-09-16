@@ -11,6 +11,7 @@ import {
   Clock,
   CheckCircle2,
   Circle,
+
   Loader2,
   Plus,
   Edit2,
@@ -18,6 +19,7 @@ import {
   Eye,
   Link as LinkIcon,
   Upload,
+  MapPin,
   MessageSquare,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -26,6 +28,8 @@ import { StudentProfileModal } from "@/components/common/StudentProfileModal";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { TaskModal } from "@/components/ui/TaskModal";
 import { MilestoneModal } from "@/components/ui/MilestoneModal";
+import { MeetingModal } from "@/components/ui/MeetingModal";
+import { PublicationModal } from "@/components/ui/PublicationModal";
 import { GroupChat } from "@/components/chat/GroupChat";
 import { auth } from "@/firebase/auth";
 import {
@@ -99,6 +103,9 @@ interface Meeting {
   title: string;
   date: string;
   duration: string;
+  type?: "online" | "offline";
+  location?: string;
+  meetingLink?: string;
   notes?: string;
   attendees: string[];
   createdAt?: unknown;
@@ -114,6 +121,7 @@ interface Publication {
   acceptanceDate?: string;
   publicationDate?: string;
   doi?: string;
+  paperUrl?: string;
   createdAt?: unknown;
 }
 
@@ -140,6 +148,14 @@ export default function ResearchGroupManagement() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
+
+  const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
+  const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
+  const [deleteMeetingId, setDeleteMeetingId] = useState<string | null>(null);
+
+  const [isPublicationModalOpen, setIsPublicationModalOpen] = useState(false);
+  const [editingPublication, setEditingPublication] = useState<Publication | null>(null);
+  const [deletePublicationId, setDeletePublicationId] = useState<string | null>(null);
 
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({
     show: false,
@@ -419,6 +435,78 @@ export default function ResearchGroupManagement() {
     }
   };
 
+  const handleSaveMeeting = async (meetingData: Omit<Meeting, "id">) => {
+    if (!id) return;
+    try {
+      if (editingMeeting) {
+        await updateDoc(doc(db, "researchGroups", id, "meetings", editingMeeting.id), {
+          ...meetingData,
+        });
+        showToast("success", "Meeting updated successfully");
+      } else {
+        await addDoc(collection(db, "researchGroups", id, "meetings"), {
+          ...meetingData,
+          createdAt: serverTimestamp(),
+        });
+        showToast("success", "Meeting scheduled successfully");
+      }
+      setIsMeetingModalOpen(false);
+      setEditingMeeting(null);
+    } catch (error) {
+      console.error("Error saving meeting:", error);
+      showToast("error", "Failed to save meeting");
+    }
+  };
+
+  const handleDeleteMeeting = async () => {
+    if (!id || !deleteMeetingId) return;
+    try {
+      await deleteDoc(doc(db, "researchGroups", id, "meetings", deleteMeetingId));
+      showToast("success", "Meeting deleted successfully");
+    } catch (error) {
+      console.error("Error deleting meeting:", error);
+      showToast("error", "Failed to delete meeting");
+    } finally {
+      setDeleteMeetingId(null);
+    }
+  };
+
+  const handleSavePublication = async (publicationData: Omit<Publication, "id" | "createdAt">) => {
+    if (!id) return;
+    try {
+      if (editingPublication) {
+        await updateDoc(doc(db, "researchGroups", id, "publications", editingPublication.id), {
+          ...publicationData,
+        });
+        showToast("success", "Publication updated successfully");
+      } else {
+        await addDoc(collection(db, "researchGroups", id, "publications"), {
+          ...publicationData,
+          createdAt: serverTimestamp(),
+        });
+        showToast("success", "Publication added successfully");
+      }
+      setIsPublicationModalOpen(false);
+      setEditingPublication(null);
+    } catch (error) {
+      console.error("Error saving publication:", error);
+      showToast("error", "Failed to save publication");
+      throw error;
+    }
+  };
+
+  const handleDeletePublication = async () => {
+    if (!id || !deletePublicationId) return;
+    try {
+      await deleteDoc(doc(db, "researchGroups", id, "publications", deletePublicationId));
+      showToast("success", "Publication deleted successfully");
+      setDeletePublicationId(null);
+    } catch (error) {
+      console.error("Error deleting publication:", error);
+      showToast("error", "Failed to delete publication");
+    }
+  };
+
   if (loading) {
     return (
       <DashboardLayout role="teacher">
@@ -490,6 +578,30 @@ export default function ResearchGroupManagement() {
         }}
         onSave={handleSaveMilestone}
         initialData={editingMilestone}
+      />
+
+      <MeetingModal
+        isOpen={isMeetingModalOpen}
+        onClose={() => {
+          setIsMeetingModalOpen(false);
+          setEditingMeeting(null);
+        }}
+        onSave={handleSaveMeeting}
+        editingMeeting={editingMeeting}
+        members={[
+          ...(topic?.supervisorId ? [{ id: topic.supervisorId, name: topic.supervisorName || "Supervisor", role: "teacher" }] : []),
+          ...teamMembers.map(m => ({ id: m.studentId, name: m.studentName, department: m.department }))
+        ]}
+      />
+
+      <PublicationModal
+        isOpen={isPublicationModalOpen}
+        onClose={() => {
+          setIsPublicationModalOpen(false);
+          setEditingPublication(null);
+        }}
+        onSave={handleSavePublication}
+        publication={editingPublication}
       />
 
       <div className="mx-auto max-w-7xl px-2 sm:px-4">
@@ -950,7 +1062,13 @@ export default function ResearchGroupManagement() {
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Meetings & Discussions</h2>
-              <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700">
+              <button 
+                onClick={() => {
+                  setEditingMeeting(null);
+                  setIsMeetingModalOpen(true);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+              >
                 <Plus className="h-4 w-4" /> Schedule Meeting
               </button>
             </div>
@@ -985,12 +1103,35 @@ export default function ResearchGroupManagement() {
                         {meeting.notes && (
                           <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{meeting.notes}</p>
                         )}
+                        {meeting.type === "offline" && meeting.location ? (
+                          <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                            <MapPin className="h-4 w-4" /> {meeting.location}
+                          </div>
+                        ) : meeting.meetingLink ? (
+                          <a 
+                            href={meeting.meetingLink} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
+                          >
+                            <LinkIcon className="h-4 w-4" /> Join Online Meeting
+                          </a>
+                        ) : null}
                       </div>
                       <div className="flex gap-2">
-                        <button className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
+                        <button 
+                          onClick={() => {
+                            setEditingMeeting(meeting);
+                            setIsMeetingModalOpen(true);
+                          }}
+                          className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                        >
                           <Edit2 className="h-4 w-4" />
                         </button>
-                        <button className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10">
+                        <button 
+                          onClick={() => setDeleteMeetingId(meeting.id || null)}
+                          className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                        >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
@@ -1006,7 +1147,13 @@ export default function ResearchGroupManagement() {
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Publications & Submissions</h2>
-              <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700">
+              <button 
+                onClick={() => {
+                  setEditingPublication(null);
+                  setIsPublicationModalOpen(true);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+              >
                 <Plus className="h-4 w-4" /> Add Publication
               </button>
             </div>
@@ -1051,12 +1198,31 @@ export default function ResearchGroupManagement() {
                         {pub.doi && (
                           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">DOI: {pub.doi}</p>
                         )}
+                        {pub.paperUrl && (
+                          <a 
+                            href={pub.paperUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
+                          >
+                            <LinkIcon className="h-4 w-4" /> View Paper
+                          </a>
+                        )}
                       </div>
                       <div className="flex gap-2">
-                        <button className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
+                        <button 
+                          onClick={() => {
+                            setEditingPublication(pub);
+                            setIsPublicationModalOpen(true);
+                          }}
+                          className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                        >
                           <Edit2 className="h-4 w-4" />
                         </button>
-                        <button className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10">
+                        <button 
+                          onClick={() => setDeletePublicationId(pub.id || null)}
+                          className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                        >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
@@ -1084,6 +1250,24 @@ export default function ResearchGroupManagement() {
         onConfirm={handleDeleteTask}
         title="Delete Task"
         message="Are you sure you want to delete this task? This action cannot be undone."
+        confirmText="Delete"
+      />
+
+      <ConfirmModal
+        isOpen={!!deleteMeetingId}
+        onClose={() => setDeleteMeetingId(null)}
+        onConfirm={handleDeleteMeeting}
+        title="Delete Meeting"
+        message="Are you sure you want to delete this meeting? This action cannot be undone."
+        confirmText="Delete"
+      />
+
+      <ConfirmModal
+        isOpen={!!deletePublicationId}
+        onClose={() => setDeletePublicationId(null)}
+        onConfirm={handleDeletePublication}
+        title="Delete Publication"
+        message="Are you sure you want to delete this publication? This action cannot be undone."
         confirmText="Delete"
       />
     </DashboardLayout>

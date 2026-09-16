@@ -21,14 +21,19 @@ import {
   ChevronDown,
   Minus,
   MessageSquare,
+  MapPin,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+
 import { ToastAlert } from "@/components/common/ToastAlert";
 import { GroupChat } from "@/components/chat/GroupChat";
 import { auth } from "@/firebase/auth";
 import { StudentProfileModal } from "@/components/common/StudentProfileModal";
 import { MilestoneViewModal } from "@/components/ui/MilestoneViewModal";
 import { TaskViewModal } from "@/components/ui/TaskViewModal";
+import { MeetingViewModal } from "@/components/ui/MeetingViewModal";
+import { PublicationModal } from "@/components/ui/PublicationModal";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import {
   doc,
   getDoc,
@@ -38,6 +43,9 @@ import {
   getDocs,
   onSnapshot,
   updateDoc,
+  addDoc,
+  deleteDoc,
+  serverTimestamp,
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
@@ -99,6 +107,9 @@ interface Meeting {
   title: string;
   date: string;
   duration: string;
+  type?: "online" | "offline";
+  location?: string;
+  meetingLink?: string;
   notes?: string;
   attendees: string[];
   createdAt?: unknown;
@@ -114,6 +125,7 @@ interface Publication {
   acceptanceDate?: string;
   publicationDate?: string;
   doi?: string;
+  paperUrl?: string;
   createdAt?: unknown;
 }
 
@@ -142,6 +154,11 @@ export default function StudentGroupDetails() {
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [viewingMilestone, setViewingMilestone] = useState<Milestone | null>(null);
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
+  const [viewingMeeting, setViewingMeeting] = useState<Meeting | null>(null);
+
+  const [isPublicationModalOpen, setIsPublicationModalOpen] = useState(false);
+  const [editingPublication, setEditingPublication] = useState<Publication | null>(null);
+  const [deletePublicationId, setDeletePublicationId] = useState<string | null>(null);
 
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({
     show: false,
@@ -418,6 +435,40 @@ export default function StudentGroupDetails() {
   };
 
 
+
+  const handleSavePublication = async (publicationData: Omit<Publication, "id" | "createdAt">) => {
+    if (!id) return;
+    try {
+      if (editingPublication) {
+        await updateDoc(doc(db, "researchGroups", id, "publications", editingPublication.id), {
+          ...publicationData,
+        });
+        showToast("success", "Publication updated successfully");
+      } else {
+        await addDoc(collection(db, "researchGroups", id, "publications"), {
+          ...publicationData,
+          createdAt: serverTimestamp(),
+        });
+        showToast("success", "Publication added successfully");
+      }
+    } catch (error) {
+      console.error("Error saving publication:", error);
+      showToast("error", "Failed to save publication");
+      throw error;
+    }
+  };
+
+  const handleDeletePublication = async () => {
+    if (!id || !deletePublicationId) return;
+    try {
+      await deleteDoc(doc(db, "researchGroups", id, "publications", deletePublicationId));
+      showToast("success", "Publication deleted successfully");
+      setDeletePublicationId(null);
+    } catch (error) {
+      console.error("Error deleting publication:", error);
+      showToast("error", "Failed to delete publication");
+    }
+  };
 
   if (loading) {
     return (
@@ -1101,9 +1152,6 @@ export default function StudentGroupDetails() {
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Meetings & Discussions</h2>
-              <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700">
-                <Plus className="h-4 w-4" /> Schedule Meeting
-              </button>
             </div>
             <div className="space-y-4">
               {meetings.length === 0 ? (
@@ -1111,14 +1159,15 @@ export default function StudentGroupDetails() {
                   <Calendar className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
                   <p className="mt-4 text-sm font-medium text-slate-900 dark:text-white">No meetings yet</p>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Schedule meetings to collaborate with your team
+                    Your supervisor will schedule meetings here.
                   </p>
                 </div>
               ) : (
                 meetings.map((meeting) => (
                   <div
                     key={meeting.id}
-                    className="rounded-xl border border-slate-200 p-4 dark:border-[#2A2A2A]"
+                    onClick={() => setViewingMeeting(meeting)}
+                    className="rounded-xl border border-slate-200 p-4 transition-all hover:border-indigo-500 hover:shadow-md cursor-pointer dark:border-[#2A2A2A] dark:hover:border-indigo-400 dark:hover:bg-[#1a1a1a]"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
@@ -1136,14 +1185,20 @@ export default function StudentGroupDetails() {
                         {meeting.notes && (
                           <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{meeting.notes}</p>
                         )}
-                      </div>
-                      <div className="flex gap-2">
-                        <button className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                        <button className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {meeting.type === "offline" && meeting.location ? (
+                          <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                            <MapPin className="h-4 w-4" /> {meeting.location}
+                          </div>
+                        ) : meeting.meetingLink ? (
+                          <a 
+                            href={meeting.meetingLink} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
+                          >
+                            <LinkIcon className="h-4 w-4" /> Join Online Meeting
+                          </a>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -1157,7 +1212,13 @@ export default function StudentGroupDetails() {
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Publications & Submissions</h2>
-              <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700">
+              <button 
+                onClick={() => {
+                  setEditingPublication(null);
+                  setIsPublicationModalOpen(true);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+              >
                 <Plus className="h-4 w-4" /> Add Publication
               </button>
             </div>
@@ -1202,12 +1263,31 @@ export default function StudentGroupDetails() {
                         {pub.doi && (
                           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">DOI: {pub.doi}</p>
                         )}
+                        {pub.paperUrl && (
+                          <a 
+                            href={pub.paperUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
+                          >
+                            <LinkIcon className="h-4 w-4" /> View Paper
+                          </a>
+                        )}
                       </div>
                       <div className="flex gap-2">
-                        <button className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
+                        <button 
+                          onClick={() => {
+                            setEditingPublication(pub);
+                            setIsPublicationModalOpen(true);
+                          }}
+                          className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                        >
                           <Edit2 className="h-4 w-4" />
                         </button>
-                        <button className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10">
+                        <button 
+                          onClick={() => setDeletePublicationId(pub.id)}
+                          className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                        >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
@@ -1219,6 +1299,34 @@ export default function StudentGroupDetails() {
           </div>
         )}
       </div>
+
+      <MeetingViewModal
+        isOpen={!!viewingMeeting}
+        onClose={() => setViewingMeeting(null)}
+        meeting={viewingMeeting}
+        teamMembers={teamMembers}
+        supervisorName={topic?.supervisorName}
+        supervisorId={topic?.supervisorId}
+      />
+
+      <PublicationModal
+        isOpen={isPublicationModalOpen}
+        onClose={() => {
+          setIsPublicationModalOpen(false);
+          setEditingPublication(null);
+        }}
+        onSave={handleSavePublication}
+        publication={editingPublication}
+      />
+
+      <ConfirmModal
+        isOpen={!!deletePublicationId}
+        onClose={() => setDeletePublicationId(null)}
+        onConfirm={handleDeletePublication}
+        title="Delete Publication"
+        message="Are you sure you want to delete this publication? This action cannot be undone."
+        confirmText="Delete Publication"
+      />
     </DashboardLayout>
   );
 }
