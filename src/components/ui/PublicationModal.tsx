@@ -1,112 +1,254 @@
-import { useState, useEffect } from "react";
-import { X, BookOpen, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  X,
+  BookOpen,
+  Presentation,
+  FileText,
+  BookMarked,
+  Image as ImageIcon,
+  MonitorPlay,
+  GraduationCap,
+  Newspaper,
+  Mic,
+  Package,
+  Loader2,
+  Link as LinkIcon,
+  Users,
+  Tag,
+  Building2,
+  CalendarDays,
+  FlaskConical,
+} from "lucide-react";
 
-interface Publication {
-  id: string;
+export type PublicationType =
+  | "journal"
+  | "conference"
+  | "workshop"
+  | "preprint"
+  | "book-chapter"
+  | "poster"
+  | "demo"
+  | "thesis"
+  | "magazine"
+  | "symposium"
+  | "other";
+
+export type PublicationStatus =
+  | "draft"
+  | "submitted"
+  | "under-review"
+  | "revision"
+  | "accepted"
+  | "published"
+  | "rejected";
+
+export interface PublicationFormData {
   title: string;
+  type: PublicationType;
   venue: string;
-  type: "conference" | "journal" | "workshop" | "preprint";
-  status: "draft" | "submitted" | "under-review" | "accepted" | "published" | "rejected";
-  submissionDate?: string;
-  acceptanceDate?: string;
-  publicationDate?: string;
-  doi?: string;
-  paperUrl?: string;
-  createdAt?: unknown;
+  publisher: string;
+  authors: string[];
+  abstract: string;
+  keywords: string[];
+  status: PublicationStatus;
+  submissionDate: string;
+  publicationDate: string;
+  doi: string;
+  paperUrl: string;
+  codeUrl: string;
+  projectUrl: string;
+  volume: string;
+  pages: string;
 }
 
 interface PublicationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: Omit<Publication, "id" | "createdAt">) => Promise<void>;
-  publication?: Publication | null;
+  onSave: (data: PublicationFormData) => Promise<void>;
+  editingPublication?: (Partial<PublicationFormData> & { id: string }) | null;
+  defaultAuthors?: string[];
 }
 
-export function PublicationModal({ isOpen, onClose, onSave, publication }: PublicationModalProps) {
+export const PUBLICATION_TYPES: {
+  value: PublicationType;
+  label: string;
+  hint: string;
+  icon: React.ElementType;
+  activeClass: string;
+}[] = [
+  { value: "journal", label: "Journal", hint: "Peer-reviewed journal article", icon: BookOpen, activeClass: "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300" },
+  { value: "conference", label: "Conference", hint: "Full conference paper", icon: Presentation, activeClass: "border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300" },
+  { value: "workshop", label: "Workshop", hint: "Workshop / short paper", icon: FlaskConical, activeClass: "border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300" },
+  { value: "preprint", label: "Preprint", hint: "arXiv / TechRxiv / SSRN", icon: FileText, activeClass: "border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300" },
+  { value: "book-chapter", label: "Book Chapter", hint: "Edited volume chapter", icon: BookMarked, activeClass: "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300" },
+  { value: "poster", label: "Poster", hint: "Poster / extended abstract", icon: ImageIcon, activeClass: "border-pink-500 bg-pink-50 text-pink-700 dark:bg-pink-500/15 dark:text-pink-300" },
+  { value: "demo", label: "Demo", hint: "System demonstration", icon: MonitorPlay, activeClass: "border-cyan-500 bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300" },
+  { value: "thesis", label: "Thesis", hint: "BS / MS / PhD thesis", icon: GraduationCap, activeClass: "border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300" },
+  { value: "magazine", label: "Magazine", hint: "Magazine / practitioner", icon: Newspaper, activeClass: "border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300" },
+  { value: "symposium", label: "Symposium", hint: "Symposium / doctoral cons.", icon: Mic, activeClass: "border-fuchsia-500 bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-500/15 dark:text-fuchsia-300" },
+  { value: "other", label: "Other", hint: "Report, dataset paper, etc.", icon: Package, activeClass: "border-slate-500 bg-slate-100 text-slate-700 dark:bg-slate-500/15 dark:text-slate-300" },
+];
+
+export const PUBLICATION_STATUSES: { value: PublicationStatus; label: string; dot: string }[] = [
+  { value: "draft", label: "Draft", dot: "bg-slate-400" },
+  { value: "submitted", label: "Submitted", dot: "bg-sky-500" },
+  { value: "under-review", label: "Under Review", dot: "bg-amber-500" },
+  { value: "revision", label: "Revision Required", dot: "bg-orange-500" },
+  { value: "accepted", label: "Accepted", dot: "bg-blue-600" },
+  { value: "published", label: "Published", dot: "bg-emerald-500" },
+  { value: "rejected", label: "Rejected", dot: "bg-rose-500" },
+];
+
+const inputCls =
+  "w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white dark:placeholder:text-slate-600 dark:focus:border-indigo-400 dark:focus:ring-indigo-400";
+
+export function PublicationModal({ isOpen, onClose, onSave, editingPublication, defaultAuthors }: PublicationModalProps) {
   const [title, setTitle] = useState("");
+  const [type, setType] = useState<PublicationType>("conference");
   const [venue, setVenue] = useState("");
-  const [type, setType] = useState<Publication["type"]>("conference");
-  const [status, setStatus] = useState<Publication["status"]>("draft");
+  const [publisher, setPublisher] = useState("");
+  const [authors, setAuthors] = useState<string[]>([]);
+  const [authorInput, setAuthorInput] = useState("");
+  const [abstract, setAbstract] = useState("");
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [keywordInput, setKeywordInput] = useState("");
+  const [status, setStatus] = useState<PublicationStatus>("draft");
   const [submissionDate, setSubmissionDate] = useState("");
-  const [acceptanceDate, setAcceptanceDate] = useState("");
   const [publicationDate, setPublicationDate] = useState("");
   const [doi, setDoi] = useState("");
   const [paperUrl, setPaperUrl] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [codeUrl, setCodeUrl] = useState("");
+  const [projectUrl, setProjectUrl] = useState("");
+  const [volume, setVolume] = useState("");
+  const [pages, setPages] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (publication && isOpen) {
-      setTitle(publication.title);
-      setVenue(publication.venue);
-      setType(publication.type);
-      setStatus(publication.status);
-      setSubmissionDate(publication.submissionDate || "");
-      setAcceptanceDate(publication.acceptanceDate || "");
-      setPublicationDate(publication.publicationDate || "");
-      setDoi(publication.doi || "");
-      setPaperUrl(publication.paperUrl || "");
-    } else if (isOpen) {
-      setTitle("");
-      setVenue("");
-      setType("conference");
-      setStatus("draft");
-      setSubmissionDate("");
-      setAcceptanceDate("");
-      setPublicationDate("");
-      setDoi("");
-      setPaperUrl("");
+    if (isOpen) {
+      if (editingPublication) {
+        setTitle(editingPublication.title || "");
+        setType(editingPublication.type || "conference");
+        setVenue(editingPublication.venue || "");
+        setPublisher(editingPublication.publisher || "");
+        setAuthors(editingPublication.authors || []);
+        setAbstract(editingPublication.abstract || "");
+        setKeywords(editingPublication.keywords || []);
+        setStatus(editingPublication.status || "draft");
+        setSubmissionDate(editingPublication.submissionDate || "");
+        setPublicationDate(editingPublication.publicationDate || "");
+        setDoi(editingPublication.doi || "");
+        setPaperUrl(editingPublication.paperUrl || "");
+        setCodeUrl(editingPublication.codeUrl || "");
+        setProjectUrl(editingPublication.projectUrl || "");
+        setVolume(editingPublication.volume || "");
+        setPages(editingPublication.pages || "");
+      } else {
+        setTitle("");
+        setType("conference");
+        setVenue("");
+        setPublisher("");
+        setAuthors(defaultAuthors || []);
+        setAbstract("");
+        setKeywords([]);
+        setStatus("draft");
+        setSubmissionDate("");
+        setPublicationDate("");
+        setDoi("");
+        setPaperUrl("");
+        setCodeUrl("");
+        setProjectUrl("");
+        setVolume("");
+        setPages("");
+      }
+      setAuthorInput("");
+      setKeywordInput("");
       setError("");
     }
-  }, [publication, isOpen]);
+  }, [isOpen, editingPublication, defaultAuthors]);
 
   if (!isOpen) return null;
 
+  const addAuthor = () => {
+    const v = authorInput.trim().replace(/,+$/, "");
+    if (!v) return;
+    if (!authors.includes(v)) setAuthors((p) => [...p, v]);
+    setAuthorInput("");
+  };
+
+  const addKeyword = () => {
+    const v = keywordInput.trim().replace(/,+$/, "").toLowerCase();
+    if (!v) return;
+    if (!keywords.includes(v)) setKeywords((p) => [...p, v]);
+    setKeywordInput("");
+  };
+
+  const isValidUrl = (u: string) => !u || /^https?:\/\/.+/.test(u.trim());
+  const isValidDoi = (d: string) => {
+    if (!d.trim()) return true;
+    const cleaned = d.trim().replace(/^https?:\/\/(dx\.)?doi\.org\//i, "");
+    return /^10\.\d{4,}(\.\d+)*\/\S+$/i.test(cleaned);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !venue.trim()) {
-      setError("Title and venue are required");
-      return;
-    }
+    if (!title.trim()) return setError("Give the publication a title.");
+    if (!venue.trim()) return setError("Add the venue — e.g. IEEE TKDE, NeurIPS 2026, arXiv.");
+    if (authors.length === 0) return setError("Add at least one author.");
+    if (!isValidDoi(doi)) return setError("DOI looks invalid. Expected format like 10.1109/xxxxx.");
+    if (!isValidUrl(paperUrl)) return setError("Paper / PDF link must start with http:// or https://");
+    if (!isValidUrl(codeUrl)) return setError("Code link must start with http:// or https://");
+    if (!isValidUrl(projectUrl)) return setError("Project link must start with http:// or https://");
+    if (status === "published" && !publicationDate)
+      return setError("Published papers need a publication date — this flips the group to Published.");
 
     try {
-      setIsSubmitting(true);
+      setIsSaving(true);
       setError("");
-      
-      const payload: Omit<Publication, "id" | "createdAt"> = {
+      await onSave({
         title: title.trim(),
-        venue: venue.trim(),
         type,
+        venue: venue.trim(),
+        publisher: publisher.trim(),
+        authors,
+        abstract: abstract.trim(),
+        keywords,
         status,
-      };
-
-      if (submissionDate) payload.submissionDate = submissionDate;
-      if (acceptanceDate) payload.acceptanceDate = acceptanceDate;
-      if (publicationDate) payload.publicationDate = publicationDate;
-      if (doi.trim()) payload.doi = doi.trim();
-      if (paperUrl.trim()) payload.paperUrl = paperUrl.trim();
-
-      await onSave(payload);
+        submissionDate,
+        publicationDate,
+        doi: doi.trim().replace(/^https?:\/\/(dx\.)?doi\.org\//i, ""),
+        paperUrl: paperUrl.trim(),
+        codeUrl: codeUrl.trim(),
+        projectUrl: projectUrl.trim(),
+        volume: volume.trim(),
+        pages: pages.trim(),
+      });
       onClose();
     } catch (err) {
-      console.error("Error saving publication:", err);
-      setError("Failed to save publication");
+      console.error("Failed to save publication:", err);
+      setError("Couldn't save this publication. Please try again.");
     } finally {
-      setIsSubmitting(false);
+      setIsSaving(false);
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm dark:bg-[#0A0A0A]/80">
-      <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-xl dark:border dark:border-[#2A2A2A] dark:bg-[#181818] max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between border-b border-slate-100 p-6 dark:border-[#2A2A2A] shrink-0">
+      <div className="w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-xl dark:border dark:border-[#2A2A2A] dark:bg-[#181818]">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 p-6 dark:border-[#2A2A2A]">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-500/10">
-              <BookOpen className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-sm">
+              <BookOpen className="h-5 w-5" />
             </div>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-              {publication ? "Edit Publication" : "Add Publication"}
-            </h2>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                {editingPublication ? "Edit publication" : "Add publication"}
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Journal, conference, preprint — anything. Share links so the team can cite it.
+              </p>
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -116,173 +258,303 @@ export function PublicationModal({ isOpen, onClose, onSave, publication }: Publi
           </button>
         </div>
 
-        <div className="overflow-y-auto">
-          <form onSubmit={handleSubmit} className="p-6">
-            {error && (
-              <div className="mb-6 rounded-xl bg-rose-50 p-4 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
-                {error}
-              </div>
-            )}
+        {/* Body */}
+        <div className="max-h-[72vh] overflow-y-auto p-6">
+          {error && (
+            <div className="mb-5 rounded-xl bg-rose-50 p-3.5 text-sm font-medium text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+              {error}
+            </div>
+          )}
 
-            <div className="space-y-6">
+          <form id="publication-form" onSubmit={handleSubmit} className="space-y-6">
+            {/* Title */}
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                Paper title <span className="text-rose-500">*</span>
+              </label>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Attention Is All You Need — Efficient Transformers for Low-Resource Languages"
+                className={inputCls}
+              />
+            </div>
+
+            {/* Type grid */}
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                Publication type <span className="text-rose-500">*</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {PUBLICATION_TYPES.map((t) => {
+                  const Icon = t.icon;
+                  const selected = type === t.value;
+                  return (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => setType(t.value)}
+                      title={t.hint}
+                      className={`flex items-center gap-2.5 rounded-xl border p-2.5 text-left transition-all ${
+                        selected
+                          ? `${t.activeClass} border-current ring-1 ring-current`
+                          : "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"
+                      }`}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span>
+                        <span className="block text-xs font-bold leading-tight">{t.label}</span>
+                        <span className="block truncate text-[11px] opacity-70">{t.hint}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Venue + publisher */}
+            <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  Title <span className="text-rose-500">*</span>
+                <label className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  <Building2 className="h-3.5 w-3.5 text-slate-400" /> Venue / Journal <span className="text-rose-500">*</span>
                 </label>
                 <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Paper title"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  Venue <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
                   value={venue}
                   onChange={(e) => setVenue(e.target.value)}
-                  placeholder="E.g., IEEE CVPR 2026, Nature, arXiv"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white"
-                  required
+                  placeholder="e.g. NeurIPS 2026, IEEE TKDE, arXiv"
+                  className={inputCls}
                 />
               </div>
-
               <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  Paper Link (URL)
-                </label>
+                <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Publisher</label>
                 <input
-                  type="url"
-                  value={paperUrl}
-                  onChange={(e) => setPaperUrl(e.target.value)}
-                  placeholder="e.g., https://arxiv.org/abs/..."
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white"
+                  value={publisher}
+                  onChange={(e) => setPublisher(e.target.value)}
+                  placeholder="e.g. IEEE, ACM, Springer, arXiv"
+                  className={inputCls}
                 />
               </div>
+            </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    Type <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={type}
-                    onChange={(e) => setType(e.target.value as Publication["type"])}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white"
-                  >
-                    <option value="conference">Conference</option>
-                    <option value="journal">Journal</option>
-                    <option value="workshop">Workshop</option>
-                    <option value="preprint">Preprint</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    Status <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as Publication["status"])}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white"
-                  >
-                    <option value="draft">Draft</option>
-                    <option value="submitted">Submitted</option>
-                    <option value="under-review">Under Review</option>
-                    <option value="accepted">Accepted</option>
-                    <option value="published">Published</option>
-                    <option value="rejected">Rejected</option>
-                  </select>
-                </div>
+            {/* Authors */}
+            <div>
+              <label className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                <Users className="h-3.5 w-3.5 text-slate-400" /> Authors <span className="text-rose-500">*</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  value={authorInput}
+                  onChange={(e) => setAuthorInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                      e.preventDefault();
+                      addAuthor();
+                    }
+                  }}
+                  placeholder="Type a name, press Enter"
+                  className={inputCls}
+                />
+                <button
+                  type="button"
+                  onClick={addAuthor}
+                  className="shrink-0 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-700 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+                >
+                  Add
+                </button>
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    Submission Date
-                  </label>
-                  <input
-                    type="date"
-                    value={submissionDate}
-                    onChange={(e) => setSubmissionDate(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white"
-                  />
-                </div>
-
-                {(status === "accepted" || status === "published") && (
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                      Acceptance Date
-                    </label>
-                    <input
-                      type="date"
-                      value={acceptanceDate}
-                      onChange={(e) => setAcceptanceDate(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {status === "published" && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                      Publication Date
-                    </label>
-                    <input
-                      type="date"
-                      value={publicationDate}
-                      onChange={(e) => setPublicationDate(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                      DOI
-                    </label>
-                    <input
-                      type="text"
-                      value={doi}
-                      onChange={(e) => setDoi(e.target.value)}
-                      placeholder="e.g., 10.1109/CVPR..."
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white"
-                    />
-                  </div>
+              {authors.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {authors.map((a) => (
+                    <span
+                      key={a}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 py-1 pl-3 pr-1.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300"
+                    >
+                      {a}
+                      <button
+                        type="button"
+                        onClick={() => setAuthors((p) => p.filter((x) => x !== a))}
+                        className="rounded-full p-0.5 hover:bg-indigo-200 dark:hover:bg-indigo-500/30"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
                 </div>
               )}
             </div>
 
-            <div className="mt-8 flex items-center justify-end gap-3 border-t border-slate-100 pt-6 dark:border-[#2A2A2A]">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-xl px-5 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[#2A2A2A]"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  "Save Publication"
-                )}
-              </button>
+            {/* Status pipeline */}
+            <div>
+              <label className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                <CalendarDays className="h-3.5 w-3.5 text-slate-400" /> Review status
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {PUBLICATION_STATUSES.map((s) => {
+                  const selected = status === s.value;
+                  return (
+                    <button
+                      key={s.value}
+                      type="button"
+                      onClick={() => setStatus(s.value)}
+                      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold transition-all ${
+                        selected
+                          ? "border-indigo-500 bg-indigo-600 text-white shadow-sm"
+                          : "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"
+                      }`}
+                    >
+                      <span className={`h-2 w-2 rounded-full ${s.dot} ${selected ? "bg-white" : ""}`} />
+                      {s.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {status === "published" && (
+                <p className="mt-2 rounded-xl bg-emerald-50 px-3.5 py-2.5 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                  Marking as Published will flip this research group&apos;s badge to Published for everyone.
+                </p>
+              )}
+            </div>
+
+            {/* Dates */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Submission date</label>
+                <input type="date" value={submissionDate} onChange={(e) => setSubmissionDate(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  Publication date {status === "published" && <span className="text-rose-500">*</span>}
+                </label>
+                <input type="date" value={publicationDate} onChange={(e) => setPublicationDate(e.target.value)} className={inputCls} />
+              </div>
+            </div>
+
+            {/* Links — link sharing */}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 dark:border-[#2A2A2A] dark:bg-[#0F0F0F]">
+              <p className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                <LinkIcon className="h-4 w-4 text-indigo-500" /> Shareable links
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-400">DOI</label>
+                  <input value={doi} onChange={(e) => setDoi(e.target.value)} placeholder="10.1109/xxxxx" className={inputCls} />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-400">Paper / PDF URL</label>
+                  <input value={paperUrl} onChange={(e) => setPaperUrl(e.target.value)} placeholder="https://..." className={inputCls} />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-400">Code repo</label>
+                  <input value={codeUrl} onChange={(e) => setCodeUrl(e.target.value)} placeholder="https://github.com/..." className={inputCls} />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-400">Project page</label>
+                  <input value={projectUrl} onChange={(e) => setProjectUrl(e.target.value)} placeholder="https://..." className={inputCls} />
+                </div>
+              </div>
+            </div>
+
+            {/* Volume / pages */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Volume / Issue</label>
+                <input value={volume} onChange={(e) => setVolume(e.target.value)} placeholder="e.g. Vol. 35, No. 4" className={inputCls} />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Pages</label>
+                <input value={pages} onChange={(e) => setPages(e.target.value)} placeholder="e.g. 1234–1245" className={inputCls} />
+              </div>
+            </div>
+
+            {/* Keywords */}
+            <div>
+              <label className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                <Tag className="h-3.5 w-3.5 text-slate-400" /> Keywords
+              </label>
+              <div className="flex gap-2">
+                <input
+                  value={keywordInput}
+                  onChange={(e) => setKeywordInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                      e.preventDefault();
+                      addKeyword();
+                    }
+                  }}
+                  placeholder="e.g. transformers, low-resource NLP"
+                  className={inputCls}
+                />
+                <button
+                  type="button"
+                  onClick={addKeyword}
+                  className="shrink-0 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#0F0F0F]"
+                >
+                  Add
+                </button>
+              </div>
+              {keywords.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {keywords.map((k) => (
+                    <span
+                      key={k}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 py-1 pl-3 pr-1.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                    >
+                      #{k}
+                      <button
+                        type="button"
+                        onClick={() => setKeywords((p) => p.filter((x) => x !== k))}
+                        className="rounded-full p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Abstract */}
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">Abstract</label>
+              <textarea
+                value={abstract}
+                onChange={(e) => setAbstract(e.target.value)}
+                rows={4}
+                placeholder="One-paragraph summary — what problem, what method, what result?"
+                className={`${inputCls} resize-y leading-relaxed`}
+              />
             </div>
           </form>
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-slate-100 bg-slate-50 p-5 dark:border-[#2A2A2A] dark:bg-[#141414]">
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSaving}
+              className="rounded-xl px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="publication-form"
+              disabled={isSaving}
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Saving…
+                </>
+              ) : editingPublication ? (
+                "Update publication"
+              ) : (
+                "Add publication"
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
