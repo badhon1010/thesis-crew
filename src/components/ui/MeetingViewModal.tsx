@@ -6,6 +6,7 @@ interface Meeting {
   date: string;
   duration: string;
   type?: "online" | "offline";
+  platform?: "google_meet" | "zoom" | "microsoft_teams" | "other";
   location?: string;
   meetingLink?: string;
   notes?: string;
@@ -91,19 +92,23 @@ export function MeetingViewModal({
               </div>
             )}
 
-            {meeting.type === "online" && meeting.meetingLink && (
+            {meeting.type === "online" && (meeting.meetingLink || meeting.platform) && (
               <div className="flex items-start gap-3">
                 <LinkIcon className="mt-0.5 h-5 w-5 text-blue-500" />
                 <div>
-                  <p className="text-sm font-medium text-slate-900 dark:text-white">Online Meeting</p>
-                  <a
-                    href={meeting.meetingLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
-                  >
-                    Join Link
-                  </a>
+                  <p className="text-sm font-medium text-slate-900 dark:text-white">
+                    {meeting.platform === "google_meet" ? "Google Meet" : meeting.platform === "zoom" ? "Zoom" : meeting.platform === "microsoft_teams" ? "Microsoft Teams" : "Online Meeting"}
+                  </p>
+                  {meeting.meetingLink && (
+                    <a
+                      href={meeting.meetingLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      Join Link
+                    </a>
+                  )}
                 </div>
               </div>
             )}

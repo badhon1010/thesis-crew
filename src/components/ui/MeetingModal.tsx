@@ -8,6 +8,7 @@ export interface Meeting {
   duration: string;
   type?: "online" | "offline";
   location?: string;
+  platform?: "google_meet" | "zoom" | "microsoft_teams" | "other";
   meetingLink?: string;
   notes?: string;
   attendees: string[];
@@ -37,6 +38,7 @@ export function MeetingModal({ isOpen, onClose, onSave, editingMeeting, members 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [meetingType, setMeetingType] = useState<"online" | "offline">("online");
+  const [platform, setPlatform] = useState<"google_meet" | "zoom" | "microsoft_teams" | "other">("google_meet");
   const [location, setLocation] = useState("");
   const [meetingLink, setMeetingLink] = useState("");
   const [notes, setNotes] = useState("");
@@ -49,6 +51,7 @@ export function MeetingModal({ isOpen, onClose, onSave, editingMeeting, members 
       setTitle(editingMeeting.title);
       setDuration(editingMeeting.duration);
       setMeetingType(editingMeeting.type || "online");
+      setPlatform(editingMeeting.platform || "google_meet");
       setLocation(editingMeeting.location || "");
       setMeetingLink(editingMeeting.meetingLink || "");
       setNotes(editingMeeting.notes || "");
@@ -72,6 +75,7 @@ export function MeetingModal({ isOpen, onClose, onSave, editingMeeting, members 
       setSelectedTime("10:00 AM");
       setDuration("30 mins");
       setMeetingType("online");
+      setPlatform("google_meet");
       setLocation("");
       setMeetingLink("");
       setNotes("");
@@ -125,8 +129,11 @@ export function MeetingModal({ isOpen, onClose, onSave, editingMeeting, members 
       if (meetingType === "offline" && location.trim()) {
         meetingData.location = location.trim();
       }
-      if (meetingType === "online" && meetingLink.trim()) {
-        meetingData.meetingLink = meetingLink.trim();
+      if (meetingType === "online") {
+        meetingData.platform = platform;
+        if (meetingLink.trim()) {
+          meetingData.meetingLink = meetingLink.trim();
+        }
       }
       if (notes.trim()) {
         meetingData.notes = notes.trim();
@@ -257,17 +264,34 @@ export function MeetingModal({ isOpen, onClose, onSave, editingMeeting, members 
             </div>
 
             {meetingType === "online" ? (
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  Online Meeting Link
-                </label>
-                <input
-                  type="url"
-                  value={meetingLink}
-                  onChange={(e) => setMeetingLink(e.target.value)}
-                  placeholder="E.g., https://meet.google.com/... or Zoom link"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
-                />
+              <div className="space-y-5">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    Platform <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={platform}
+                    onChange={(e) => setPlatform(e.target.value as any)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
+                  >
+                    <option value="google_meet">Google Meet</option>
+                    <option value="zoom">Zoom</option>
+                    <option value="microsoft_teams">Microsoft Teams</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    Online Meeting Link
+                  </label>
+                  <input
+                    type="url"
+                    value={meetingLink}
+                    onChange={(e) => setMeetingLink(e.target.value)}
+                    placeholder="E.g., https://meet.google.com/... or Zoom link"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
+                  />
+                </div>
               </div>
             ) : (
               <div>
