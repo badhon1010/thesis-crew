@@ -14,6 +14,7 @@ import { auth } from "@/firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
+import { SubmissionForm } from "./SubmissionForm";
 
 const mockTopics = [
   { title: "AI-Based Fall Detection", supervisor: "Dr. Rahman", skills: "Python · ML · IoT", match: "92%" },
@@ -90,6 +91,11 @@ export default function StudentDashboard() {
           <StatCard icon={Clock3} value="02" label="Pending requests" trend="Needs attention" />
           <StatCard icon={CheckCircle2} value="18" label="Completed tasks" trend="+4 this week" />
           <StatCard icon={FileText} value="07" label="Saved papers" trend="+2 this month" />
+        </div>
+
+        {/* Submission Form Component Added Here */}
+        <div className="mb-12">
+          <SubmissionForm />
         </div>
 
         <div className="mb-6 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
