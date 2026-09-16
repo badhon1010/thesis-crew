@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -23,8 +23,13 @@ import {
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 import { StudentProfileModal } from "@/components/common/StudentProfileModal";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { TaskModal } from "@/components/ui/TaskModal";
+<<<<<<< HEAD
 import { DocumentModal } from "@/components/ui/DocumentModal";
+=======
+import { MilestoneModal } from "@/components/ui/MilestoneModal";
+>>>>>>> student
 import { GroupChat } from "@/components/chat/GroupChat";
 import { auth } from "@/firebase/auth";
 import { storage } from "@/firebase/storage";
@@ -32,12 +37,12 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage
 import {
   doc,
   getDoc,
+  addDoc,
   collection,
   query,
   where,
   getDocs,
   onSnapshot,
-  addDoc,
   updateDoc,
   deleteDoc,
   serverTimestamp,
@@ -71,7 +76,7 @@ interface Milestone {
   title: string;
   description: string;
   deadline: string;
-  status: "pending" | "in-progress" | "completed";
+  status: "planned" | "in-progress" | "completed";
   createdAt?: unknown;
 }
 
@@ -136,10 +141,14 @@ export default function ResearchGroupManagement() {
   const [publications, setPublications] = useState<Publication[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [isMilestoneModalOpen, setIsMilestoneModalOpen] = useState(false);
+  const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
+  const [deleteMilestoneId, setDeleteMilestoneId] = useState<string | null>(null);
 
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
+  const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
 
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({
     show: false,
@@ -149,6 +158,46 @@ export default function ResearchGroupManagement() {
 
   const showToast = (type: "success" | "error", message: string) => {
     setToast({ show: true, type, message });
+  };
+
+  const handleSaveMilestone = async (milestoneData: Omit<Milestone, "id">) => {
+    if (!id) {
+      showToast("error", "Unable to identify the research group.");
+      return;
+    }
+
+    try {
+      if (editingMilestone) {
+        await updateDoc(doc(db, "researchGroups", id, "milestones", editingMilestone.id), {
+          ...milestoneData,
+        });
+        showToast("success", "Milestone updated successfully.");
+      } else {
+        await addDoc(collection(db, "researchGroups", id, "milestones"), {
+          ...milestoneData,
+          createdAt: serverTimestamp(),
+        });
+        showToast("success", "Milestone added successfully.");
+      }
+      setIsMilestoneModalOpen(false);
+      setEditingMilestone(null);
+    } catch (error) {
+      console.error("Failed to save milestone:", error);
+      showToast("error", "Failed to save milestone.");
+    }
+  };
+
+  const handleDeleteMilestone = async () => {
+    if (!id || !deleteMilestoneId) return;
+    try {
+      await deleteDoc(doc(db, "researchGroups", id, "milestones", deleteMilestoneId));
+      showToast("success", "Milestone deleted successfully.");
+    } catch (error) {
+      console.error("Failed to delete milestone:", error);
+      showToast("error", "Failed to delete milestone.");
+    } finally {
+      setDeleteMilestoneId(null);
+    }
   };
 
   useEffect(() => {
@@ -353,14 +402,16 @@ export default function ResearchGroupManagement() {
     }
   };
 
-  const handleDeleteTask = async (taskId: string) => {
-    if (!id || !window.confirm("Are you sure you want to delete this task?")) return;
+  const handleDeleteTask = async () => {
+    if (!id || !deleteTaskId) return;
     try {
-      await deleteDoc(doc(db, "researchGroups", id, "tasks", taskId));
+      await deleteDoc(doc(db, "researchGroups", id, "tasks", deleteTaskId));
       showToast("success", "Task deleted successfully");
     } catch (error) {
       console.error("Error deleting task:", error);
       showToast("error", "Failed to delete task");
+    } finally {
+      setDeleteTaskId(null);
     }
   };
 
@@ -488,6 +539,16 @@ export default function ResearchGroupManagement() {
         onSave={handleSaveTask}
         editingTask={editingTask}
         teamMembers={teamMembers}
+        milestones={milestones}
+      />
+      <MilestoneModal
+        isOpen={isMilestoneModalOpen}
+        onClose={() => {
+          setIsMilestoneModalOpen(false);
+          setEditingMilestone(null);
+        }}
+        onSave={handleSaveMilestone}
+        initialData={editingMilestone}
       />
 
       <DocumentModal
@@ -707,7 +768,14 @@ export default function ResearchGroupManagement() {
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Research Milestones</h2>
-              <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingMilestone(null);
+                  setIsMilestoneModalOpen(true);
+                }}
+                className="relative z-10 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+              >
                 <Plus className="h-4 w-4" /> Add Milestone
               </button>
             </div>
@@ -746,10 +814,19 @@ export default function ResearchGroupManagement() {
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <button className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
+                          <button
+                            onClick={() => {
+                              setEditingMilestone(milestone);
+                              setIsMilestoneModalOpen(true);
+                            }}
+                            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                          >
                             <Edit2 className="h-4 w-4" />
                           </button>
-                          <button className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10">
+                          <button
+                            onClick={() => setDeleteMilestoneId(milestone.id || null)}
+                            className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                          >
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
@@ -855,7 +932,7 @@ export default function ResearchGroupManagement() {
                             <Edit2 className="h-4 w-4" />
                           </button>
                           <button
-                            onClick={() => handleDeleteTask(task.id)}
+                            onClick={() => setDeleteTaskId(task.id || null)}
                             className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -1062,6 +1139,24 @@ export default function ResearchGroupManagement() {
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={!!deleteMilestoneId}
+        onClose={() => setDeleteMilestoneId(null)}
+        onConfirm={handleDeleteMilestone}
+        title="Delete Milestone"
+        message="Are you sure you want to delete this milestone? This action cannot be undone and will also delete any associated tasks."
+        confirmText="Delete"
+      />
+
+      <ConfirmModal
+        isOpen={!!deleteTaskId}
+        onClose={() => setDeleteTaskId(null)}
+        onConfirm={handleDeleteTask}
+        title="Delete Task"
+        message="Are you sure you want to delete this task? This action cannot be undone."
+        confirmText="Delete"
+      />
     </DashboardLayout>
   );
 }

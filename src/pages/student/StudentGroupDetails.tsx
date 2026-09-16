@@ -27,6 +27,8 @@ import { ToastAlert } from "@/components/common/ToastAlert";
 import { GroupChat } from "@/components/chat/GroupChat";
 import { auth } from "@/firebase/auth";
 import { StudentProfileModal } from "@/components/common/StudentProfileModal";
+import { MilestoneViewModal } from "@/components/ui/MilestoneViewModal";
+import { TaskViewModal } from "@/components/ui/TaskViewModal";
 import {
   doc,
   getDoc,
@@ -39,6 +41,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
+import { notifyTeacherOfTaskUpdate, notifyTeacherOfMilestoneCompletion } from "@/firebase/notifications";
 
 interface ResearchTopic {
   id: string;
@@ -66,7 +69,7 @@ interface Milestone {
   title: string;
   description: string;
   deadline: string;
-  status: "pending" | "in-progress" | "completed";
+  status: "planned" | "in-progress" | "completed";
   createdAt?: unknown;
 }
 
@@ -78,6 +81,7 @@ interface Task {
   status: "todo" | "in-progress" | "completed";
   priority: "low" | "medium" | "high";
   dueDate?: string;
+  milestoneId?: string;
   createdAt?: unknown;
 }
 
@@ -129,8 +133,15 @@ export default function StudentGroupDetails() {
   const [publications, setPublications] = useState<Publication[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
-
+  const [conversations, setConversations] = useState<{ id: string; updatedAt?: any }[]>([]);
+  
+  const [lastViewed, setLastViewed] = useState<Record<string, number>>(() => {
+    const stored = localStorage.getItem(`group_${id}_lastViewed`);
+    return stored ? JSON.parse(stored) : { overview: Date.now() };
+  });
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [viewingMilestone, setViewingMilestone] = useState<Milestone | null>(null);
+  const [viewingTask, setViewingTask] = useState<Task | null>(null);
 
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({
     show: false,
@@ -151,6 +162,7 @@ export default function StudentGroupDetails() {
     let unsubscribeDocuments: Unsubscribe | undefined;
     let unsubscribeMeetings: Unsubscribe | undefined;
     let unsubscribePublications: Unsubscribe | undefined;
+    let unsubscribeConversations: Unsubscribe | undefined;
 
     const fetchData = async () => {
       try {
@@ -229,7 +241,11 @@ export default function StudentGroupDetails() {
               id: doc.id,
               ...doc.data(),
             })) as Milestone[];
-            setMilestones(milestonesData.sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()));
+            setMilestones(milestonesData.sort((a, b) => {
+              if (a.status === "completed" && b.status !== "completed") return 1;
+              if (a.status !== "completed" && b.status === "completed") return -1;
+              return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+            }));
           },
           (error) => console.error("Failed to load milestones:", error)
         );
@@ -286,6 +302,19 @@ export default function StudentGroupDetails() {
           (error) => console.error("Failed to load publications:", error)
         );
 
+        // Subscribe to conversations for chat unread status
+        unsubscribeConversations = onSnapshot(
+          query(collection(db, "researchGroups", id, "conversations")),
+          (snapshot) => {
+            const convData = snapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            }));
+            setConversations(convData);
+          },
+          (error) => console.error("Failed to load conversations:", error)
+        );
+
         setLoading(false);
       } catch (error) {
         console.error("Error loading data:", error);
@@ -303,6 +332,7 @@ export default function StudentGroupDetails() {
       unsubscribeDocuments?.();
       unsubscribeMeetings?.();
       unsubscribePublications?.();
+      unsubscribeConversations?.();
     };
   }, [id]);
 
@@ -332,18 +362,53 @@ export default function StudentGroupDetails() {
     e.dataTransfer.dropEffect = "move";
   };
 
-  const handleDrop = async (e: React.DragEvent, newStatus: "todo" | "in-progress" | "completed") => {
+  const handleDrop = async (e: React.DragEvent, newStatus: "todo" | "in-progress" | "completed", targetMilestoneId: string) => {
     e.preventDefault();
     const taskId = draggedTaskId;
     
     if (!taskId || !id) return;
     
     const task = tasks.find(t => t.id === taskId);
-    if (task && task.status !== newStatus) {
+    if (!task) return;
+    
+    if ((task.milestoneId || "unassigned") !== targetMilestoneId) {
+      showToast("error", "Cannot drag a task to a different milestone");
+      setDraggedTaskId(null);
+      return;
+    }
+
+    if (task.status !== newStatus) {
       try {
         await updateDoc(doc(db, "researchGroups", id, "tasks", taskId), {
           status: newStatus,
         });
+
+        // Notify Teacher of task update
+        if (topic?.supervisorId && auth.currentUser?.displayName) {
+          await notifyTeacherOfTaskUpdate(topic.supervisorId, id, task.title, newStatus, auth.currentUser.displayName);
+        }
+
+        // Auto-complete milestone if all tasks are completed
+        if (newStatus === "completed" && task.milestoneId) {
+          const milestoneTasks = tasks.filter(t => t.milestoneId === task.milestoneId);
+          // Check if all OTHER tasks in this milestone are already completed
+          const allOthersCompleted = milestoneTasks
+            .filter(t => t.id !== taskId)
+            .every(t => t.status === "completed");
+            
+          if (allOthersCompleted) {
+            await updateDoc(doc(db, "researchGroups", id, "milestones", task.milestoneId), {
+              status: "completed",
+            });
+            showToast("success", "Milestone auto-completed! All tasks are done.");
+            
+            const milestone = milestones.find(m => m.id === task.milestoneId);
+            if (topic?.supervisorId && milestone) {
+              await notifyTeacherOfMilestoneCompletion(topic.supervisorId, id, milestone.title);
+            }
+          }
+        }
+
       } catch (error) {
         console.error("Error updating task status:", error);
         showToast("error", "Failed to update task status");
@@ -351,6 +416,8 @@ export default function StudentGroupDetails() {
     }
     setDraggedTaskId(null);
   };
+
+
 
   if (loading) {
     return (
@@ -388,6 +455,49 @@ export default function StudentGroupDetails() {
     { id: "publications", label: "Publications", icon: <BookOpen className="h-4 w-4" /> },
   ];
 
+  const handleTabChange = (tabId: TabType) => {
+    setActiveTab(tabId);
+    const updatedLastViewed = { ...lastViewed, [tabId]: Date.now() };
+    setLastViewed(updatedLastViewed);
+    localStorage.setItem(`group_${id}_lastViewed`, JSON.stringify(updatedLastViewed));
+  };
+
+  const hasUnread = (tabId: TabType) => {
+    const lastTime = lastViewed[tabId] || 0;
+    
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const getMaxTime = (items: any[], dateField = "createdAt") => {
+      let max = 0;
+      items.forEach(item => {
+        const t = item[dateField];
+        let millis = 0;
+        if (t && t.toMillis) millis = t.toMillis();
+        else if (t instanceof Date) millis = t.getTime();
+        else if (typeof t === "string") millis = new Date(t).getTime();
+        
+        if (millis > max) max = millis;
+      });
+      return max;
+    };
+
+    switch (tabId) {
+      case "milestones":
+        return getMaxTime(milestones) > lastTime;
+      case "tasks":
+        return getMaxTime(tasks) > lastTime;
+      case "documents":
+        return getMaxTime(documents) > lastTime;
+      case "meetings":
+        return getMaxTime(meetings, "createdAt") > lastTime;
+      case "publications":
+        return getMaxTime(publications, "createdAt") > lastTime;
+      case "chat":
+        return getMaxTime(conversations, "updatedAt") > lastTime;
+      default:
+        return false;
+    }
+  };
+
   return (
     <DashboardLayout role="student">
       <ToastAlert
@@ -399,12 +509,25 @@ export default function StudentGroupDetails() {
       />
 
       <StudentProfileModal
-        isOpen={selectedStudentId !== null}
-        studentId={selectedStudentId || ""}
+        isOpen={!!selectedStudentId}
         onClose={() => setSelectedStudentId(null)}
+        studentId={selectedStudentId || ""}
       />
 
-      <div className="mx-auto max-w-5xl px-2 sm:px-0">
+      <MilestoneViewModal
+        isOpen={viewingMilestone !== null}
+        milestone={viewingMilestone}
+        onClose={() => setViewingMilestone(null)}
+      />
+
+      <TaskViewModal
+        isOpen={viewingTask !== null}
+        task={viewingTask}
+        milestoneName={viewingTask?.milestoneId ? milestones.find(m => m.id === viewingTask.milestoneId)?.title : undefined}
+        onClose={() => setViewingTask(null)}
+      />
+
+      <div className="mx-auto max-w-7xl px-2 sm:px-4">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <button
@@ -450,8 +573,8 @@ export default function StudentGroupDetails() {
             {tabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
+                onClick={() => handleTabChange(tab.id)}
+                className={`relative flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
                   activeTab === tab.id
                     ? "border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400"
                     : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
@@ -459,6 +582,9 @@ export default function StudentGroupDetails() {
               >
                 {tab.icon}
                 {tab.label}
+                {tab.id !== activeTab && hasUnread(tab.id) && (
+                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#181818]"></span>
+                )}
               </button>
             ))}
           </div>
@@ -601,162 +727,296 @@ export default function StudentGroupDetails() {
         {activeTab === "milestones" && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Research Milestones</h2>
-              <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700">
-                <Plus className="h-4 w-4" /> Add Milestone
-              </button>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Project Milestones</h2>
             </div>
+
             <div className="space-y-4">
               {milestones.length === 0 ? (
-                <div className="py-12 text-center">
-                  <GitBranch className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
-                  <p className="mt-4 text-sm font-medium text-slate-900 dark:text-white">No milestones yet</p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Create milestones to track research progress
-                  </p>
+                <div className="flex items-center justify-center rounded-xl border border-dashed border-slate-300 py-12 dark:border-slate-700">
+                  <p className="text-sm text-slate-500 dark:text-slate-400">No milestones have been created yet.</p>
                 </div>
               ) : (
-                milestones.map((milestone) => (
-                  <div
-                    key={milestone.id}
-                    className="flex items-start gap-4 rounded-xl border border-slate-200 p-4 dark:border-[#2A2A2A]"
-                  >
-                    <div className="flex-shrink-0">
-                      {milestone.status === "completed" ? (
-                        <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-                      ) : milestone.status === "in-progress" ? (
-                        <Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />
-                      ) : (
-                        <Circle className="h-6 w-6 text-slate-400" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
+                milestones.map((milestone) => {
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const deadlineDate = new Date(milestone.deadline);
+                  const isOverdue = deadlineDate < today && milestone.status !== "completed";
+                  const milestoneTasks = tasks.filter((t) => t.milestoneId === milestone.id);
+
+                  return (
+                    <div
+                      key={milestone.id}
+                      className={`rounded-xl border p-5 ${
+                        isOverdue 
+                          ? "border-rose-200 bg-rose-50/30 dark:border-rose-900/50 dark:bg-rose-950/10" 
+                          : "border-slate-200 bg-white dark:border-[#333] dark:bg-[#1A1A1A]"
+                      }`}
+                    >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
-                          <h3 className="font-semibold text-slate-900 dark:text-white">{milestone.title}</h3>
-                          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{milestone.description}</p>
-                          <div className="mt-2 flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
-                            <span>Due: {new Date(milestone.deadline).toLocaleDateString()}</span>
-                            <span className="capitalize">Status: {milestone.status.replace("-", " ")}</span>
+                          <div className="flex items-center gap-3">
+                            <h3 className={`font-bold text-lg ${
+                              milestone.status === "completed" 
+                                ? "line-through text-slate-400 dark:text-slate-500" 
+                                : isOverdue 
+                                ? "text-rose-700 dark:text-rose-400" 
+                                : "text-slate-900 dark:text-white"
+                            }`}>
+                              {milestone.title}
+                            </h3>
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold uppercase ${
+                              milestone.status === "completed" 
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400"
+                                : milestone.status === "in-progress"
+                                ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
+                                : "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400"
+                            }`}>
+                              {milestone.status}
+                            </span>
+                          </div>
+                          
+                          <p className={`mt-2 text-sm ${isOverdue ? "text-rose-600/80 dark:text-rose-400/80" : "text-slate-600 dark:text-slate-300"}`}>
+                            {milestone.description}
+                          </p>
+                          
+                          <div className="mt-4 flex items-center gap-4 text-sm font-medium">
+                            <div className={`flex items-center gap-1.5 ${
+                              isOverdue 
+                                ? "text-rose-600 dark:text-rose-400 font-bold" 
+                                : "text-slate-500 dark:text-slate-400"
+                            }`}>
+                              <Calendar className="h-4 w-4" />
+                              {isOverdue ? "Overdue: " : "Deadline: "}
+                              {new Date(milestone.deadline).toLocaleDateString()}
+                            </div>
+                            
+                            <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                              <CheckCircle2 className="h-4 w-4" />
+                              {milestoneTasks.filter(t => t.status === "completed").length} / {milestoneTasks.length} Tasks Completed
+                            </div>
                           </div>
                         </div>
-                        <div className="flex gap-2">
-                          <button className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                          <button className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
+                        
+                        <button
+                          onClick={() => setViewingMilestone(milestone)}
+                          className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-[#2A2A2A] dark:hover:text-indigo-400"
+                        >
+                          <Eye className="h-5 w-5" />
+                        </button>
                       </div>
+                      
+                      {/* Tasks under this milestone */}
+                      {milestoneTasks.length > 0 && (
+                        <div className="mt-6 border-t border-slate-100 pt-4 dark:border-[#2A2A2A]">
+                          <h4 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Associated Tasks</h4>
+                          <div className="grid gap-2">
+                            {milestoneTasks.map(task => (
+                              <div key={task.id} className="flex items-start gap-3 rounded-lg bg-slate-50 p-3 dark:bg-[#111]">
+                                <div className="mt-0.5">
+                                  {task.status === "completed" ? (
+                                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                  ) : task.status === "in-progress" ? (
+                                    <Clock className="h-4 w-4 text-amber-500" />
+                                  ) : (
+                                    <Circle className="h-4 w-4 text-slate-300 dark:text-slate-600" />
+                                  )}
+                                </div>
+                                <div>
+                                  <p className={`text-sm font-medium ${task.status === "completed" ? "text-slate-400 line-through" : "text-slate-700 dark:text-slate-200"}`}>
+                                    {task.title}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
         )}
 
         {activeTab === "tasks" && (
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Tasks Kanban Board</h2>
+          <div className="space-y-6">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Tasks Kanban Board</h2>
             </div>
 
-            {/* Kanban Columns Authentic Jira-style */}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              {(["todo", "in-progress", "completed"] as const).map((status) => {
-                const columnTasks = tasks.filter((t) => t.status === status);
-                
-                let title = "TO DO";
-                let columnBg = "bg-blue-50 dark:bg-blue-900/10";
-                let headerColor = "text-blue-700 dark:text-blue-400";
-                let countBg = "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400";
-                
-                if (status === "in-progress") {
-                  title = "IN PROGRESS";
-                  columnBg = "bg-amber-50 dark:bg-amber-900/10";
-                  headerColor = "text-amber-700 dark:text-amber-400";
-                  countBg = "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400";
-                } else if (status === "completed") {
-                  title = "DONE";
-                  columnBg = "bg-emerald-50 dark:bg-emerald-900/10";
-                  headerColor = "text-emerald-700 dark:text-emerald-400";
-                  countBg = "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400";
-                }
+            {milestones.length === 0 && tasks.length === 0 ? (
+              <div className="flex items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white p-12 dark:border-slate-700 dark:bg-[#181818]">
+                <p className="text-sm text-slate-500 dark:text-slate-400">No tasks have been created yet.</p>
+              </div>
+            ) : (
+              [...milestones, { id: "unassigned", title: "Unassigned Tasks", status: "none", description: "", deadline: "" }].map((milestone) => {
+                const milestoneTasks = milestone.id === "unassigned" 
+                  ? tasks.filter(t => !t.milestoneId) 
+                  : tasks.filter(t => t.milestoneId === milestone.id);
+                  
+                if (milestone.id === "unassigned" && milestoneTasks.length === 0) return null;
 
                 return (
-                  <div
-                    key={status}
-                    className={`flex flex-col rounded-lg ${columnBg} p-3 border border-transparent hover:border-slate-200 dark:hover:border-slate-800 transition-colors`}
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, status)}
-                  >
-                    <div className="mb-3 flex items-center justify-between px-1 pt-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className={`text-xs font-bold ${headerColor}`}>{title}</h3>
-                        <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${countBg}`}>
-                          {columnTasks.length}
-                        </span>
+                  <div key={milestone.id} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+                    <div className="mb-4">
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-md font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                          <GitBranch className="h-5 w-5 text-indigo-500" />
+                          {milestone.title}
+                        </h3>
+                        {milestone.id !== "unassigned" && milestone.deadline && (
+                          <span className="flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full dark:bg-slate-800 dark:text-slate-400">
+                            <Calendar className="h-3 w-3" />
+                            Deadline: {new Date(milestone.deadline).toLocaleDateString()}
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    <div className="flex flex-1 flex-col gap-1.5 min-h-[250px] pb-1">
-                      {columnTasks.length === 0 ? (
-                        <div className="flex flex-1 items-center justify-center rounded-[3px] border-2 border-dashed border-slate-300/50 dark:border-slate-700">
-                          <p className="text-xs text-slate-400">Drop tasks here</p>
-                        </div>
-                      ) : (
-                        columnTasks.map((task) => {
-                          let PriorityIcon = ChevronDown;
-                          let priorityColor = "text-blue-500";
-                          
-                          if (task.priority === "high") {
-                            PriorityIcon = ChevronUp;
-                            priorityColor = "text-rose-500";
-                          } else if (task.priority === "medium") {
-                            PriorityIcon = Minus;
-                            priorityColor = "text-amber-500";
-                          }
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                      {(["todo", "in-progress", "completed"] as const).map((status) => {
+                        const columnTasks = milestoneTasks.filter((t) => t.status === status).sort((a,b) => {
+                          const dateA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+                          const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+                          return dateA - dateB;
+                        });
+                        
+                        let title = "TO DO";
+                        let columnBg = "bg-blue-50 dark:bg-blue-900/10";
+                        let headerColor = "text-blue-700 dark:text-blue-400";
+                        let countBg = "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400";
+                        
+                        if (status === "in-progress") {
+                          title = "IN PROGRESS";
+                          columnBg = "bg-amber-50 dark:bg-amber-900/10";
+                          headerColor = "text-amber-700 dark:text-amber-400";
+                          countBg = "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400";
+                        } else if (status === "completed") {
+                          title = "DONE";
+                          columnBg = "bg-emerald-50 dark:bg-emerald-900/10";
+                          headerColor = "text-emerald-700 dark:text-emerald-400";
+                          countBg = "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400";
+                        }
 
-                          return (
-                            <div
-                              key={task.id}
-                              draggable
-                              onDragStart={(e) => handleDragStart(e, task.id)}
-                              className="group cursor-grab rounded-[3px] bg-white p-2.5 shadow-[0_1px_2px_rgba(9,30,66,0.25)] hover:bg-slate-50 active:cursor-grabbing dark:bg-[#222731] dark:shadow-[0_1px_2px_rgba(0,0,0,0.5)] dark:hover:bg-[#2c333f] border border-transparent hover:border-slate-200 dark:hover:border-slate-600 transition-colors"
-                            >
-                              <div className="mb-2">
-                                <h4 className={`text-[14px] leading-snug text-[#172b4d] dark:text-[#b6c2cf] ${status === "completed" ? "line-through opacity-70" : ""}`}>
-                                  {task.title}
-                                </h4>
-                              </div>
-
-                              <div className="flex items-center justify-between mt-3">
-                                <div className="flex items-center gap-2">
-                                  <div title={`Priority: ${task.priority}`} className="flex h-5 w-5 items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700">
-                                    <PriorityIcon className={`h-4 w-4 ${priorityColor}`} strokeWidth={3} />
-                                  </div>
-                                  <span className="text-[12px] font-medium text-[#5e6c84] dark:text-slate-400 hover:underline cursor-pointer">
-                                    {task.id.substring(0, 7).toUpperCase()}
-                                  </span>
-                                </div>
-                                
-                                {task.dueDate && (
-                                  <span className="text-[11px] text-[#5e6c84] dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-[3px]">
-                                    {new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                  </span>
-                                )}
+                        return (
+                          <div
+                            key={status}
+                            className={`flex flex-col rounded-lg ${columnBg} p-3 border border-transparent hover:border-slate-200 dark:hover:border-slate-800 transition-colors`}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, status, milestone.id)}
+                          >
+                            <div className="mb-3 flex items-center justify-between px-1 pt-1">
+                              <div className="flex items-center gap-2">
+                                <h4 className={`text-xs font-bold ${headerColor}`}>{title}</h4>
+                                <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${countBg}`}>
+                                  {columnTasks.length}
+                                </span>
                               </div>
                             </div>
-                          );
-                        })
-                      )}
+
+                            <div className="flex flex-1 flex-col gap-1.5 min-h-[150px] pb-1">
+                              {columnTasks.length === 0 ? (
+                                <div className="flex flex-1 items-center justify-center rounded-[3px] border-2 border-dashed border-slate-300/50 dark:border-slate-700">
+                                  <p className="text-xs text-slate-400">Drop tasks here</p>
+                                </div>
+                              ) : (
+                                columnTasks.map((task) => {
+                                  const today = new Date();
+                                  today.setHours(0, 0, 0, 0);
+                                  const isOverdue = task.dueDate ? new Date(task.dueDate) < today && task.status !== "completed" : false;
+
+                                  let PriorityIcon = ChevronDown;
+                                  let priorityColor = "text-blue-500";
+                                  
+                                  if (task.priority === "high") {
+                                    PriorityIcon = ChevronUp;
+                                    priorityColor = "text-rose-500";
+                                  } else if (task.priority === "medium") {
+                                    PriorityIcon = Minus;
+                                    priorityColor = "text-amber-500";
+                                  }
+
+                                  const isAssigned = auth.currentUser ? task.assignedTo?.includes(auth.currentUser.uid) : false;
+
+                                  return (
+                                    <div
+                                      key={task.id}
+                                      title={isAssigned ? "" : "You are not assigned to this task"}
+                                      draggable={isAssigned}
+                                      onDragStart={(e) => {
+                                        if (isAssigned) handleDragStart(e, task.id);
+                                        else e.preventDefault();
+                                      }}
+                                      className={`group ${isAssigned ? 'cursor-grab' : 'cursor-not-allowed opacity-75'} rounded-xl p-3.5 shadow-sm hover:shadow-md transition-all duration-200 border ${
+                                        isOverdue
+                                          ? "bg-rose-50/50 border-rose-200 hover:border-rose-300 dark:bg-rose-950/20 dark:border-rose-900/50 dark:hover:border-rose-800"
+                                          : "bg-white hover:bg-slate-50 dark:bg-[#1C1C1E] dark:hover:bg-[#252528] border-slate-200 dark:border-slate-700/50 hover:border-slate-300 dark:hover:border-slate-600"
+                                      }`}
+                                    >
+                                      <div className="mb-2 flex items-start justify-between gap-2">
+                                        <h4 className={`text-sm font-semibold leading-snug ${
+                                          status === "completed" 
+                                            ? "text-slate-400 dark:text-slate-500 line-through" 
+                                            : isOverdue
+                                            ? "text-rose-700 dark:text-rose-400"
+                                            : "text-slate-800 dark:text-slate-200"
+                                        }`}>
+                                          {task.title}
+                                        </h4>
+                                        <div className="flex flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setViewingTask(task);
+                                            }}
+                                            className={`rounded p-1 ${isOverdue ? "text-rose-400 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50" : "text-slate-400 hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-[#2A2A2A] dark:hover:text-indigo-400"}`}
+                                          >
+                                            <Eye className="h-4 w-4" />
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center justify-between mt-3">
+                                        <div className="flex items-center gap-2">
+                                          <div title={`Priority: ${task.priority}`} className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
+                                            <PriorityIcon className={`h-3.5 w-3.5 ${priorityColor}`} strokeWidth={3} />
+                                          </div>
+                                          {task.assignedTo && task.assignedTo.length > 0 && (
+                                            <div title={`${task.assignedTo.length} Assignees`} className="flex h-6 items-center justify-center gap-1 rounded-md bg-indigo-50 px-1.5 dark:bg-indigo-500/10 border border-indigo-100 dark:border-indigo-500/20">
+                                              <Users className="h-3 w-3 text-indigo-500" />
+                                              <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">{task.assignedTo.length}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                        
+                                        {task.dueDate && (
+                                          <div className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-full font-medium ${
+                                            isOverdue 
+                                              ? "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300"
+                                              : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                                          }`}>
+                                            <Calendar className="h-3 w-3" />
+                                            <span>
+                                              {isOverdue ? "Overdue: " : ""}
+                                              {new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );
-              })}
-            </div>
+              })
+            )}
           </div>
         )}
 
