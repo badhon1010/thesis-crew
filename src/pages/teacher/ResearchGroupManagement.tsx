@@ -104,6 +104,7 @@ interface Meeting {
   date: string;
   duration: string;
   type?: "online" | "offline";
+  platform?: "google_meet" | "zoom" | "microsoft_teams" | "other";
   location?: string;
   meetingLink?: string;
   notes?: string;
@@ -333,7 +334,22 @@ export default function ResearchGroupManagement() {
               id: doc.id,
               ...doc.data(),
             })) as Meeting[];
-            setMeetings(meetingsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+            setMeetings(meetingsData.sort((a, b) => {
+              const now = new Date().getTime();
+              const aTime = new Date(a.date).getTime();
+              const bTime = new Date(b.date).getTime();
+              const aIsPast = aTime < now;
+              const bIsPast = bTime < now;
+
+              if (aIsPast && !bIsPast) return 1;
+              if (!aIsPast && bIsPast) return -1;
+              
+              if (!aIsPast && !bIsPast) {
+                return aTime - bTime;
+              } else {
+                return bTime - aTime;
+              }
+            }));
           },
           (error) => console.error("Failed to load meetings:", error)
         );
@@ -1114,7 +1130,7 @@ export default function ResearchGroupManagement() {
                             rel="noopener noreferrer" 
                             className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
                           >
-                            <LinkIcon className="h-4 w-4" /> Join Online Meeting
+                            <LinkIcon className="h-4 w-4" /> Join {meeting.platform === "google_meet" ? "Google Meet" : meeting.platform === "zoom" ? "Zoom" : meeting.platform === "microsoft_teams" ? "Microsoft Teams" : "Online Meeting"}
                           </a>
                         ) : null}
                       </div>
