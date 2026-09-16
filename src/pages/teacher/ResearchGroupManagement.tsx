@@ -25,11 +25,8 @@ import { ToastAlert } from "@/components/common/ToastAlert";
 import { StudentProfileModal } from "@/components/common/StudentProfileModal";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { TaskModal } from "@/components/ui/TaskModal";
-<<<<<<< HEAD
 import { DocumentModal } from "@/components/ui/DocumentModal";
-=======
 import { MilestoneModal } from "@/components/ui/MilestoneModal";
->>>>>>> student
 import { GroupChat } from "@/components/chat/GroupChat";
 import { auth } from "@/firebase/auth";
 import { storage } from "@/firebase/storage";
