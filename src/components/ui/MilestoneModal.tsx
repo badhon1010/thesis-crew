@@ -42,14 +42,12 @@ export function MilestoneModal({ isOpen, onClose, onSave, initialData, existingM
     }
   }, [isOpen, initialData]);
 
-  // Calculate min deadline for new milestone
   const minDeadlineDate = React.useMemo(() => {
     if (initialData) return undefined;
-    const safeMilestones = existingMilestones as Milestone[] || [];
-    const otherMilestones = safeMilestones.filter(m => m.id !== initialData?.id);
-    if (otherMilestones.length === 0) return undefined;
+    const safeMilestones: Milestone[] = existingMilestones || [];
+    if (safeMilestones.length === 0) return undefined;
     
-    const latest = Math.max(...otherMilestones.map(m => new Date(m.deadline).getTime()));
+    const latest = Math.max(...safeMilestones.map(m => new Date(m.deadline).getTime()));
     const nextDay = new Date(latest);
     nextDay.setDate(nextDay.getDate() + 1);
     return nextDay.toISOString().split('T')[0];
