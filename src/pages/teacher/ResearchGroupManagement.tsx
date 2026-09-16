@@ -35,6 +35,12 @@ import {
   Quote,
   Building2,
   Presentation,
+  Flame,
+  Repeat,
+  ListChecks,
+  CalendarClock,
+  Wand2,
+  Play,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
@@ -93,6 +99,9 @@ interface Milestone {
   description: string;
   deadline: string;
   status: "planned" | "in-progress" | "completed";
+  cadence?: "weekly" | "biweekly" | "monthly" | "quarterly" | "one-time";
+  phase?: "proposal" | "literature" | "methodology" | "implementation" | "evaluation" | "writing" | "defense" | "other";
+  deliverables?: string[];
   createdAt?: unknown;
 }
 
@@ -195,6 +204,12 @@ export default function ResearchGroupManagement() {
   const [copiedPubId, setCopiedPubId] = useState<string | null>(null);
   const [expandedPubId, setExpandedPubId] = useState<string | null>(null);
 
+  const [msSearch, setMsSearch] = useState("");
+  const [msStatusFilter, setMsStatusFilter] = useState<"all" | Milestone["status"] | "overdue">("all");
+  const [msCadenceFilter, setMsCadenceFilter] = useState<"all" | NonNullable<Milestone["cadence"]>>("all");
+  const [msPhaseFilter, setMsPhaseFilter] = useState<"all" | NonNullable<Milestone["phase"]>>("all");
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({
     show: false,
     type: "success",
@@ -242,6 +257,51 @@ export default function ResearchGroupManagement() {
       showToast("error", "Failed to delete milestone.");
     } finally {
       setDeleteMilestoneId(null);
+    }
+  };
+
+  const advanceMilestoneStatus = async (milestone: Milestone) => {
+    if (!id) return;
+    const next = milestone.status === "planned" ? "in-progress" : milestone.status === "in-progress" ? "completed" : "planned";
+    try {
+      await updateDoc(doc(db, "researchGroups", id, "milestones", milestone.id), { status: next });
+      showToast("success", next === "completed" ? "Milestone completed — nice progress." : `Milestone moved to ${next.replace("-", " ")}.`);
+    } catch (error) {
+      console.error("Failed to update milestone status:", error);
+      showToast("error", "Failed to update milestone status.");
+    }
+  };
+
+  const generateMilestonePlan = async (weeks: 4 | 12) => {
+    if (!id) return;
+    const existingCount = milestones.length;
+    const startFrom = milestones.reduce((latest, m) => {
+      const t = new Date(m.deadline).getTime();
+      return Number.isNaN(t) ? latest : Math.max(latest, t);
+    }, Date.now());
+    const phases: NonNullable<Milestone["phase"]>[] = ["proposal", "literature", "methodology", "implementation", "evaluation", "writing"];
+    try {
+      setIsGeneratingPlan(true);
+      for (let w = 1; w <= weeks; w++) {
+        const d = new Date(startFrom);
+        d.setDate(d.getDate() + w * 7);
+        await addDoc(collection(db, "researchGroups", id, "milestones"), {
+          title: `Week ${existingCount + w} check-in`,
+          description: `Weekly sync #${existingCount + w}: demo progress, flag blockers, agree next week's deliverables.`,
+          deadline: d.toISOString().split("T")[0],
+          status: "planned",
+          cadence: "weekly",
+          phase: phases[Math.min(Math.floor(((existingCount + w - 1) / weeks) * phases.length), phases.length - 1)],
+          deliverables: ["Progress demo", "Updated notes"],
+          createdAt: serverTimestamp(),
+        });
+      }
+      showToast("success", `${weeks}-week plan added — weekly check-ins are on the timeline.`);
+    } catch (error) {
+      console.error("Failed to generate milestone plan:", error);
+      showToast("error", "Failed to generate weekly plan.");
+    } finally {
+      setIsGeneratingPlan(false);
     }
   };
 
@@ -744,6 +804,7 @@ export default function ResearchGroupManagement() {
         }}
         onSave={handleSaveMilestone}
         initialData={editingMilestone}
+        existingMilestones={milestones}
       />
 
       <DocumentModal
@@ -940,17 +1001,28 @@ export default function ResearchGroupManagement() {
                     {milestones
                       .filter((m) => m.status !== "completed")
                       .slice(0, 3)
-                      .map((milestone) => (
-                        <div key={milestone.id} className="flex items-start gap-3">
-                          <Circle className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-slate-900 dark:text-white">{milestone.title}</p>
-                            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                              Due: {new Date(milestone.deadline).toLocaleDateString()}
-                            </p>
+                      .map((milestone) => {
+                        const due = new Date(`${milestone.deadline}T00:00:00`).getTime();
+                        const overdue = !Number.isNaN(due) && due < new Date(new Date().setHours(0, 0, 0, 0)).getTime();
+                        return (
+                          <div key={milestone.id} className="flex items-start gap-3">
+                            <Circle className={`mt-0.5 h-4 w-4 flex-shrink-0 ${overdue ? "text-rose-400" : "text-slate-400"}`} />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold text-slate-900 dark:text-white">{milestone.title}</p>
+                              <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                                <span className={overdue ? "font-bold text-rose-500" : ""}>
+                                  Due: {new Date(milestone.deadline).toLocaleDateString()}{overdue ? " · overdue" : ""}
+                                </span>
+                                {milestone.cadence && milestone.cadence !== "one-time" && (
+                                  <span className="rounded-full bg-indigo-50 px-1.5 py-px text-[10px] font-bold capitalize text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
+                                    {milestone.cadence}
+                                  </span>
+                                )}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     {milestones.filter((m) => m.status !== "completed").length === 0 && (
                       <p className="text-sm text-slate-500 dark:text-slate-400">No upcoming milestones</p>
                     )}
@@ -991,80 +1063,410 @@ export default function ResearchGroupManagement() {
           />
         )}
 
-        {activeTab === "milestones" && (
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Research Milestones</h2>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingMilestone(null);
-                  setIsMilestoneModalOpen(true);
-                }}
-                className="relative z-10 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+        {activeTab === "milestones" && (() => {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const msDate = (m: Milestone) => new Date(`${m.deadline}T00:00:00`);
+          const isOverdue = (m: Milestone) => m.status !== "completed" && msDate(m).getTime() < today.getTime();
+          const daysLeft = (m: Milestone) => Math.round((msDate(m).getTime() - today.getTime()) / 86400000);
+
+          const msStatusStyles: Record<string, string> = {
+            completed: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
+            "in-progress": "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
+            planned: "bg-slate-100 text-slate-600 dark:bg-slate-500/20 dark:text-slate-300",
+          };
+          const cadenceLabels: Record<string, string> = {
+            weekly: "Weekly",
+            biweekly: "Biweekly",
+            monthly: "Monthly",
+            quarterly: "Quarterly",
+            "one-time": "One-time",
+          };
+          const phaseLabels: Record<string, string> = {
+            proposal: "Proposal",
+            literature: "Literature",
+            methodology: "Methodology",
+            implementation: "Implementation",
+            evaluation: "Evaluation",
+            writing: "Writing",
+            defense: "Defense",
+            other: "Other",
+          };
+
+          const overdueCount = milestones.filter(isOverdue).length;
+          const completedCount = milestones.filter((m) => m.status === "completed").length;
+          const inProgressCount = milestones.filter((m) => m.status === "in-progress").length;
+          const progress = getProgressPercentage();
+
+          const q = msSearch.trim().toLowerCase();
+          const filtered = milestones
+            .filter((m) => {
+              if (msStatusFilter === "all") return true;
+              if (msStatusFilter === "overdue") return isOverdue(m);
+              return m.status === msStatusFilter;
+            })
+            .filter((m) => (msCadenceFilter === "all" ? true : (m.cadence || "one-time") === msCadenceFilter))
+            .filter((m) => (msPhaseFilter === "all" ? true : (m.phase || "other") === msPhaseFilter))
+            .filter((m) => {
+              if (!q) return true;
+              return (
+                m.title.toLowerCase().includes(q) ||
+                m.description.toLowerCase().includes(q) ||
+                (m.deliverables || []).join(" ").toLowerCase().includes(q)
+              );
+            });
+
+          const overdue = filtered.filter(isOverdue).sort((a, b) => msDate(a).getTime() - msDate(b).getTime());
+          const upcoming = filtered.filter((m) => !isOverdue(m) && m.status !== "completed").sort((a, b) => msDate(a).getTime() - msDate(b).getTime());
+          const completed = filtered.filter((m) => m.status === "completed").sort((a, b) => msDate(b).getTime() - msDate(a).getTime());
+
+          const renderMilestoneCard = (m: Milestone) => {
+            const overdueBy = isOverdue(m) ? Math.abs(daysLeft(m)) : 0;
+            const left = daysLeft(m);
+            const dueSoon = !isOverdue(m) && m.status !== "completed" && left >= 0 && left <= 7;
+            const nextLabel = m.status === "planned" ? "Start" : m.status === "in-progress" ? "Complete" : "Reopen";
+            return (
+              <article
+                key={m.id}
+                className={`relative overflow-hidden rounded-2xl border bg-white shadow-sm transition-all hover:shadow-md dark:bg-[#181818] ${
+                  m.status === "completed"
+                    ? "border-emerald-200 dark:border-emerald-500/30"
+                    : isOverdue(m)
+                    ? "border-rose-200 dark:border-rose-500/30"
+                    : "border-slate-200 dark:border-[#2A2A2A]"
+                }`}
               >
-                <Plus className="h-4 w-4" /> Add Milestone
-              </button>
-            </div>
-            <div className="space-y-4">
-              {milestones.length === 0 ? (
-                <div className="py-12 text-center">
-                  <GitBranch className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
-                  <p className="mt-4 text-sm font-medium text-slate-900 dark:text-white">No milestones yet</p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Create milestones to track research progress
-                  </p>
-                </div>
-              ) : (
-                milestones.map((milestone) => (
-                  <div
-                    key={milestone.id}
-                    className="flex items-start gap-4 rounded-xl border border-slate-200 p-4 dark:border-[#2A2A2A]"
+                {(isOverdue(m) || m.status === "completed") && (
+                  <div className={`h-1 w-full ${isOverdue(m) ? "bg-gradient-to-r from-rose-400 via-rose-500 to-rose-400" : "bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-400"}`} />
+                )}
+                <div className="flex items-start gap-4 p-5 sm:p-6">
+                  <button
+                    onClick={() => advanceMilestoneStatus(m)}
+                    title={m.status === "completed" ? "Reopen milestone" : m.status === "planned" ? "Start milestone" : "Mark completed"}
+                    className="mt-0.5 shrink-0 rounded-full transition-transform hover:scale-110"
                   >
-                    <div className="flex-shrink-0">
-                      {milestone.status === "completed" ? (
-                        <CheckCircle2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-                      ) : milestone.status === "in-progress" ? (
-                        <Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />
-                      ) : (
-                        <Circle className="h-6 w-6 text-slate-400" />
+                    {m.status === "completed" ? (
+                      <CheckCircle2 className="h-7 w-7 text-emerald-500" />
+                    ) : m.status === "in-progress" ? (
+                      <Clock className="h-7 w-7 text-amber-500" />
+                    ) : (
+                      <Circle className="h-7 w-7 text-slate-300 hover:text-indigo-500 dark:text-slate-600" />
+                    )}
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-[11px] font-extrabold text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">
+                        <Repeat className="h-3 w-3" /> {cadenceLabels[m.cadence || "one-time"]}
+                      </span>
+                      <span className="rounded-full bg-violet-50 px-2.5 py-0.5 text-[11px] font-extrabold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
+                        {phaseLabels[m.phase || "other"]}
+                      </span>
+                      <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold capitalize ${msStatusStyles[m.status]}`}>
+                        {m.status.replace("-", " ")}
+                      </span>
+                      {isOverdue(m) && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-[11px] font-extrabold text-rose-700 dark:bg-rose-500/20 dark:text-rose-300">
+                          <Flame className="h-3 w-3" /> Overdue by {overdueBy}d
+                        </span>
+                      )}
+                      {dueSoon && (
+                        <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-extrabold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+                          Due in {left === 0 ? "today" : `${left}d`}
+                        </span>
                       )}
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-slate-900 dark:text-white">{milestone.title}</h3>
-                          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{milestone.description}</p>
-                          <div className="mt-2 flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
-                            <span>Due: {new Date(milestone.deadline).toLocaleDateString()}</span>
-                            <span className="capitalize">Status: {milestone.status.replace("-", " ")}</span>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              setEditingMilestone(milestone);
-                              setIsMilestoneModalOpen(true);
-                            }}
-                            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteMilestoneId(milestone.id || null)}
-                            className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
+                    <h3 className={`mt-2 font-extrabold leading-snug ${m.status === "completed" ? "text-slate-400 line-through dark:text-slate-500" : "text-slate-900 dark:text-white"}`}>
+                      {m.title}
+                    </h3>
+                    <p className="mt-1 text-[13px] leading-relaxed text-slate-600 dark:text-slate-300">{m.description}</p>
+                    {(m.deliverables?.length ?? 0) > 0 && (
+                      <div className="mt-2.5 flex flex-wrap gap-1.5">
+                        <ListChecks className="mt-1 h-3.5 w-3.5 text-slate-400" />
+                        {m.deliverables!.map((d) => (
+                          <span key={d} className="rounded-full border border-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-[#333] dark:text-slate-300">
+                            {d}
+                          </span>
+                        ))}
                       </div>
+                    )}
+                    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-[#262626] dark:text-slate-400">
+                      <span className="flex items-center gap-1.5 font-semibold">
+                        <CalendarClock className="h-3.5 w-3.5" />
+                        {msDate(m).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                      </span>
+                      <button
+                        onClick={() => advanceMilestoneStatus(m)}
+                        className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1 text-[11px] font-bold text-white hover:bg-slate-700 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+                      >
+                        <Play className="h-3 w-3" /> {nextLabel}
+                      </button>
                     </div>
                   </div>
-                ))
+                  <div className="flex shrink-0 gap-1">
+                    <button
+                      onClick={() => {
+                        setEditingMilestone(m);
+                        setIsMilestoneModalOpen(true);
+                      }}
+                      title="Edit milestone"
+                      className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setDeleteMilestoneId(m.id || null)}
+                      title="Delete milestone"
+                      className="rounded-lg p-2 text-rose-500 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          };
+
+          return (
+            <div className="space-y-5">
+              {/* Hero header */}
+              <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-600 via-indigo-600 to-violet-600 p-6 text-white shadow-sm dark:border-indigo-500/20">
+                <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10" />
+                <div className="pointer-events-none absolute -bottom-20 right-24 h-44 w-44 rounded-full bg-white/10" />
+                <div className="relative flex flex-wrap items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur">
+                        <GitBranch className="h-3.5 w-3.5" /> Research Roadmap
+                      </span>
+                      {overdueCount > 0 && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-400/25 px-3 py-1 text-xs font-bold text-rose-100">
+                          <Flame className="h-3.5 w-3.5" /> {overdueCount} overdue
+                        </span>
+                      )}
+                    </div>
+                    <h2 className="mt-3 text-2xl font-extrabold tracking-tight">Milestones</h2>
+                    <p className="mt-1 max-w-xl text-sm text-indigo-100">
+                      Weekly check-ins, monthly reviews, one-time gates — {completedCount} of {milestones.length} complete.
+                    </p>
+                    {milestones.length > 0 && (
+                      <div className="mt-4 max-w-md">
+                        <div className="flex items-center justify-between text-xs font-bold text-indigo-100">
+                          <span>Overall progress</span>
+                          <span>{progress}%</span>
+                        </div>
+                        <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-white/20">
+                          <div className="h-full rounded-full bg-white transition-all" style={{ width: `${progress}%` }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingMilestone(null);
+                        setIsMilestoneModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 shadow-sm transition-all hover:bg-indigo-50 hover:shadow"
+                    >
+                      <Plus className="h-4 w-4" /> Add Milestone
+                    </button>
+                    {milestones.length > 0 && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => generateMilestonePlan(4)}
+                          disabled={isGeneratingPlan}
+                          title="Auto-create 4 weekly check-ins"
+                          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/15 px-3 py-2 text-xs font-bold text-white backdrop-blur transition-all hover:bg-white/25 disabled:opacity-50"
+                        >
+                          <Wand2 className="h-3.5 w-3.5" /> 4-week sprint
+                        </button>
+                        <button
+                          onClick={() => generateMilestonePlan(12)}
+                          disabled={isGeneratingPlan}
+                          title="Auto-create 12 weekly check-ins for the semester"
+                          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/15 px-3 py-2 text-xs font-bold text-white backdrop-blur transition-all hover:bg-white/25 disabled:opacity-50"
+                        >
+                          <Wand2 className="h-3.5 w-3.5" /> Semester plan
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats */}
+              {milestones.length > 0 && (
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  {[
+                    { label: "Total", value: milestones.length, icon: <GitBranch className="h-4 w-4" />, cls: "text-indigo-600 dark:text-indigo-400" },
+                    { label: "Completed", value: completedCount, icon: <CheckCircle2 className="h-4 w-4" />, cls: "text-emerald-600 dark:text-emerald-400" },
+                    { label: "In progress", value: inProgressCount, icon: <Clock className="h-4 w-4" />, cls: "text-amber-600 dark:text-amber-400" },
+                    { label: "Overdue", value: overdueCount, icon: <Flame className="h-4 w-4" />, cls: "text-rose-600 dark:text-rose-400" },
+                  ].map((s) => (
+                    <div key={s.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+                      <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wide ${s.cls}`}>
+                        {s.icon} {s.label}
+                      </div>
+                      <p className="mt-1.5 text-2xl font-extrabold text-slate-900 dark:text-white">{s.value}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Toolbar */}
+              {milestones.length > 0 && (
+                <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818] lg:flex-row lg:items-center">
+                  <div className="relative flex-1">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      value={msSearch}
+                      onChange={(e) => setMsSearch(e.target.value)}
+                      placeholder="Search milestones, deliverables…"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {(["all", "overdue", "planned", "in-progress", "completed"] as const).map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setMsStatusFilter(s)}
+                        className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize transition-all ${
+                          msStatusFilter === s
+                            ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                        }`}
+                      >
+                        {s === "in-progress" ? "In progress" : s}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <select
+                      value={msCadenceFilter}
+                      onChange={(e) => setMsCadenceFilter(e.target.value as typeof msCadenceFilter)}
+                      className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-700 focus:border-indigo-500 focus:outline-none dark:border-[#333] dark:bg-[#0F0F0F] dark:text-slate-300"
+                    >
+                      <option value="all">All cadences</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="biweekly">Biweekly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="quarterly">Quarterly</option>
+                      <option value="one-time">One-time</option>
+                    </select>
+                    <select
+                      value={msPhaseFilter}
+                      onChange={(e) => setMsPhaseFilter(e.target.value as typeof msPhaseFilter)}
+                      className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-700 focus:border-indigo-500 focus:outline-none dark:border-[#333] dark:bg-[#0F0F0F] dark:text-slate-300"
+                    >
+                      <option value="all">All phases</option>
+                      <option value="proposal">Proposal</option>
+                      <option value="literature">Literature</option>
+                      <option value="methodology">Methodology</option>
+                      <option value="implementation">Implementation</option>
+                      <option value="evaluation">Evaluation</option>
+                      <option value="writing">Writing</option>
+                      <option value="defense">Defense</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* List */}
+              {milestones.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center dark:border-[#2A2A2A] dark:bg-[#181818]">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-md">
+                    <GitBranch className="h-8 w-8" />
+                  </div>
+                  <p className="mt-4 text-base font-bold text-slate-900 dark:text-white">No milestones yet — chart the course</p>
+                  <p className="mx-auto mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
+                    Break the research into weekly check-ins, monthly reviews and final gates. Or generate a plan in one click.
+                  </p>
+                  <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingMilestone(null);
+                        setIsMilestoneModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                    >
+                      <Plus className="h-4 w-4" /> Add First Milestone
+                    </button>
+                    <button
+                      onClick={() => generateMilestonePlan(4)}
+                      disabled={isGeneratingPlan}
+                      className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-5 py-2.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/20"
+                    >
+                      <Wand2 className="h-4 w-4" /> Generate 4-week sprint
+                    </button>
+                    <button
+                      onClick={() => generateMilestonePlan(12)}
+                      disabled={isGeneratingPlan}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#0F0F0F]"
+                    >
+                      <Wand2 className="h-4 w-4" /> Semester plan (12 weeks)
+                    </button>
+                  </div>
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="rounded-2xl border border-slate-200 bg-white px-6 py-14 text-center dark:border-[#2A2A2A] dark:bg-[#181818]">
+                  <Search className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600" />
+                  <p className="mt-3 text-sm font-bold text-slate-900 dark:text-white">No matches for these filters</p>
+                  <button
+                    onClick={() => {
+                      setMsSearch("");
+                      setMsStatusFilter("all");
+                      setMsCadenceFilter("all");
+                      setMsPhaseFilter("all");
+                    }}
+                    className="mt-3 text-sm font-semibold text-indigo-600 hover:underline dark:text-indigo-400"
+                  >
+                    Clear search & filters
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {overdue.length > 0 && (
+                    <div>
+                      <div className="mb-3 flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-rose-500" />
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                          Needs attention ({overdue.length})
+                        </h3>
+                      </div>
+                      <div className="space-y-3">{overdue.map(renderMilestoneCard)}</div>
+                    </div>
+                  )}
+                  {upcoming.length > 0 && (
+                    <div>
+                      <div className="mb-3 flex items-center gap-2">
+                        <span className="relative flex h-2 w-2">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-60" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-indigo-500" />
+                        </span>
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                          Upcoming ({upcoming.length})
+                        </h3>
+                      </div>
+                      <div className="space-y-3">{upcoming.map(renderMilestoneCard)}</div>
+                    </div>
+                  )}
+                  {completed.length > 0 && (
+                    <div>
+                      <div className="mb-3 flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                          Completed ({completed.length})
+                        </h3>
+                      </div>
+                      <div className="space-y-3">{completed.map(renderMilestoneCard)}</div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {activeTab === "tasks" && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
