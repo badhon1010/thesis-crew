@@ -73,6 +73,14 @@ interface Milestone {
   createdAt?: unknown;
 }
 
+interface TaskStatusEvent {
+  from: string;
+  to: string;
+  byUid: string;
+  byName: string;
+  at: string;
+}
+
 interface Task {
   id: string;
   title: string;
@@ -82,6 +90,12 @@ interface Task {
   priority: "low" | "medium" | "high";
   dueDate?: string;
   milestoneId?: string;
+  createdBy?: string;
+  createdByName?: string;
+  lastMovedBy?: string;
+  lastMovedByName?: string;
+  lastMovedAt?: string;
+  statusHistory?: TaskStatusEvent[];
   createdAt?: unknown;
 }
 
@@ -379,8 +393,15 @@ export default function StudentGroupDetails() {
 
     if (task.status !== newStatus) {
       try {
+        const moverUid = auth.currentUser?.uid || "";
+        const moverName = auth.currentUser?.displayName || "Student";
+        const nowIso = new Date().toISOString();
         await updateDoc(doc(db, "researchGroups", id, "tasks", taskId), {
           status: newStatus,
+          lastMovedBy: moverUid,
+          lastMovedByName: moverName,
+          lastMovedAt: nowIso,
+          statusHistory: [...(task.statusHistory || []), { from: task.status, to: newStatus, byUid: moverUid, byName: moverName, at: nowIso }],
         });
 
         // Notify Teacher of task update
@@ -524,6 +545,7 @@ export default function StudentGroupDetails() {
         isOpen={viewingTask !== null}
         task={viewingTask}
         milestoneName={viewingTask?.milestoneId ? milestones.find(m => m.id === viewingTask.milestoneId)?.title : undefined}
+        assigneeNames={(viewingTask?.assignedTo || []).map((sid) => teamMembers.find((m) => m.studentId === sid)?.studentName || "Unknown member")}
         onClose={() => setViewingTask(null)}
       />
 

@@ -41,12 +41,19 @@ import {
   CalendarClock,
   Wand2,
   Play,
+  ListTodo,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  ChevronDown,
+  Minus,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 import { StudentProfileModal } from "@/components/common/StudentProfileModal";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { TaskModal } from "@/components/ui/TaskModal";
+import { TaskViewModal } from "@/components/ui/TaskViewModal";
 import { DocumentModal } from "@/components/ui/DocumentModal";
 import { MilestoneModal } from "@/components/ui/MilestoneModal";
 import { MeetingModal, type MeetingFormData, type MeetingPlatform } from "@/components/ui/MeetingModal";
@@ -105,6 +112,14 @@ interface Milestone {
   createdAt?: unknown;
 }
 
+interface TaskStatusEvent {
+  from: Task["status"] | "created";
+  to: Task["status"];
+  byUid: string;
+  byName: string;
+  at: string; // ISO string
+}
+
 interface Task {
   id: string;
   title: string;
@@ -113,7 +128,15 @@ interface Task {
   status: "todo" | "in-progress" | "completed";
   priority: "low" | "medium" | "high";
   dueDate?: string;
+  milestoneId?: string;
+  createdBy?: string;
+  createdByName?: string;
+  lastMovedBy?: string;
+  lastMovedByName?: string;
+  lastMovedAt?: string; // ISO string
+  statusHistory?: TaskStatusEvent[];
   createdAt?: unknown;
+  updatedAt?: unknown;
 }
 
 interface Document {
@@ -189,6 +212,10 @@ export default function ResearchGroupManagement() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
   const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
+  const [viewingTask, setViewingTask] = useState<Task | null>(null);
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [taskSearch, setTaskSearch] = useState("");
+  const [taskPriorityFilter, setTaskPriorityFilter] = useState<"all" | Task["priority"]>("all");
 
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
   const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
@@ -486,18 +513,35 @@ export default function ResearchGroupManagement() {
 
   const handleSaveTask = async (taskData: Omit<Task, "id">) => {
     if (!id) return;
+    const meUid = auth.currentUser?.uid || "";
+    const meName = auth.currentUser?.displayName || topic?.supervisorName || "Supervisor";
     try {
       if (editingTask) {
-        await updateDoc(doc(db, "researchGroups", id, "tasks", editingTask.id), {
-          ...taskData,
-        });
-        showToast("success", "Task updated successfully");
+        const statusChanged = editingTask.status !== taskData.status;
+        const history = [...(editingTask.statusHistory || [])];
+        const update: Record<string, unknown> = { ...taskData, updatedAt: serverTimestamp() };
+        if (statusChanged) {
+          history.push({ from: editingTask.status, to: taskData.status, byUid: meUid, byName: meName, at: new Date().toISOString() });
+          update.statusHistory = history;
+          update.lastMovedBy = meUid;
+          update.lastMovedByName = meName;
+          update.lastMovedAt = new Date().toISOString();
+        }
+        await updateDoc(doc(db, "researchGroups", id, "tasks", editingTask.id), update);
+        showToast("success", statusChanged ? `Task updated and moved to ${taskData.status.replace("-", " ")}.` : "Task updated successfully");
       } else {
         await addDoc(collection(db, "researchGroups", id, "tasks"), {
           ...taskData,
+          createdBy: meUid,
+          createdByName: meName,
+          lastMovedBy: meUid,
+          lastMovedByName: meName,
+          lastMovedAt: new Date().toISOString(),
+          statusHistory: [{ from: "created", to: taskData.status, byUid: meUid, byName: meName, at: new Date().toISOString() }],
           createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
         });
-        showToast("success", "Task created successfully");
+        showToast("success", "Task created successfully — it's on the board");
       }
       setIsTaskModalOpen(false);
       setEditingTask(null);
@@ -520,17 +564,50 @@ export default function ResearchGroupManagement() {
     }
   };
 
-  const toggleTaskStatus = async (task: Task) => {
-    if (!id) return;
+  const moveTask = async (task: Task, newStatus: Task["status"]) => {
+    if (!id || task.status === newStatus) return;
+    const meUid = auth.currentUser?.uid || "";
+    const meName = auth.currentUser?.displayName || topic?.supervisorName || "Supervisor";
+    const nowIso = new Date().toISOString();
     try {
-      const newStatus = task.status === "completed" ? "todo" : "completed";
       await updateDoc(doc(db, "researchGroups", id, "tasks", task.id), {
         status: newStatus,
+        lastMovedBy: meUid,
+        lastMovedByName: meName,
+        lastMovedAt: nowIso,
+        statusHistory: [...(task.statusHistory || []), { from: task.status, to: newStatus, byUid: meUid, byName: meName, at: nowIso }],
+        updatedAt: serverTimestamp(),
       });
+      showToast("success", `Moved to ${newStatus.replace("-", " ")}.`);
     } catch (error) {
       console.error("Error updating task status:", error);
       showToast("error", "Failed to update task status");
     }
+  };
+
+  const handleTaskDragStart = (e: React.DragEvent, taskId: string) => {
+    e.dataTransfer.setData("text/plain", taskId);
+    e.dataTransfer.effectAllowed = "move";
+    setDraggedTaskId(taskId);
+  };
+
+  const handleTaskDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleTaskDrop = async (e: React.DragEvent, newStatus: Task["status"], targetMilestoneId: string) => {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData("text/plain") || draggedTaskId;
+    setDraggedTaskId(null);
+    if (!taskId || !id) return;
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    if ((task.milestoneId || "unassigned") !== targetMilestoneId) {
+      showToast("error", "Cannot drag a task to a different milestone — edit it to reassign.");
+      return;
+    }
+    await moveTask(task, newStatus);
   };
 
   const handleSaveDocument = async (data: { title: string; type: string; url: string; file: File | null; isLink: boolean }) => {
@@ -795,6 +872,13 @@ export default function ResearchGroupManagement() {
         editingTask={editingTask}
         teamMembers={teamMembers}
         milestones={milestones}
+      />
+      <TaskViewModal
+        isOpen={viewingTask !== null}
+        onClose={() => setViewingTask(null)}
+        task={viewingTask}
+        milestoneName={viewingTask?.milestoneId ? milestones.find((m) => m.id === viewingTask.milestoneId)?.title : undefined}
+        assigneeNames={(viewingTask?.assignedTo || []).map((sid) => teamMembers.find((m) => m.studentId === sid)?.studentName || "Unknown member")}
       />
       <MilestoneModal
         isOpen={isMilestoneModalOpen}
@@ -1468,113 +1552,345 @@ export default function ResearchGroupManagement() {
           );
         })()}
 
-        {activeTab === "tasks" && (
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Tasks & Deliverables</h2>
-              <button
-                onClick={() => {
-                  setEditingTask(null);
-                  setIsTaskModalOpen(true);
-                }}
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+        {activeTab === "tasks" && (() => {
+          const stats = getTaskStats();
+          const tq = taskSearch.trim().toLowerCase();
+          const visibleTasks = tasks
+            .filter((t) => (taskPriorityFilter === "all" ? true : t.priority === taskPriorityFilter))
+            .filter((t) => {
+              if (!tq) return true;
+              const assigneeNames = t.assignedTo.map((sid) => teamMembers.find((m) => m.studentId === sid)?.studentName || "").join(" ");
+              return (
+                t.title.toLowerCase().includes(tq) ||
+                (t.description || "").toLowerCase().includes(tq) ||
+                assigneeNames.toLowerCase().includes(tq) ||
+                (t.createdByName || "").toLowerCase().includes(tq) ||
+                (t.lastMovedByName || "").toLowerCase().includes(tq)
+              );
+            });
+
+          const assigneeNameOf = (sid: string) => teamMembers.find((m) => m.studentId === sid)?.studentName || "Unknown";
+
+          const columns = [
+            { status: "todo" as const, title: "TO DO", columnBg: "bg-blue-50 dark:bg-blue-500/10", headerColor: "text-blue-700 dark:text-blue-300", countBg: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300" },
+            { status: "in-progress" as const, title: "IN PROGRESS", columnBg: "bg-amber-50 dark:bg-amber-500/10", headerColor: "text-amber-700 dark:text-amber-300", countBg: "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300" },
+            { status: "completed" as const, title: "DONE", columnBg: "bg-emerald-50 dark:bg-emerald-500/10", headerColor: "text-emerald-700 dark:text-emerald-300", countBg: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300" },
+          ];
+
+          const moveStep = (t: Task, dir: -1 | 1) => {
+            const order: Task["status"][] = ["todo", "in-progress", "completed"];
+            const next = order[order.indexOf(t.status) + dir];
+            if (next) moveTask(t, next);
+          };
+
+          const renderTaskCard = (task: Task) => {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const isOverdue = task.dueDate ? new Date(`${task.dueDate}T00:00:00`) < today && task.status !== "completed" : false;
+            const PriorityIcon = task.priority === "high" ? ChevronUp : task.priority === "medium" ? Minus : ChevronDown;
+            const priorityColor = task.priority === "high" ? "text-rose-500" : task.priority === "medium" ? "text-amber-500" : "text-blue-500";
+            return (
+              <div
+                key={task.id}
+                draggable
+                onDragStart={(e) => handleTaskDragStart(e, task.id)}
+                onClick={() => setViewingTask(task)}
+                className={`group cursor-grab rounded-xl border p-3.5 shadow-sm transition-all hover:shadow-md active:cursor-grabbing ${
+                  isOverdue
+                    ? "border-rose-200 bg-rose-50/60 hover:border-rose-300 dark:border-rose-500/30 dark:bg-rose-500/10"
+                    : "border-slate-200 bg-white hover:border-slate-300 dark:border-[#333] dark:bg-[#1C1C1E] dark:hover:border-slate-600"
+                }`}
               >
-                <Plus className="h-4 w-4" /> Add Task
-              </button>
-            </div>
+                <div className="mb-1.5 flex items-start justify-between gap-2">
+                  <h4 className={`text-sm font-semibold leading-snug ${
+                    task.status === "completed"
+                      ? "text-slate-400 line-through dark:text-slate-500"
+                      : isOverdue
+                      ? "text-rose-700 dark:text-rose-300"
+                      : "text-slate-800 dark:text-slate-100"
+                  }`}>
+                    {task.title}
+                  </h4>
+                  <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setViewingTask(task);
+                      }}
+                      title="View details"
+                      className="rounded-lg p-1.5 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingTask(task);
+                        setIsTaskModalOpen(true);
+                      }}
+                      title="Edit task"
+                      className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteTaskId(task.id || null);
+                      }}
+                      title="Delete task"
+                      className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
 
-            {/* Task Stats */}
-            <div className="mb-6 grid grid-cols-4 gap-4">
-              <div className="rounded-lg bg-slate-50 p-4 dark:bg-[#0F0F0F]">
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total</p>
-                <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{getTaskStats().total}</p>
-              </div>
-              <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-500/10">
-                <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">To Do</p>
-                <p className="mt-1 text-2xl font-bold text-blue-900 dark:text-blue-100">{getTaskStats().todo}</p>
-              </div>
-              <div className="rounded-lg bg-amber-50 p-4 dark:bg-amber-500/10">
-                <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">In Progress</p>
-                <p className="mt-1 text-2xl font-bold text-amber-900 dark:text-amber-100">{getTaskStats().inProgress}</p>
-              </div>
-              <div className="rounded-lg bg-emerald-50 p-4 dark:bg-emerald-500/10">
-                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Completed</p>
-                <p className="mt-1 text-2xl font-bold text-emerald-900 dark:text-emerald-100">{getTaskStats().completed}</p>
-              </div>
-            </div>
+                {task.description && (
+                  <p className="line-clamp-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">{task.description}</p>
+                )}
 
-            <div className="space-y-3">
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                  <span className={`inline-flex items-center gap-1 font-bold capitalize ${priorityColor}`}>
+                    <PriorityIcon className="h-3.5 w-3.5" /> {task.priority}
+                  </span>
+                  {task.dueDate && (
+                    <span className={`inline-flex items-center gap-1 font-semibold ${isOverdue ? "text-rose-600 dark:text-rose-400" : "text-slate-500 dark:text-slate-400"}`}>
+                      <Calendar className="h-3 w-3" />
+                      {new Date(`${task.dueDate}T00:00:00`).toLocaleDateString()}{isOverdue ? " · overdue" : ""}
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5 dark:border-[#2A2A2A]">
+                  <div className="flex min-w-0 items-center">
+                    {task.assignedTo.slice(0, 3).map((sid, i) => (
+                      <span
+                        key={sid}
+                        title={assigneeNameOf(sid)}
+                        className="-ml-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-indigo-600 text-[10px] font-bold text-white first:ml-0 dark:border-[#1C1C1E]"
+                        style={{ zIndex: 3 - i }}
+                      >
+                        {assigneeNameOf(sid).charAt(0).toUpperCase()}
+                      </span>
+                    ))}
+                    {task.assignedTo.length > 3 && (
+                      <span className="ml-1 text-[10px] font-bold text-slate-400">+{task.assignedTo.length - 3}</span>
+                    )}
+                    {task.assignedTo.length === 0 && (
+                      <span className="text-[10px] italic text-slate-400">Unassigned</span>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 gap-0.5" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => moveStep(task, -1)}
+                      disabled={task.status === "todo"}
+                      title="Move back"
+                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 dark:hover:bg-slate-700"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => moveStep(task, 1)}
+                      disabled={task.status === "completed"}
+                      title="Move forward"
+                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 dark:hover:bg-slate-700"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-1.5 space-y-0.5 text-[10px] leading-snug text-slate-400 dark:text-slate-500">
+                  <p className="truncate">Created by <span className="font-bold text-slate-500 dark:text-slate-400">{task.createdByName || "Unknown"}</span></p>
+                  {task.lastMovedByName && (
+                    <p className="truncate">→ {task.status.replace("-", " ")} by <span className="font-bold text-slate-500 dark:text-slate-400">{task.lastMovedByName}</span></p>
+                  )}
+                </div>
+              </div>
+            );
+          };
+
+          const groups = [
+            ...milestones.map((m) => ({ id: m.id, title: m.title, deadline: m.deadline, kind: "milestone" as const })),
+            { id: "unassigned", title: "Unassigned Tasks", deadline: "", kind: "unassigned" as const },
+          ];
+
+          return (
+            <div className="space-y-5">
+              {/* Hero header */}
+              <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-600 via-indigo-600 to-violet-600 p-6 text-white shadow-sm dark:border-indigo-500/20">
+                <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10" />
+                <div className="pointer-events-none absolute -bottom-20 right-24 h-44 w-44 rounded-full bg-white/10" />
+                <div className="relative flex flex-wrap items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur">
+                        <ListTodo className="h-3.5 w-3.5" /> Task Board
+                      </span>
+                      <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur">
+                        {stats.completed}/{stats.total} done
+                      </span>
+                    </div>
+                    <h2 className="mt-3 text-2xl font-extrabold tracking-tight">Tasks & Deliverables</h2>
+                    <p className="mt-1 max-w-xl text-sm text-indigo-100">
+                      Drag cards across the board — every move is stamped with who moved it, so progress is always visible.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditingTask(null);
+                      setIsTaskModalOpen(true);
+                    }}
+                    className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 shadow-sm transition-all hover:bg-indigo-50 hover:shadow"
+                  >
+                    <Plus className="h-4 w-4" /> Add Task
+                  </button>
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {[
+                  { label: "Total", value: stats.total, icon: <ListTodo className="h-4 w-4" />, cls: "text-slate-500 dark:text-slate-400" },
+                  { label: "To Do", value: stats.todo, icon: <Circle className="h-4 w-4" />, cls: "text-blue-600 dark:text-blue-400" },
+                  { label: "In Progress", value: stats.inProgress, icon: <Clock className="h-4 w-4" />, cls: "text-amber-600 dark:text-amber-400" },
+                  { label: "Completed", value: stats.completed, icon: <CheckCircle2 className="h-4 w-4" />, cls: "text-emerald-600 dark:text-emerald-400" },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+                    <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wide ${s.cls}`}>
+                      {s.icon} {s.label}
+                    </div>
+                    <p className="mt-1.5 text-2xl font-extrabold text-slate-900 dark:text-white">{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Toolbar */}
+              {tasks.length > 0 && (
+                <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818] lg:flex-row lg:items-center">
+                  <div className="relative flex-1">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      value={taskSearch}
+                      onChange={(e) => setTaskSearch(e.target.value)}
+                      placeholder="Search title, description, creator, mover, assignee…"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {(["all", "high", "medium", "low"] as const).map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => setTaskPriorityFilter(p)}
+                        className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize transition-all ${
+                          taskPriorityFilter === p
+                            ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                        }`}
+                      >
+                        {p === "all" ? "All priorities" : p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Board */}
               {tasks.length === 0 ? (
-                <div className="py-12 text-center">
-                  <CheckCircle2 className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
-                  <p className="mt-4 text-sm font-medium text-slate-900 dark:text-white">No tasks yet</p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Add tasks to organize and track work
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center dark:border-[#2A2A2A] dark:bg-[#181818]">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-md">
+                    <ListTodo className="h-8 w-8" />
+                  </div>
+                  <p className="mt-4 text-base font-bold text-slate-900 dark:text-white">No tasks yet — fill the board</p>
+                  <p className="mx-auto mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
+                    Create a task, assign it to students, and watch it travel from To Do to Done — with every move attributed.
                   </p>
+                  <button
+                    onClick={() => {
+                      setEditingTask(null);
+                      setIsTaskModalOpen(true);
+                    }}
+                    className="mt-6 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                  >
+                    <Plus className="h-4 w-4" /> Add First Task
+                  </button>
                 </div>
               ) : (
-                tasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="flex items-start gap-4 rounded-xl border border-slate-200 p-4 dark:border-[#2A2A2A]"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={task.status === "completed"}
-                      onChange={() => toggleTaskStatus(task)}
-                      className="mt-1 h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <h3 className={`font-semibold ${task.status === "completed" ? "line-through text-slate-400" : "text-slate-900 dark:text-white"}`}>
-                            {task.title}
+                <div className="space-y-5">
+                  {groups.map((g) => {
+                    const groupTasks = g.id === "unassigned"
+                      ? visibleTasks.filter((t) => !t.milestoneId)
+                      : visibleTasks.filter((t) => t.milestoneId === g.id);
+                    if (g.id === "unassigned" && groupTasks.length === 0) return null;
+                    return (
+                      <div key={g.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+                        <div className="mb-4 flex flex-wrap items-center gap-2">
+                          <h3 className="flex items-center gap-2 text-sm font-extrabold text-slate-800 dark:text-slate-100">
+                            <GitBranch className="h-4 w-4 text-indigo-500" />
+                            {g.title}
                           </h3>
-                          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{task.description}</p>
-                          <div className="mt-2 flex items-center gap-4 text-xs">
-                            <span
-                              className={`rounded-full px-2 py-0.5 font-semibold capitalize ${
-                                task.priority === "high"
-                                  ? "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300"
-                                  : task.priority === "medium"
-                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
-                                  : "bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-300"
-                              }`}
-                            >
-                              {task.priority}
+                          {g.deadline && (
+                            <span className="flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                              <Calendar className="h-3 w-3" />
+                              {new Date(`${g.deadline}T00:00:00`).toLocaleDateString()}
                             </span>
-                            {task.dueDate && (
-                              <span className="text-slate-500 dark:text-slate-400">
-                                Due: {new Date(task.dueDate).toLocaleDateString()}
-                              </span>
-                            )}
+                          )}
+                          <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
+                            {groupTasks.length}
+                          </span>
+                        </div>
+                        {groupTasks.length === 0 ? (
+                          <p className="rounded-xl border border-dashed border-slate-200 py-6 text-center text-xs text-slate-400 dark:border-[#333] dark:text-slate-500">
+                            No tasks match the current search here.
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                            {columns.map((col) => {
+                              const columnTasks = groupTasks
+                                .filter((t) => t.status === col.status)
+                                .sort((a, b) => {
+                                  const da = a.dueDate ? new Date(`${a.dueDate}T00:00:00`).getTime() : Infinity;
+                                  const db = b.dueDate ? new Date(`${b.dueDate}T00:00:00`).getTime() : Infinity;
+                                  return da - db;
+                                });
+                              return (
+                                <div
+                                  key={col.status}
+                                  onDragOver={handleTaskDragOver}
+                                  onDrop={(e) => handleTaskDrop(e, col.status, g.id)}
+                                  className={`flex min-h-[180px] flex-col rounded-xl ${col.columnBg} p-3 transition-colors ${
+                                    draggedTaskId ? "outline-2 outline-dashed outline-indigo-300 dark:outline-indigo-500/50" : "outline-none"
+                                  }`}
+                                >
+                                  <div className="mb-3 flex items-center justify-between px-1 pt-1">
+                                    <h4 className={`text-xs font-extrabold tracking-wide ${col.headerColor}`}>{col.title}</h4>
+                                    <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${col.countBg}`}>
+                                      {columnTasks.length}
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-1 flex-col gap-2">
+                                    {columnTasks.length === 0 ? (
+                                      <div className="flex flex-1 items-center justify-center rounded-lg border-2 border-dashed border-slate-300/50 py-8 dark:border-slate-700">
+                                        <p className="text-[11px] text-slate-400">Drop here</p>
+                                      </div>
+                                    ) : (
+                                      columnTasks.map(renderTaskCard)
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              setEditingTask(task);
-                              setIsTaskModalOpen(true);
-                            }}
-                            className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteTaskId(task.id || null)}
-                            className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
+                        )}
                       </div>
-                    </div>
-                  </div>
-                ))
+                    );
+                  })}
+                </div>
               )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {activeTab === "documents" && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
