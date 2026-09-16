@@ -127,69 +127,7 @@ export default function TeacherResearchGroups() {
             </div>
           ) : (
             filteredGroups.map((group) => (
-<<<<<<< HEAD
-              <div
-                key={group.projectId}
-                onClick={() => navigate(`/teacher/research-groups/${group.projectId}`)}
-                className="group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/60 bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:border-indigo-500/30 hover:shadow-lg dark:border-white/5 dark:bg-[#151515] dark:hover:border-indigo-500/30"
-              >
-                <div>
-                  <div className="mb-4 flex items-center justify-between">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                      ACTIVE
-                    </span>
-                    <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                      {group.memberIds.length}/{group.maxTeamSize} Capacity
-                    </span>
-                  </div>
-                  
-                  <h3 className="mb-3 text-xl font-bold text-slate-900 group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">
-                    {group.topicTitle}
-                  </h3>
-                  
-                  <div className="mb-6 flex flex-wrap items-center gap-4 text-xs font-medium text-slate-500 dark:text-slate-400">
-                    <div className="flex items-center gap-1.5">
-                      <TrendingUp className="h-4 w-4 text-indigo-500" />
-                      <span>{Math.floor(Math.random() * 30) + 50}% Progress</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <FileText className="h-4 w-4 text-violet-500" />
-                      <span>{Math.floor(Math.random() * 15) + 5} Files</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-5 dark:border-white/5">
-                  <div className="flex -space-x-2.5">
-                    {Array.from({ length: Math.min(group.memberIds.length, 5) }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-xs font-medium shadow-sm dark:border-[#151515]"
-                        style={{
-                          backgroundColor: `hsl(${(i * 360) / 5}, 80%, 90%)`,
-                          color: `hsl(${(i * 360) / 5}, 70%, 40%)`,
-                        }}
-                      >
-                        {String.fromCharCode(65 + i)}
-                      </div>
-                    ))}
-                    {group.memberIds.length > 5 && (
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-50 text-xs font-medium text-slate-600 shadow-sm dark:border-[#151515] dark:bg-slate-800 dark:text-slate-400">
-                        +{group.memberIds.length - 5}
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-400 transition-colors group-hover:text-indigo-600 dark:text-slate-500 dark:group-hover:text-indigo-400">
-                    <span>Manage</span>
-                    <ArrowLeft className="h-4 w-4 rotate-180" />
-                  </div>
-                </div>
-              </div>
-=======
               <GroupCard key={group.projectId} group={group} role="teacher" />
->>>>>>> student
             ))
           )}
         </div>
