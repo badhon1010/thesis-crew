@@ -19,6 +19,10 @@ import {
   Link as LinkIcon,
   Upload,
   MessageSquare,
+  Copy,
+  ExternalLink,
+  Video,
+  Users2,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
@@ -27,6 +31,7 @@ import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { TaskModal } from "@/components/ui/TaskModal";
 import { DocumentModal } from "@/components/ui/DocumentModal";
 import { MilestoneModal } from "@/components/ui/MilestoneModal";
+import { MeetingModal, type MeetingFormData, type MeetingPlatform } from "@/components/ui/MeetingModal";
 import { GroupChat } from "@/components/chat/GroupChat";
 import { auth } from "@/firebase/auth";
 import { storage } from "@/firebase/storage";
@@ -102,8 +107,12 @@ interface Document {
 interface Meeting {
   id: string;
   title: string;
-  date: string;
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:MM
   duration: string;
+  platform?: MeetingPlatform | "";
+  meetingLink?: string;
+  agenda?: string;
   notes?: string;
   attendees: string[];
   createdAt?: unknown;
@@ -146,6 +155,11 @@ export default function ResearchGroupManagement() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
   const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
+
+  const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
+  const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
+  const [deleteMeetingId, setDeleteMeetingId] = useState<string | null>(null);
+  const [copiedMeetingId, setCopiedMeetingId] = useState<string | null>(null);
 
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({
     show: false,
@@ -475,6 +489,51 @@ export default function ResearchGroupManagement() {
     }
   };
 
+  const handleSaveMeeting = async (data: MeetingFormData) => {
+    if (!id) return;
+    try {
+      if (editingMeeting) {
+        await updateDoc(doc(db, "researchGroups", id, "meetings", editingMeeting.id), {
+          ...data,
+        });
+        showToast("success", "Meeting updated successfully");
+      } else {
+        await addDoc(collection(db, "researchGroups", id, "meetings"), {
+          ...data,
+          createdAt: serverTimestamp(),
+        });
+        showToast("success", "Meeting scheduled successfully");
+      }
+      setIsMeetingModalOpen(false);
+      setEditingMeeting(null);
+    } catch (error) {
+      console.error("Error saving meeting:", error);
+      throw error;
+    }
+  };
+
+  const handleDeleteMeeting = async () => {
+    if (!id || !deleteMeetingId) return;
+    try {
+      await deleteDoc(doc(db, "researchGroups", id, "meetings", deleteMeetingId));
+      showToast("success", "Meeting deleted successfully");
+    } catch (error) {
+      console.error("Error deleting meeting:", error);
+      showToast("error", "Failed to delete meeting");
+    } finally {
+      setDeleteMeetingId(null);
+    }
+  };
+
+  const handleCopyMeetingLink = (meeting: Meeting) => {
+    if (!meeting.meetingLink) return;
+    navigator.clipboard.writeText(meeting.meetingLink).then(() => {
+      setCopiedMeetingId(meeting.id);
+      showToast("success", "Meeting link copied to clipboard!");
+      setTimeout(() => setCopiedMeetingId(null), 2000);
+    }).catch(() => showToast("error", "Failed to copy link"));
+  };
+
   if (loading) {
     return (
       <DashboardLayout role="teacher">
@@ -552,6 +611,27 @@ export default function ResearchGroupManagement() {
         isOpen={isDocumentModalOpen}
         onClose={() => setIsDocumentModalOpen(false)}
         onSave={handleSaveDocument}
+      />
+
+      <MeetingModal
+        isOpen={isMeetingModalOpen}
+        onClose={() => {
+          setIsMeetingModalOpen(false);
+          setEditingMeeting(null);
+        }}
+        onSave={handleSaveMeeting}
+        editingMeeting={editingMeeting ? {
+          id: editingMeeting.id,
+          title: editingMeeting.title,
+          date: editingMeeting.date,
+          time: editingMeeting.time || "",
+          duration: editingMeeting.duration,
+          platform: editingMeeting.platform || "",
+          meetingLink: editingMeeting.meetingLink || "",
+          agenda: editingMeeting.agenda || editingMeeting.notes || "",
+          attendees: editingMeeting.attendees || [],
+        } : null}
+        teamMembers={teamMembers}
       />
 
       <div className="mx-auto max-w-7xl px-2 sm:px-4">
@@ -1014,61 +1094,287 @@ export default function ResearchGroupManagement() {
           </div>
         )}
 
-        {activeTab === "meetings" && (
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Meetings & Discussions</h2>
-              <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700">
-                <Plus className="h-4 w-4" /> Schedule Meeting
-              </button>
-            </div>
-            <div className="space-y-4">
-              {meetings.length === 0 ? (
-                <div className="py-12 text-center">
-                  <Calendar className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
-                  <p className="mt-4 text-sm font-medium text-slate-900 dark:text-white">No meetings yet</p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Schedule meetings to collaborate with your team
-                  </p>
-                </div>
-              ) : (
-                meetings.map((meeting) => (
-                  <div
-                    key={meeting.id}
-                    className="rounded-xl border border-slate-200 p-4 dark:border-[#2A2A2A]"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-slate-900 dark:text-white">{meeting.title}</h3>
-                        <div className="mt-2 flex items-center gap-4 text-sm text-slate-600 dark:text-slate-300">
-                          <span className="flex items-center gap-1.5">
-                            <Calendar className="h-4 w-4" />
-                            {new Date(meeting.date).toLocaleDateString()}
+        {activeTab === "meetings" && (() => {
+          const now = new Date();
+          const upcomingMeetings = meetings.filter((m) => {
+            const dt = new Date(`${m.date}T${m.time || "00:00"}`);
+            return dt >= now;
+          });
+          const pastMeetings = meetings.filter((m) => {
+            const dt = new Date(`${m.date}T${m.time || "00:00"}`);
+            return dt < now;
+          });
+
+          const platformConfig: Record<string, { label: string; color: string; bg: string; darkBg: string; border: string }> = {
+            zoom: { label: "Zoom", color: "text-blue-700 dark:text-blue-300", bg: "bg-blue-50", darkBg: "dark:bg-blue-500/15", border: "border-blue-200 dark:border-blue-500/30" },
+            "google-meet": { label: "Google Meet", color: "text-emerald-700 dark:text-emerald-300", bg: "bg-emerald-50", darkBg: "dark:bg-emerald-500/15", border: "border-emerald-200 dark:border-emerald-500/30" },
+            "google-classroom": { label: "Google Classroom", color: "text-teal-700 dark:text-teal-300", bg: "bg-teal-50", darkBg: "dark:bg-teal-500/15", border: "border-teal-200 dark:border-teal-500/30" },
+            teams: { label: "MS Teams", color: "text-violet-700 dark:text-violet-300", bg: "bg-violet-50", darkBg: "dark:bg-violet-500/15", border: "border-violet-200 dark:border-violet-500/30" },
+            custom: { label: "Custom Link", color: "text-slate-700 dark:text-slate-300", bg: "bg-slate-50", darkBg: "dark:bg-slate-500/15", border: "border-slate-200 dark:border-slate-500/30" },
+          };
+
+          const renderMeetingCard = (meeting: Meeting, isPast: boolean) => {
+            const platform = meeting.platform || "";
+            const cfg = platform && platformConfig[platform] ? platformConfig[platform] : null;
+            const meetingDateTime = new Date(`${meeting.date}T${meeting.time || "00:00"}`);
+            const diffMs = meetingDateTime.getTime() - now.getTime();
+            const isLiveSoon = !isPast && diffMs > 0 && diffMs < 30 * 60 * 1000;
+
+            return (
+              <div
+                key={meeting.id}
+                className={`group relative overflow-hidden rounded-2xl border p-5 transition-all ${
+                  isPast
+                    ? "border-slate-100 bg-slate-50/50 dark:border-[#222] dark:bg-[#111]"
+                    : "border-slate-200 bg-white shadow-sm hover:shadow-md dark:border-[#2A2A2A] dark:bg-[#181818]"
+                }`}
+              >
+                {/* Top row: title + actions */}
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3
+                        className={`font-bold ${
+                          isPast
+                            ? "text-slate-500 dark:text-slate-500"
+                            : "text-slate-900 dark:text-white"
+                        }`}
+                      >
+                        {meeting.title}
+                      </h3>
+                      {isLiveSoon && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
+                          <span className="relative flex h-2 w-2">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
                           </span>
-                          <span className="flex items-center gap-1.5">
-                            <Clock className="h-4 w-4" />
-                            {meeting.duration}
-                          </span>
-                        </div>
-                        {meeting.notes && (
-                          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{meeting.notes}</p>
+                          Starting soon
+                        </span>
+                      )}
+                      {isPast && (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-700/50 dark:text-slate-400">
+                          Completed
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Date, time & duration row */}
+                    <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+                      <span className={`flex items-center gap-1.5 ${ isPast ? "text-slate-400 dark:text-slate-500" : "text-slate-600 dark:text-slate-300" }`}>
+                        <Calendar className="h-3.5 w-3.5" />
+                        {new Date(meeting.date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                      </span>
+                      {meeting.time && (
+                        <span className={`flex items-center gap-1.5 ${ isPast ? "text-slate-400 dark:text-slate-500" : "text-slate-600 dark:text-slate-300" }`}>
+                          <Clock className="h-3.5 w-3.5" />
+                          {(() => {
+                            const [h, m] = meeting.time.split(":").map(Number);
+                            const period = h >= 12 ? "PM" : "AM";
+                            const h12 = h % 12 || 12;
+                            return `${h12}:${String(m).padStart(2, "0")} ${period}`;
+                          })()}
+                        </span>
+                      )}
+                      <span className={`flex items-center gap-1.5 ${ isPast ? "text-slate-400 dark:text-slate-500" : "text-slate-500 dark:text-slate-400" }`}>
+                        <Clock className="h-3.5 w-3.5 opacity-60" />
+                        {meeting.duration}
+                      </span>
+                    </div>
+
+                    {/* Platform badge + link actions */}
+                    {platform && cfg && (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
+                            isPast
+                              ? "border-slate-200 bg-slate-100 text-slate-400 dark:border-[#222] dark:bg-[#1A1A1A] dark:text-slate-500"
+                              : `${cfg.border} ${cfg.bg} ${cfg.color} ${cfg.darkBg}`
+                          }`}
+                        >
+                          <Video className="h-3 w-3" />
+                          {cfg.label}
+                        </span>
+
+                        {meeting.meetingLink && (
+                          <>
+                            <a
+                              href={meeting.meetingLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-all ${
+                                isPast
+                                  ? "border-slate-200 text-slate-400 hover:bg-slate-100 dark:border-[#222] dark:text-slate-500 dark:hover:bg-[#1A1A1A]"
+                                  : "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-500/15 dark:text-indigo-300 dark:hover:bg-indigo-500/25"
+                              }`}
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              Join
+                            </a>
+                            <button
+                              onClick={() => handleCopyMeetingLink(meeting)}
+                              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-all ${
+                                copiedMeetingId === meeting.id
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300"
+                                  : isPast
+                                  ? "border-slate-200 text-slate-400 hover:bg-slate-100 dark:border-[#222] dark:text-slate-500"
+                                  : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"
+                              }`}
+                            >
+                              <Copy className="h-3 w-3" />
+                              {copiedMeetingId === meeting.id ? "Copied!" : "Copy Link"}
+                            </button>
+                          </>
                         )}
                       </div>
-                      <div className="flex gap-2">
-                        <button className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800">
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                        <button className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                    )}
+
+                    {/* Agenda */}
+                    {(meeting.agenda || meeting.notes) && (
+                      <p className={`mt-3 rounded-lg border p-3 text-sm ${
+                        isPast
+                          ? "border-slate-100 bg-slate-50/50 text-slate-400 dark:border-[#222] dark:bg-[#0F0F0F] dark:text-slate-500"
+                          : "border-slate-100 bg-slate-50 text-slate-600 dark:border-[#222] dark:bg-[#0F0F0F] dark:text-slate-300"
+                      }`}>
+                        {meeting.agenda || meeting.notes}
+                      </p>
+                    )}
+
+                    {/* Attendees */}
+                    {meeting.attendees && meeting.attendees.length > 0 && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <Users2 className={`h-3.5 w-3.5 ${ isPast ? "text-slate-400" : "text-slate-400 dark:text-slate-500" }`} />
+                        <div className="flex flex-wrap gap-1">
+                          {meeting.attendees.slice(0, 4).map((attendeeId) => {
+                            const member = teamMembers.find((m) => m.studentId === attendeeId);
+                            return member ? (
+                              <span
+                                key={attendeeId}
+                                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                                  isPast
+                                    ? "bg-slate-100 text-slate-400 dark:bg-slate-700/30 dark:text-slate-500"
+                                    : "bg-slate-100 text-slate-600 dark:bg-slate-700/50 dark:text-slate-300"
+                                }`}
+                              >
+                                {member.studentName.split(" ")[0]}
+                              </span>
+                            ) : null;
+                          })}
+                          {meeting.attendees.length > 4 && (
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 dark:bg-slate-700/30 dark:text-slate-400">
+                              +{meeting.attendees.length - 4} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex shrink-0 gap-1">
+                    <button
+                      onClick={() => {
+                        setEditingMeeting(meeting);
+                        setIsMeetingModalOpen(true);
+                      }}
+                      className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                      title="Edit meeting"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setDeleteMeetingId(meeting.id)}
+                      className="rounded-lg p-2 text-rose-500 transition-colors hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-300"
+                      title="Delete meeting"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          };
+
+          return (
+            <div className="space-y-6">
+              {/* Header card */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">Meetings &amp; Discussions</h2>
+                    <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+                      {upcomingMeetings.length} upcoming · {pastMeetings.length} past
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditingMeeting(null);
+                      setIsMeetingModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-700 hover:shadow-md"
+                  >
+                    <Plus className="h-4 w-4" /> Schedule Meeting
+                  </button>
+                </div>
+              </div>
+
+              {meetings.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white py-16 text-center dark:border-[#2A2A2A] dark:bg-[#181818]">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 dark:bg-indigo-500/10">
+                    <Calendar className="h-8 w-8 text-indigo-500 dark:text-indigo-400" />
+                  </div>
+                  <p className="mt-4 text-base font-semibold text-slate-900 dark:text-white">No meetings scheduled yet</p>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    Schedule a meeting and share a Zoom, Meet, or Teams link with your team.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setEditingMeeting(null);
+                      setIsMeetingModalOpen(true);
+                    }}
+                    className="mt-6 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-indigo-700"
+                  >
+                    <Plus className="h-4 w-4" /> Schedule First Meeting
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* Upcoming */}
+                  {upcomingMeetings.length > 0 && (
+                    <div>
+                      <div className="mb-3 flex items-center gap-2">
+                        <span className="relative flex h-2 w-2">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-60" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-indigo-500" />
+                        </span>
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                          Upcoming ({upcomingMeetings.length})
+                        </h3>
+                      </div>
+                      <div className="space-y-3">
+                        {upcomingMeetings.map((m) => renderMeetingCard(m, false))}
                       </div>
                     </div>
-                  </div>
-                ))
+                  )}
+
+                  {/* Past */}
+                  {pastMeetings.length > 0 && (
+                    <div>
+                      <div className="mb-3 flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600" />
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                          Past ({pastMeetings.length})
+                        </h3>
+                      </div>
+                      <div className="space-y-3">
+                        {pastMeetings.map((m) => renderMeetingCard(m, true))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {activeTab === "publications" && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
@@ -1152,6 +1458,15 @@ export default function ResearchGroupManagement() {
         onConfirm={handleDeleteTask}
         title="Delete Task"
         message="Are you sure you want to delete this task? This action cannot be undone."
+        confirmText="Delete"
+      />
+
+      <ConfirmModal
+        isOpen={!!deleteMeetingId}
+        onClose={() => setDeleteMeetingId(null)}
+        onConfirm={handleDeleteMeeting}
+        title="Delete Meeting"
+        message="Are you sure you want to delete this meeting? The meeting link and all details will be permanently removed."
         confirmText="Delete"
       />
     </DashboardLayout>
