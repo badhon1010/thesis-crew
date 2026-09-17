@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Check, Video, Link as LinkIcon, Clock, Calendar, MapPin } from "lucide-react";
+import { X, Check, Video, Link as LinkIcon, Calendar, MapPin } from "lucide-react";
 
 interface TeamMember {
   studentId: string;
