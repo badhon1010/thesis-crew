@@ -498,10 +498,35 @@ export default function ResearchGroupManagement() {
     };
   }, [id]);
 
+  // Real group progress: a group is one research paper, so progress must reflect
+  // actual work (tasks) — not just manually-toggled milestone flags.
+  // A milestone with linked tasks derives its progress from those tasks;
+  // a milestone without tasks falls back to its manual status.
+  const getMilestoneTaskProgress = (milestoneId: string): number | null => {
+    const linked = tasks.filter((t) => t.milestoneId === milestoneId);
+    if (linked.length === 0) return null;
+    const done = linked.filter((t) => t.status === "completed").length;
+    return Math.round((done / linked.length) * 100);
+  };
+
+  const getMilestoneProgress = (m: Milestone): number => {
+    const taskProgress = getMilestoneTaskProgress(m.id);
+    if (taskProgress !== null) return taskProgress;
+    return m.status === "completed" ? 100 : m.status === "in-progress" ? 50 : 0;
+  };
+
   const getProgressPercentage = () => {
-    if (milestones.length === 0) return 0;
-    const completed = milestones.filter((m) => m.status === "completed").length;
-    return Math.round((completed / milestones.length) * 100);
+    // A published paper means the research is done.
+    if (publications.some((p) => p.status === "published")) return 100;
+    if (milestones.length > 0) {
+      const total = milestones.reduce((sum, m) => sum + getMilestoneProgress(m), 0);
+      return Math.round(total / milestones.length);
+    }
+    if (tasks.length > 0) {
+      const done = tasks.filter((t) => t.status === "completed").length;
+      return Math.round((done / tasks.length) * 100);
+    }
+    return 0;
   };
 
   const getTaskStats = () => {
@@ -547,6 +572,7 @@ export default function ResearchGroupManagement() {
       }
       setIsTaskModalOpen(false);
       setEditingTask(null);
+      setPresetMilestoneId(null);
     } catch (error) {
       console.error("Error saving task:", error);
       showToast("error", "Failed to save task");
@@ -710,28 +736,63 @@ export default function ResearchGroupManagement() {
   const isGroupPublished = publications.some((p) => p.status === "published");
   const publishedCount = publications.filter((p) => p.status === "published").length;
 
+  // Keep milestone flags truthful: a milestone with linked tasks follows the work
+  // (all tasks done -> completed, work started -> in-progress). This also keeps
+  // the milestone-based progress shown on the group cards accurate.
+  useEffect(() => {
+    if (!id || loading) return;
+    if (milestones.length === 0 || tasks.length === 0) return;
+    const updates: { milestoneId: string; next: Milestone["status"] }[] = [];
+    milestones.forEach((m) => {
+      const linked = tasks.filter((t) => t.milestoneId === m.id);
+      if (linked.length === 0) return;
+      const done = linked.filter((t) => t.status === "completed").length;
+      const started = linked.some((t) => t.status !== "todo");
+      if (done === linked.length && m.status !== "completed") {
+        updates.push({ milestoneId: m.id, next: "completed" });
+      } else if (done < linked.length && m.status === "completed") {
+        updates.push({ milestoneId: m.id, next: "in-progress" });
+      } else if (started && m.status === "planned") {
+        updates.push({ milestoneId: m.id, next: "in-progress" });
+      }
+    });
+    if (updates.length === 0) return;
+    (async () => {
+      try {
+        await Promise.all(
+          updates.map(({ milestoneId, next }) =>
+            updateDoc(doc(db, "researchGroups", id, "milestones", milestoneId), { status: next })
+          )
+        );
+      } catch (e) {
+        console.error("Failed to auto-sync milestone status:", e);
+      }
+    })();
+  }, [id, loading, milestones, tasks]);
+
   // Keep the group's state in sync: any published paper => group is "published"
   useEffect(() => {
     if (!id || loading) return;
     const groupStatus = isGroupPublished ? "published" : "ongoing";
+    const progress = getProgressPercentage();
     const sync = async () => {
       try {
         await setDoc(
           doc(db, "researchGroups", id),
-          { groupStatus, publishedCount, updatedAt: serverTimestamp() },
+          { groupStatus, publishedCount, progress, updatedAt: serverTimestamp() },
           { merge: true }
         );
         const topicRef = doc(db, "researchTopics", id);
         const topicSnap = await getDoc(topicRef);
         if (topicSnap.exists()) {
-          await updateDoc(topicRef, { groupStatus, publishedCount, updatedAt: serverTimestamp() });
+          await updateDoc(topicRef, { groupStatus, publishedCount, progress, updatedAt: serverTimestamp() });
         }
       } catch (e) {
         console.error("Failed to sync group publish state:", e);
       }
     };
     sync();
-  }, [id, loading, isGroupPublished, publishedCount]);
+  }, [id, loading, isGroupPublished, publishedCount, milestones, tasks, publications]);
 
   const handleSavePublication = async (data: PublicationFormData) => {
     if (!id || !auth.currentUser) {
