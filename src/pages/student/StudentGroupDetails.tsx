@@ -10,7 +10,6 @@ import {
   Clock,
   CheckCircle2,
   Circle,
-  Loader2,
   Plus,
   Edit2,
   Trash2,
@@ -546,8 +545,23 @@ export default function StudentGroupDetails() {
   if (loading) {
     return (
       <DashboardLayout role="student">
-        <div className="flex h-96 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+        <div className="mx-auto max-w-7xl px-2 sm:px-4">
+          <div className="mb-6 h-10 w-48 animate-pulse rounded-full bg-slate-200 dark:bg-[#181818]"></div>
+          
+          <div className="mb-8 h-48 w-full animate-pulse rounded-3xl bg-slate-200 dark:bg-[#181818]"></div>
+          
+          <div className="mb-8 h-12 w-full max-w-3xl animate-pulse rounded-full bg-slate-200 dark:bg-[#181818]"></div>
+          
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="h-28 animate-pulse rounded-2xl bg-slate-200 dark:bg-[#181818]"></div>
+            ))}
+          </div>
+          
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="h-96 animate-pulse rounded-2xl bg-slate-200 lg:col-span-2 dark:bg-[#181818]"></div>
+            <div className="h-96 animate-pulse rounded-2xl bg-slate-200 dark:bg-[#181818]"></div>
+          </div>
         </div>
       </DashboardLayout>
     );
@@ -657,103 +671,158 @@ export default function StudentGroupDetails() {
         <div className="mb-6 flex items-center justify-between">
           <button
             onClick={() => navigate("/student/my-groups")}
-            className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400"
+            className="group inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm ring-1 ring-inset ring-slate-200 hover:bg-slate-50 hover:text-indigo-600 transition-all hover:scale-105 active:scale-95 dark:bg-[#181818] dark:text-slate-300 dark:ring-[#2A2A2A] dark:hover:bg-[#222] dark:hover:text-indigo-400"
           >
-            <ArrowLeft className="h-4 w-4" /> Back to Research Groups
+            <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" /> Back to Research Groups
           </button>
         </div>
 
         {/* Title Card */}
-        <div className="mb-6 rounded-2xl border border-slate-200 bg-gradient-to-r from-indigo-50 to-violet-50 p-6 shadow-sm dark:border-[#2A2A2A] dark:from-indigo-500/10 dark:to-violet-500/10">
-          <div className="flex items-start justify-between gap-4">
+        <div className="relative mb-6 rounded-2xl bg-indigo-50/50 p-6 shadow-sm border border-indigo-100 dark:bg-indigo-500/5 dark:border-indigo-500/10">
+          <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
             <div className="flex-1">
-              <div className="mb-2 flex items-center gap-2">
-                <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
+                  <div className="h-1.5 w-1.5 rounded-full bg-indigo-500"></div>
                   {topic.category}
                 </span>
                 <span
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-bold capitalize ${
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold capitalize ${
                     publications.some((pub) => pub.status === "published")
                       ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
                       : "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
                   }`}
                 >
+                  <div className={`h-1.5 w-1.5 rounded-full ${publications.some((pub) => pub.status === "published") ? "bg-emerald-500" : "bg-amber-500"}`}></div>
                   {publications.some((pub) => pub.status === "published") ? "Published" : "Ongoing"}
                 </span>
               </div>
-              <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white">{topic.title}</h1>
-              <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                Supervisor: <span className="font-semibold">{topic.supervisorName || "N/A"}</span>
-              </p>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">{topic.title}</h1>
+              
+              <div className="mt-4 flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
+                  {topic.supervisorName ? topic.supervisorName.charAt(0).toUpperCase() : "S"}
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Supervisor</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-200">{topic.supervisorName || "N/A"}</p>
+                </div>
+              </div>
             </div>
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white dark:bg-[#181818]">
-              <Users className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
+            
+            <div className="flex flex-shrink-0 items-center justify-center rounded-xl bg-white p-4 shadow-sm border border-slate-200 dark:bg-[#181818] dark:border-[#2A2A2A]">
+              <div className="relative flex h-16 w-16 items-center justify-center">
+                <svg className="h-full w-full -rotate-90 transform" viewBox="0 0 100 100">
+                  <circle className="text-slate-100 dark:text-slate-800 stroke-current" strokeWidth="10" cx="50" cy="50" r="40" fill="transparent"></circle>
+                  <circle 
+                    className="text-indigo-500 stroke-current transition-all duration-1000 ease-out" 
+                    strokeWidth="10" strokeLinecap="round" cx="50" cy="50" r="40" fill="transparent" 
+                    strokeDasharray={`${2 * Math.PI * 40}`} 
+                    strokeDashoffset={`${2 * Math.PI * 40 * (1 - getProgressPercentage() / 100)}`}
+                  ></circle>
+                </svg>
+                <div className="absolute flex flex-col items-center justify-center text-slate-900 dark:text-white">
+                  <span className="text-sm font-bold">{getProgressPercentage()}%</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="mb-6 overflow-x-auto">
-          <div className="flex gap-2 border-b border-slate-200 dark:border-[#2A2A2A]">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
-                className={`relative flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
-                  activeTab === tab.id
-                    ? "border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400"
-                    : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
-                }`}
-              >
-                {tab.icon}
-                {tab.label}
-                {tab.id !== activeTab && hasUnread(tab.id) && (
-                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#181818]"></span>
-                )}
-              </button>
-            ))}
+        <div className="sticky top-0 z-40 -mx-2 mb-8 bg-slate-50/80 px-2 py-3 backdrop-blur-xl transition-all sm:-mx-4 sm:px-4 dark:bg-[#0f0f0f]/80 border-b border-slate-200/50 dark:border-slate-800/50">
+          <div className="overflow-x-auto pb-1">
+            <div className="flex w-full min-w-max items-center gap-1 rounded-full bg-slate-100/80 p-1.5 dark:bg-[#181818]">
+              {tabs.map((tab) => {
+              const isActive = activeTab === tab.id;
+              const hasNotification = tab.id !== activeTab && hasUnread(tab.id);
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => handleTabChange(tab.id)}
+                  className={`relative flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 ${
+                    isActive
+                      ? "bg-white text-indigo-600 shadow-sm dark:bg-[#2A2A2A] dark:text-indigo-400"
+                      : "text-slate-600 hover:bg-slate-200/50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-[#222] dark:hover:text-slate-200"
+                  }`}
+                >
+                  <div className={`${isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400 dark:text-slate-500"}`}>
+                    {tab.icon}
+                  </div>
+                  {tab.label}
+                  {hasNotification && (
+                    <span className="absolute right-1 top-1 flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75"></span>
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500"></span>
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
+      </div>
 
         {/* Tab Content */}
-        {activeTab === "overview" && (
+        <div key={activeTab} className="animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-both">
+          {activeTab === "overview" && (
           <div className="space-y-6">
             {/* Stats Grid */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                <div className="flex items-center gap-3">
-                  <Users className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-                  <span className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Team Size</span>
+              <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md dark:border-[#2A2A2A] dark:bg-[#181818]">
+                <div className="absolute bottom-0 left-0 h-1 w-0 bg-indigo-500 transition-all duration-300 group-hover:w-full"></div>
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 transition-transform duration-300 group-hover:scale-110 dark:bg-indigo-500/10 dark:text-indigo-400">
+                    <Users className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Team Size</span>
+                    <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">
+                      {teamMembers.length} <span className="text-sm font-medium text-slate-400">/ {topic.maxTeamSize}</span>
+                    </p>
+                  </div>
                 </div>
-                <p className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white">
-                  {teamMembers.length} / {topic.maxTeamSize}
-                </p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                <div className="flex items-center gap-3">
-                  <GitBranch className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                  <span className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Progress</span>
+              <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md dark:border-[#2A2A2A] dark:bg-[#181818]">
+                <div className="absolute bottom-0 left-0 h-1 w-0 bg-emerald-500 transition-all duration-300 group-hover:w-full"></div>
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-transform duration-300 group-hover:scale-110 dark:bg-emerald-500/10 dark:text-emerald-400">
+                    <GitBranch className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Progress</span>
+                    <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">{getProgressPercentage()}%</p>
+                  </div>
                 </div>
-                <p className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white">{getProgressPercentage()}%</p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  <span className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Tasks</span>
+              <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md dark:border-[#2A2A2A] dark:bg-[#181818]">
+                <div className="absolute bottom-0 left-0 h-1 w-0 bg-blue-500 transition-all duration-300 group-hover:w-full"></div>
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-transform duration-300 group-hover:scale-110 dark:bg-blue-500/10 dark:text-blue-400">
+                    <CheckCircle2 className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Tasks</span>
+                    <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">
+                      {getTaskStats().completed} <span className="text-sm font-medium text-slate-400">/ {getTaskStats().total}</span>
+                    </p>
+                  </div>
                 </div>
-                <p className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white">
-                  {getTaskStats().completed} / {getTaskStats().total}
-                </p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                <div className="flex items-center gap-3">
-                  <BookOpen className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                  <span className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Publications</span>
+              <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md dark:border-[#2A2A2A] dark:bg-[#181818]">
+                <div className="absolute bottom-0 left-0 h-1 w-0 bg-amber-500 transition-all duration-300 group-hover:w-full"></div>
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-amber-600 transition-transform duration-300 group-hover:scale-110 dark:bg-amber-500/10 dark:text-amber-400">
+                    <BookOpen className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Publications</span>
+                    <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">{publications.length}</p>
+                  </div>
                 </div>
-                <p className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white">{publications.length}</p>
               </div>
             </div>
 
@@ -781,21 +850,29 @@ export default function StudentGroupDetails() {
                     {teamMembers.map((member) => (
                       <div
                         key={member.studentId}
-                        className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-[#2A2A2A] dark:bg-[#0F0F0F]"
+                        onClick={() => setSelectedStudentId(member.studentId)}
+                        className="group relative flex cursor-pointer items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md active:scale-[0.98] dark:border-[#2A2A2A] dark:bg-[#0F0F0F] dark:hover:bg-[#181818]"
                       >
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 text-sm font-bold text-indigo-700 dark:from-indigo-500/20 dark:to-violet-500/20 dark:text-indigo-300">
+                          {member.studentName.charAt(0).toUpperCase()}
+                        </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{member.studentName}</p>
                           {member.department && (
                             <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">{member.department}</p>
                           )}
                         </div>
-                        <button
-                          onClick={() => setSelectedStudentId(member.studentId)}
-                          className="ml-2 rounded-lg p-1.5 text-indigo-600 transition-colors hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
-                          title="View Profile"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
+                        
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100">
+                          <button
+                            onClick={() => setSelectedStudentId(member.studentId)}
+                            className="flex items-center gap-1.5 rounded-lg bg-indigo-50 px-2.5 py-1.5 text-xs font-semibold text-indigo-600 transition-colors hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
+                            title="View Profile"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            <span>View</span>
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -812,8 +889,12 @@ export default function StudentGroupDetails() {
                       .filter((m) => m.status !== "completed")
                       .slice(0, 3)
                       .map((milestone) => (
-                        <div key={milestone.id} className="flex items-start gap-3">
-                          <Circle className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400" />
+                        <div 
+                          key={milestone.id} 
+                          onClick={() => setViewingMilestone(milestone)}
+                          className="group flex cursor-pointer items-start gap-3 rounded-lg p-2 -mx-2 transition-all hover:-translate-y-0.5 hover:bg-slate-50 active:scale-[0.98] dark:hover:bg-[#222]"
+                        >
+                          <Circle className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400 transition-colors group-hover:text-indigo-500" />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold text-slate-900 dark:text-white">{milestone.title}</p>
                             <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
@@ -823,7 +904,12 @@ export default function StudentGroupDetails() {
                         </div>
                       ))}
                     {milestones.filter((m) => m.status !== "completed").length === 0 && (
-                      <p className="text-sm text-slate-500 dark:text-slate-400">No upcoming milestones</p>
+                      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-8 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
+                        <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 shadow-inner dark:bg-indigo-500/20 dark:text-indigo-400">
+                          <Circle className="h-5 w-5" />
+                        </div>
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white">No upcoming milestones</p>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -833,15 +919,22 @@ export default function StudentGroupDetails() {
                   <h2 className="mb-4 text-base font-bold text-slate-900 dark:text-white">Recent Documents</h2>
                   <div className="space-y-3">
                     {documents.slice(0, 3).map((doc) => (
-                      <div key={doc.id} className="flex items-start gap-3">
-                        <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400" />
+                      <div key={doc.id} className="group flex items-start gap-3 rounded-lg p-2 -mx-2 transition-all hover:bg-slate-50 dark:hover:bg-[#222]">
+                        <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400 transition-colors group-hover:text-indigo-500" />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{doc.title}</p>
                           <p className="mt-0.5 text-xs capitalize text-slate-500 dark:text-slate-400">{doc.type}</p>
                         </div>
                       </div>
                     ))}
-                    {documents.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">No documents yet</p>}
+                    {documents.length === 0 && (
+                      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-8 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
+                        <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 shadow-inner dark:bg-indigo-500/20 dark:text-indigo-400">
+                          <FileText className="h-5 w-5" />
+                        </div>
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white">No documents yet</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -854,11 +947,34 @@ export default function StudentGroupDetails() {
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Project Milestones</h2>
             </div>
+            
+            {/* Overall Progress Bar */}
+            <div className="mb-8 rounded-xl bg-slate-50 p-4 dark:bg-[#111]">
+              <div className="mb-2 flex items-center justify-between text-sm">
+                <span className="font-semibold text-slate-700 dark:text-slate-300">Overall Progress</span>
+                <span className="font-bold text-indigo-600 dark:text-indigo-400">{getProgressPercentage()}%</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                <div 
+                  className="h-full bg-indigo-500 transition-all duration-1000 ease-out"
+                  style={{ width: `${getProgressPercentage()}%` }}
+                ></div>
+              </div>
+              <div className="mt-3 flex gap-4 text-xs font-medium text-slate-500 dark:text-slate-400">
+                <div className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-emerald-500"></div>Completed</div>
+                <div className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-amber-500"></div>In Progress</div>
+                <div className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-rose-500"></div>Overdue</div>
+              </div>
+            </div>
 
             <div className="space-y-4">
               {milestones.length === 0 ? (
-                <div className="flex items-center justify-center rounded-xl border border-dashed border-slate-300 py-12 dark:border-slate-700">
-                  <p className="text-sm text-slate-500 dark:text-slate-400">No milestones have been created yet.</p>
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 py-16 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 shadow-inner dark:bg-indigo-500/20 dark:text-indigo-400">
+                    <GitBranch className="h-8 w-8" />
+                  </div>
+                  <p className="text-xl font-bold text-slate-900 dark:text-white">No Milestones Yet</p>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Your supervisor has not created any milestones for this project yet.</p>
                 </div>
               ) : (
                 milestones.map((milestone) => {
@@ -867,19 +983,30 @@ export default function StudentGroupDetails() {
                   const deadlineDate = new Date(milestone.deadline);
                   const isOverdue = deadlineDate < today && milestone.status !== "completed";
                   const milestoneTasks = tasks.filter((t) => t.milestoneId === milestone.id);
+                  const completedTasksCount = milestoneTasks.filter(t => t.status === "completed").length;
+                  const totalTasksCount = milestoneTasks.length;
+                  const taskProgress = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
+                  
+                  const borderColor = milestone.status === "completed" 
+                    ? "border-l-emerald-500" 
+                    : isOverdue 
+                    ? "border-l-rose-500" 
+                    : milestone.status === "in-progress"
+                    ? "border-l-amber-500"
+                    : "border-l-blue-500";
 
                   return (
                     <div
                       key={milestone.id}
-                      className={`rounded-xl border p-5 ${
+                      className={`relative overflow-hidden rounded-xl border-y border-r border-l-4 p-5 ${borderColor} ${
                         isOverdue 
-                          ? "border-rose-200 bg-rose-50/30 dark:border-rose-900/50 dark:bg-rose-950/10" 
-                          : "border-slate-200 bg-white dark:border-[#333] dark:bg-[#1A1A1A]"
+                          ? "border-y-rose-200 border-r-rose-200 bg-rose-50/30 dark:border-y-rose-900/50 dark:border-r-rose-900/50 dark:bg-rose-950/10" 
+                          : "border-y-slate-200 border-r-slate-200 bg-white dark:border-y-[#333] dark:border-r-[#333] dark:bg-[#1A1A1A]"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
-                          <div className="flex items-center gap-3">
+                          <div className="flex flex-wrap items-center gap-3">
                             <h3 className={`font-bold text-lg ${
                               milestone.status === "completed" 
                                 ? "line-through text-slate-400 dark:text-slate-500" 
@@ -904,7 +1031,7 @@ export default function StudentGroupDetails() {
                             {milestone.description}
                           </p>
                           
-                          <div className="mt-4 flex items-center gap-4 text-sm font-medium">
+                          <div className="mt-4 flex flex-wrap items-center gap-6 text-sm font-medium">
                             <div className={`flex items-center gap-1.5 ${
                               isOverdue 
                                 ? "text-rose-600 dark:text-rose-400 font-bold" 
@@ -915,9 +1042,14 @@ export default function StudentGroupDetails() {
                               {new Date(milestone.deadline).toLocaleDateString()}
                             </div>
                             
-                            <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-                              <CheckCircle2 className="h-4 w-4" />
-                              {milestoneTasks.filter(t => t.status === "completed").length} / {milestoneTasks.length} Tasks Completed
+                            <div className="flex items-center gap-3 flex-1 max-w-[200px]">
+                              <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                                <CheckCircle2 className="h-4 w-4" />
+                                {completedTasksCount} / {totalTasksCount} Tasks
+                              </div>
+                              <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700 flex-1">
+                                <div className="h-full rounded-full bg-indigo-500" style={{ width: `${taskProgress}%` }}></div>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -971,8 +1103,12 @@ export default function StudentGroupDetails() {
             </div>
 
             {milestones.length === 0 && tasks.length === 0 ? (
-              <div className="flex items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white p-12 dark:border-slate-700 dark:bg-[#181818]">
-                <p className="text-sm text-slate-500 dark:text-slate-400">No tasks have been created yet.</p>
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 py-16 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 shadow-inner dark:bg-indigo-500/20 dark:text-indigo-400">
+                  <CheckCircle2 className="h-8 w-8" />
+                </div>
+                <p className="text-xl font-bold text-slate-900 dark:text-white">No Tasks Yet</p>
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Tasks associated with milestones will appear in this kanban board.</p>
               </div>
             ) : (
               [...milestones, { id: "unassigned", title: "Unassigned Tasks", status: "none", description: "", deadline: "" }].map((milestone) => {
@@ -1027,9 +1163,14 @@ export default function StudentGroupDetails() {
                         return (
                           <div
                             key={status}
-                            className={`flex flex-col rounded-lg ${columnBg} p-3 border border-transparent hover:border-slate-200 dark:hover:border-slate-800 transition-colors`}
+                            className={`flex flex-col rounded-lg ${columnBg} p-3 border border-transparent hover:border-slate-200 dark:hover:border-slate-800 transition-all duration-200`}
                             onDragOver={handleDragOver}
-                            onDrop={(e) => handleDrop(e, status, milestone.id)}
+                            onDragEnter={(e) => e.currentTarget.classList.add("ring-2", "ring-indigo-400", "scale-[1.01]")}
+                            onDragLeave={(e) => e.currentTarget.classList.remove("ring-2", "ring-indigo-400", "scale-[1.01]")}
+                            onDrop={(e) => {
+                              e.currentTarget.classList.remove("ring-2", "ring-indigo-400", "scale-[1.01]");
+                              handleDrop(e, status, milestone.id);
+                            }}
                           >
                             <div className="mb-3 flex items-center justify-between px-1 pt-1">
                               <div className="flex items-center gap-2">
@@ -1073,7 +1214,7 @@ export default function StudentGroupDetails() {
                                         if (isAssigned) handleDragStart(e, task.id);
                                         else e.preventDefault();
                                       }}
-                                      className={`group ${isAssigned ? 'cursor-grab' : 'cursor-not-allowed opacity-75'} rounded-xl p-3.5 shadow-sm hover:shadow-md transition-all duration-200 border ${
+                                      className={`group ${isAssigned ? 'cursor-grab active:cursor-grabbing hover:-translate-y-1' : 'cursor-not-allowed opacity-75'} rounded-xl p-3.5 shadow-sm hover:shadow-md transition-all duration-200 border ${
                                         isOverdue
                                           ? "bg-rose-50/50 border-rose-200 hover:border-rose-300 dark:bg-rose-950/20 dark:border-rose-900/50 dark:hover:border-rose-800"
                                           : "bg-white hover:bg-slate-50 dark:bg-[#1C1C1E] dark:hover:bg-[#252528] border-slate-200 dark:border-slate-700/50 hover:border-slate-300 dark:hover:border-slate-600"
@@ -1162,24 +1303,24 @@ export default function StudentGroupDetails() {
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Documents & Resources</h2>
-              <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700">
+              <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-indigo-700 hover:scale-105 active:scale-95 shadow-sm hover:shadow-md">
                 <Upload className="h-4 w-4" /> Upload Document
               </button>
             </div>
             <div className="space-y-3">
               {documents.length === 0 ? (
-                <div className="py-12 text-center">
-                  <FileText className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
-                  <p className="mt-4 text-sm font-medium text-slate-900 dark:text-white">No documents yet</p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Upload papers, datasets, code, and other resources
-                  </p>
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 py-16 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 shadow-inner dark:bg-indigo-500/20 dark:text-indigo-400">
+                    <FileText className="h-8 w-8" />
+                  </div>
+                  <p className="text-xl font-bold text-slate-900 dark:text-white">No Documents Yet</p>
+                  <p className="mt-2 max-w-sm text-sm text-slate-500 dark:text-slate-400">Upload papers, datasets, code, and other resources relevant to your research.</p>
                 </div>
               ) : (
                 documents.map((doc) => (
                   <div
                     key={doc.id}
-                    className="flex items-center justify-between rounded-xl border border-slate-200 p-4 dark:border-[#2A2A2A]"
+                    className="group flex items-center justify-between rounded-xl border border-slate-200 p-4 hover:border-indigo-200 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 dark:border-[#2A2A2A] dark:hover:border-indigo-500/30 dark:hover:bg-[#1a1a1a]"
                   >
                     <div className="flex items-center gap-4">
                       <div
@@ -1226,33 +1367,33 @@ export default function StudentGroupDetails() {
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Meetings & Discussions</h2>
-              <div className="flex gap-2">
+              <div className="flex gap-1.5 rounded-xl bg-slate-100 p-1 dark:bg-[#222]">
                 <button
                   onClick={() => setMeetingSubTab("upcoming")}
-                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
                     meetingSubTab === "upcoming"
-                      ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400"
-                      : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
+                      ? "bg-white text-indigo-600 shadow-sm dark:bg-[#333] dark:text-indigo-400"
+                      : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                   }`}
                 >
                   Upcoming
                 </button>
                 <button
                   onClick={() => setMeetingSubTab("past")}
-                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
                     meetingSubTab === "past"
-                      ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400"
-                      : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
+                      ? "bg-white text-indigo-600 shadow-sm dark:bg-[#333] dark:text-indigo-400"
+                      : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                   }`}
                 >
                   Past
                 </button>
                 <button
                   onClick={() => setMeetingSubTab("all")}
-                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
                     meetingSubTab === "all"
-                      ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400"
-                      : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
+                      ? "bg-white text-indigo-600 shadow-sm dark:bg-[#333] dark:text-indigo-400"
+                      : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                   }`}
                 >
                   All
@@ -1275,12 +1416,12 @@ export default function StudentGroupDetails() {
 
                 if (filteredMeetings.length === 0) {
                   return (
-                    <div className="py-12 text-center">
-                      <Calendar className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
-                      <p className="mt-4 text-sm font-medium text-slate-900 dark:text-white">No meetings yet</p>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        Your supervisor will schedule meetings here.
-                      </p>
+                    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 py-16 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
+                      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 shadow-inner dark:bg-indigo-500/20 dark:text-indigo-400">
+                        <Calendar className="h-8 w-8" />
+                      </div>
+                      <p className="text-xl font-bold text-slate-900 dark:text-white">No Meetings Found</p>
+                      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Your supervisor has not scheduled any meetings for this tab yet.</p>
                     </div>
                   );
                 }
@@ -1312,7 +1453,11 @@ export default function StudentGroupDetails() {
                     <div
                       key={meeting.id}
                       onClick={() => setViewingMeeting(meeting)}
-                      className={`rounded-xl border border-slate-200 p-4 transition-all hover:border-indigo-500 hover:shadow-md cursor-pointer dark:border-[#2A2A2A] dark:hover:border-indigo-400 dark:hover:bg-[#1a1a1a] ${isPast ? "opacity-75 bg-slate-50 dark:bg-[#121212]" : ""}`}
+                      className={`relative overflow-hidden rounded-xl border-y border-r border-l-4 p-4 transition-all hover:shadow-md cursor-pointer ${
+                        isPast 
+                          ? "border-l-slate-400 border-y-slate-200 border-r-slate-200 bg-slate-50 dark:border-l-slate-600 dark:border-y-[#2A2A2A] dark:border-r-[#2A2A2A] dark:bg-[#121212] opacity-75 hover:border-l-slate-500" 
+                          : "border-l-indigo-500 border-y-slate-200 border-r-slate-200 bg-white hover:border-l-indigo-600 dark:border-l-indigo-500 dark:border-y-[#2A2A2A] dark:border-r-[#2A2A2A] dark:bg-[#1A1A1A] hover:border-y-indigo-500/30 hover:border-r-indigo-500/30"
+                      }`}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
@@ -1428,8 +1573,11 @@ export default function StudentGroupDetails() {
                             </div>
                           </>
                         ) : meetingSubTab === "upcoming" ? (
-                          <div className="py-8 text-center text-sm font-medium text-slate-500 dark:text-slate-400">
-                            No upcoming meetings
+                          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-10 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
+                            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 shadow-inner dark:bg-indigo-500/20 dark:text-indigo-400">
+                              <Calendar className="h-6 w-6" />
+                            </div>
+                            <p className="text-sm font-semibold text-slate-900 dark:text-white">No upcoming meetings</p>
                           </div>
                         ) : null}
                       </div>
@@ -1451,8 +1599,11 @@ export default function StudentGroupDetails() {
                             </div>
                           </>
                         ) : meetingSubTab === "past" ? (
-                          <div className="py-8 text-center text-sm font-medium text-slate-500 dark:text-slate-400">
-                            No past meetings
+                          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-10 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
+                            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 shadow-inner dark:bg-indigo-500/20 dark:text-indigo-400">
+                              <Clock className="h-6 w-6" />
+                            </div>
+                            <p className="text-sm font-semibold text-slate-900 dark:text-white">No past meetings</p>
                           </div>
                         ) : null}
                       </div>
@@ -1473,87 +1624,112 @@ export default function StudentGroupDetails() {
                   setEditingPublication(null);
                   setIsPublicationModalOpen(true);
                 }}
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-indigo-700 hover:scale-105 active:scale-95 shadow-sm hover:shadow-md"
               >
                 <Plus className="h-4 w-4" /> Add Publication
               </button>
             </div>
             <div className="space-y-4">
               {publications.length === 0 ? (
-                <div className="py-12 text-center">
-                  <BookOpen className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
-                  <p className="mt-4 text-sm font-medium text-slate-900 dark:text-white">No publications yet</p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Track conference and journal submissions here
-                  </p>
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 py-16 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 shadow-inner dark:bg-indigo-500/20 dark:text-indigo-400">
+                    <BookOpen className="h-8 w-8" />
+                  </div>
+                  <p className="text-xl font-bold text-slate-900 dark:text-white">No Publications Yet</p>
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Track conference and journal submissions here.</p>
                 </div>
               ) : (
-                publications.map((pub) => (
-                  <div
-                    key={pub.id}
-                    className="rounded-xl border border-slate-200 p-4 dark:border-[#2A2A2A]"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-slate-900 dark:text-white">{pub.title}</h3>
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-xs font-bold capitalize ${
-                              pub.status === "published"
-                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
-                                : pub.status === "accepted"
-                                ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
-                                : pub.status === "under-review"
-                                ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
-                                : pub.status === "rejected"
-                                ? "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300"
-                                : "bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-300"
-                            }`}
-                          >
-                            {pub.status.replace("-", " ")}
-                          </span>
+                publications.map((pub) => {
+                  const borderColor = pub.status === "published"
+                    ? "border-l-emerald-500"
+                    : pub.status === "accepted"
+                    ? "border-l-blue-500"
+                    : pub.status === "under-review"
+                    ? "border-l-amber-500"
+                    : pub.status === "rejected"
+                    ? "border-l-rose-500"
+                    : "border-l-slate-500";
+                    
+                  return (
+                    <div
+                      key={pub.id}
+                      className={`group relative overflow-hidden rounded-xl border-y border-r border-l-4 p-5 ${borderColor} bg-white dark:border-y-[#2A2A2A] dark:border-r-[#2A2A2A] dark:bg-[#1A1A1A] shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-bold text-lg text-slate-900 dark:text-white">{pub.title}</h3>
+                            <span
+                              className={`rounded-full px-2.5 py-0.5 text-xs font-bold capitalize ${
+                                pub.status === "published"
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
+                                  : pub.status === "accepted"
+                                  ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
+                                  : pub.status === "under-review"
+                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
+                                  : pub.status === "rejected"
+                                  ? "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300"
+                                  : "bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-300"
+                              }`}
+                            >
+                              {pub.status.replace("-", " ")}
+                            </span>
+                          </div>
+                          
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <span className="inline-flex items-center rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-[#2A2A2A] dark:text-slate-300">
+                              <MapPin className="mr-1.5 h-3.5 w-3.5 text-slate-400" />
+                              {pub.venue}
+                            </span>
+                            <span className="inline-flex items-center rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-[#2A2A2A] dark:text-slate-300">
+                              <FileText className="mr-1.5 h-3.5 w-3.5 text-slate-400" />
+                              {pub.type}
+                            </span>
+                            {pub.doi && (
+                              <span className="inline-flex items-center rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-[#2A2A2A] dark:text-slate-300">
+                                <LinkIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400" />
+                                {pub.doi}
+                              </span>
+                            )}
+                          </div>
+                          
+                          {pub.paperUrl && (
+                            <a 
+                              href={pub.paperUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-600 transition-colors hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
+                            >
+                              <ExternalLink className="h-4 w-4" /> View Paper
+                            </a>
+                          )}
                         </div>
-                        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                          {pub.venue} • {pub.type}
-                        </p>
-                        {pub.doi && (
-                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">DOI: {pub.doi}</p>
-                        )}
-                        {pub.paperUrl && (
-                          <a 
-                            href={pub.paperUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => {
+                              setEditingPublication(pub);
+                              setIsPublicationModalOpen(true);
+                            }}
+                            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400"
                           >
-                            <LinkIcon className="h-4 w-4" /> View Paper
-                          </a>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => {
-                            setEditingPublication(pub);
-                            setIsPublicationModalOpen(true);
-                          }}
-                          className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                        <button 
-                          onClick={() => setDeletePublicationId(pub.id)}
-                          className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                            <Edit2 className="h-5 w-5" />
+                          </button>
+                          <button 
+                            onClick={() => setDeletePublicationId(pub.id)}
+                            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
         )}
+        </div>
       </div>
 
       <MeetingViewModal
