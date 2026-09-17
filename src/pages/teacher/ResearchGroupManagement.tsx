@@ -1817,31 +1817,28 @@ export default function ResearchGroupManagement() {
 
           return (
             <div className="space-y-5">
-              {/* Hero header */}
-              <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-600 via-indigo-600 to-violet-600 p-6 text-white shadow-sm dark:border-indigo-500/20">
-                <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10" />
-                <div className="pointer-events-none absolute -bottom-20 right-24 h-44 w-44 rounded-full bg-white/10" />
-                <div className="relative flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur">
-                        <ListTodo className="h-3.5 w-3.5" /> Task Board
-                      </span>
-                      <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur">
-                        {stats.completed}/{stats.total} done
-                      </span>
+              {/* Minimal header — matches Milestones/Meetings/Documents style, no gradients */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-500/10">
+                      <ListTodo className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                     </div>
-                    <h2 className="mt-3 text-2xl font-extrabold tracking-tight">Tasks & Deliverables</h2>
-                    <p className="mt-1 max-w-xl text-sm text-indigo-100">
-                      Drag cards across the board — every move is stamped with who moved it, so progress is always visible.
-                    </p>
+                    <div className="min-w-0">
+                      <h2 className="text-base font-bold text-slate-900 dark:text-white">Tasks</h2>
+                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                        {stats.completed} of {stats.total} done
+                        {stats.inProgress > 0 && <span> · {stats.inProgress} in progress</span>}
+                        {stats.todo > 0 && <span> · {stats.todo} to do</span>}
+                      </p>
+                    </div>
                   </div>
                   <button
                     onClick={() => {
                       setEditingTask(null);
                       setIsTaskModalOpen(true);
                     }}
-                    className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 shadow-sm transition-all hover:bg-indigo-50 hover:shadow"
+                    className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
                   >
                     <Plus className="h-4 w-4" /> Add Task
                   </button>
@@ -1898,7 +1895,7 @@ export default function ResearchGroupManagement() {
               {/* Board */}
               {tasks.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center dark:border-[#2A2A2A] dark:bg-[#181818]">
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-md">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-md">
                     <ListTodo className="h-8 w-8" />
                   </div>
                   <p className="mt-4 text-base font-bold text-slate-900 dark:text-white">No tasks yet — fill the board</p>
@@ -2391,32 +2388,31 @@ export default function ResearchGroupManagement() {
 
           return (
             <div className="space-y-5">
-              {/* Hero header */}
-              <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-600 via-indigo-600 to-violet-600 p-6 text-white shadow-sm dark:border-indigo-500/20">
-                <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10" />
-                <div className="pointer-events-none absolute -bottom-20 right-24 h-44 w-44 rounded-full bg-white/10" />
-                <div className="relative flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur">
-                        <BookOpen className="h-3.5 w-3.5" /> Research Output
-                      </span>
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${isGroupPublished ? "bg-emerald-400/20 text-emerald-100" : "bg-amber-400/20 text-amber-100"}`}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${isGroupPublished ? "bg-emerald-300" : "bg-amber-300"}`} />
-                        {isGroupPublished ? `Published · ${publishedCount}` : "Ongoing — no published paper yet"}
-                      </span>
+              {/* Minimal header — matches Milestones/Meetings/Documents style, no gradients */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-500/10">
+                      <BookOpen className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                     </div>
-                    <h2 className="mt-3 text-2xl font-extrabold tracking-tight">Publications & Submissions</h2>
-                    <p className="mt-1 max-w-xl text-sm text-indigo-100">
-                      Journals, conferences, preprints — anything this group produces. Add as many as you need, share links, and the group badge flips to Published automatically.
-                    </p>
+                    <div className="min-w-0">
+                      <h2 className="text-base font-bold text-slate-900 dark:text-white">Publications</h2>
+                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                        {publications.length} total
+                        {isGroupPublished ? (
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400"> · Published · {publishedCount}</span>
+                        ) : (
+                          <span> · Ongoing — no published paper yet</span>
+                        )}
+                      </p>
+                    </div>
                   </div>
                   <button
                     onClick={() => {
                       setEditingPublication(null);
                       setIsPublicationModalOpen(true);
                     }}
-                    className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 shadow-sm transition-all hover:bg-indigo-50 hover:shadow"
+                    className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
                   >
                     <Plus className="h-4 w-4" /> Add Publication
                   </button>
@@ -2508,7 +2504,7 @@ export default function ResearchGroupManagement() {
               {/* List */}
               {publications.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center dark:border-[#2A2A2A] dark:bg-[#181818]">
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-md">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-md">
                     <BookOpen className="h-8 w-8" />
                   </div>
                   <p className="mt-4 text-base font-bold text-slate-900 dark:text-white">No publications yet — start the group&apos;s story</p>
@@ -2555,7 +2551,7 @@ export default function ResearchGroupManagement() {
                             : "border-slate-200 dark:border-[#2A2A2A]"
                         }`}
                       >
-                        {pub.status === "published" && <div className="h-1 w-full bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-400" />}
+                        {pub.status === "published" && <div className="h-1 w-full bg-emerald-500" />}
                         <div className="p-5 sm:p-6">
                           {/* Top row */}
                           <div className="flex items-start justify-between gap-4">
