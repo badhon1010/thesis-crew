@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { 
   collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, 
-  doc, updateDoc, arrayUnion, deleteDoc 
+  doc, updateDoc, arrayUnion, deleteDoc, arrayRemove 
 } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
 import { Send, User as UserIcon, Edit2, Trash2, X, Check, MoreVertical, Trash, History, Plus } from "lucide-react";
@@ -22,6 +22,7 @@ interface Conversation {
   name: string;
   createdAt: any;
   hiddenBy: string[];
+  admins?: string[];
 }
 
 export interface ChatMember {
@@ -218,7 +219,8 @@ export function GroupChat({ groupId, currentUserId, currentUserName, currentUser
       const newRef = await addDoc(collection(db, "researchGroups", groupId, "conversations"), {
         name: trimmedName,
         createdAt: serverTimestamp(),
-        hiddenBy: []
+        hiddenBy: [],
+        admins: [currentUserId]
       });
       setActiveConversationId(newRef.id);
       setIsCreateModalOpen(false);
@@ -250,6 +252,17 @@ export function GroupChat({ groupId, currentUserId, currentUserName, currentUser
       setActiveConversationId(null);
     } catch (error) {
       console.error("Error deleting conversation:", error);
+    }
+  };
+
+  const handleToggleAdmin = async (memberId: string, isAdmin: boolean) => {
+    if (!activeConversationId) return;
+    try {
+      await updateDoc(doc(db, "researchGroups", groupId, "conversations", activeConversationId), {
+        admins: isAdmin ? arrayRemove(memberId) : arrayUnion(memberId)
+      });
+    } catch (error) {
+      console.error("Error updating admin status:", error);
     }
   };
 
@@ -412,21 +425,67 @@ export function GroupChat({ groupId, currentUserId, currentUserName, currentUser
               {members.length === 0 ? (
                 <p className="text-center text-sm text-slate-500">No members found.</p>
               ) : (
-                members.map((member) => (
-                  <div key={member.id} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-[#333] dark:bg-[#222]">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-full font-bold ${
-                      member.role === "teacher" 
-                        ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400" 
-                        : "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300"
-                    }`}>
-                      {member.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 overflow-hidden">
-                      <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{member.name}</p>
-                      <p className="text-xs text-slate-500 capitalize">{member.role}</p>
-                    </div>
-                  </div>
-                ))
+                (() => {
+                  const activeConversation = conversations.find(c => c.id === activeConversationId);
+                  const isCurrentUserAdmin = activeConversation?.admins?.includes(currentUserId) || currentUserRole === "teacher";
+                  
+                  return members.map((member) => {
+                    const avatarColors = [
+                      "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+                      "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+                      "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+                      "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
+                      "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
+                      "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-400",
+                    ];
+                    let hash = 0;
+                    for (let i = 0; i < member.id.length; i++) {
+                      hash = member.id.charCodeAt(i) + ((hash << 5) - hash);
+                    }
+                    const studentColor = avatarColors[Math.abs(hash) % avatarColors.length];
+                    const isMemberAdmin = activeConversation?.admins?.includes(member.id) || member.role === "teacher";
+                    
+                    return (
+                      <div key={member.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-[#333] dark:bg-[#222]">
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full font-bold ${
+                            member.role === "teacher" 
+                              ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 ring-2 ring-indigo-500/20" 
+                              : studentColor
+                          }`}>
+                            {member.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1 overflow-hidden">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{member.name}</p>
+                              {isMemberAdmin && (
+                                <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
+                                  Admin
+                                </span>
+                              )}
+                            </div>
+                            <p className={`text-xs ${member.role === "teacher" ? "text-indigo-600 font-medium dark:text-indigo-400" : "text-slate-500"}`}>
+                              {member.role === "teacher" ? "Supervisor" : "Team Member"}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {isCurrentUserAdmin && member.id !== currentUserId && member.role !== "teacher" && (
+                          <button
+                            onClick={() => handleToggleAdmin(member.id, !!activeConversation?.admins?.includes(member.id))}
+                            className={`flex-shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                              activeConversation?.admins?.includes(member.id)
+                                ? "bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+                                : "bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
+                            }`}
+                          >
+                            {activeConversation?.admins?.includes(member.id) ? "Remove Admin" : "Make Admin"}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  });
+                })()
               )}
             </div>
           </div>
