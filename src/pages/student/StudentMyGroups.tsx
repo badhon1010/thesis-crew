@@ -82,7 +82,7 @@ export default function StudentMyGroups() {
         />
 
         {/* Hero Header */}
-        <div className="relative mb-8 rounded-2xl bg-indigo-50/50 p-6 shadow-sm border border-indigo-100 dark:bg-indigo-500/5 dark:border-indigo-500/10">
+        <div className="relative mb-8 rounded-2xl bg-indigo-50/50 p-6 shadow-sm border border-indigo-100 dark:bg-[#181818] dark:border-[#2A2A2A] dark:shadow-sm">
           <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-center">
             <div>
               <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-indigo-100 px-2.5 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">

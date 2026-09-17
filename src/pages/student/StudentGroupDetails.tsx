@@ -678,7 +678,7 @@ export default function StudentGroupDetails() {
         </div>
 
         {/* Title Card */}
-        <div className="relative mb-6 rounded-2xl bg-indigo-50/50 p-6 shadow-sm border border-indigo-100 dark:bg-indigo-500/5 dark:border-indigo-500/10">
+        <div className="relative mb-6 rounded-2xl bg-indigo-50/50 p-6 shadow-sm border border-indigo-100 dark:bg-[#181818] dark:border-[#2A2A2A] dark:shadow-sm">
           <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
             <div className="flex-1">
               <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -730,7 +730,7 @@ export default function StudentGroupDetails() {
         </div>
 
         {/* Tabs */}
-        <div className="sticky top-0 z-40 -mx-2 mb-8 bg-slate-50/80 px-2 py-3 backdrop-blur-xl transition-all sm:-mx-4 sm:px-4 dark:bg-[#0f0f0f]/80 border-b border-slate-200/50 dark:border-slate-800/50">
+        <div className="sticky top-20 z-20 -mx-6 mb-8 bg-[#fcfcfd]/90 px-6 py-3 backdrop-blur-xl transition-all dark:bg-[#000000]/90 border-b border-slate-200/50 dark:border-slate-800/50 lg:-mx-10 lg:px-10">
           <div className="overflow-x-auto pb-1">
             <div className="flex w-full min-w-max items-center gap-1 rounded-full bg-slate-100/80 p-1.5 dark:bg-[#181818]">
               {tabs.map((tab) => {
@@ -831,7 +831,7 @@ export default function StudentGroupDetails() {
               {/* Left: Team Members & Description */}
               <div className="space-y-6 lg:col-span-2">
                 {/* Description */}
-                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 dark:border-[#2A2A2A] dark:bg-[#181818]">
                   <h2 className="mb-4 text-base font-bold text-slate-900 dark:text-white">Research Description</h2>
                   <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600 dark:text-slate-300">
                     {topic.description}
@@ -877,13 +877,62 @@ export default function StudentGroupDetails() {
                     ))}
                   </div>
                 </div>
+
+                {/* Recent Publications */}
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+                  <h2 
+                    onClick={() => handleTabChange("publications")}
+                    className="mb-4 text-base font-bold text-slate-900 cursor-pointer transition-colors hover:text-orange-600 dark:text-white dark:hover:text-orange-400 inline-block"
+                  >
+                    Recent Publications
+                  </h2>
+                  <div className="space-y-3">
+                    {publications.slice(0, 3).map((pub) => (
+                      <div 
+                        key={pub.id} 
+                        onClick={() => handleTabChange("publications")}
+                        className="group flex cursor-pointer items-start gap-3 rounded-lg p-2 -mx-2 transition-all hover:-translate-y-0.5 hover:bg-slate-50 active:scale-[0.98] dark:hover:bg-[#222]"
+                      >
+                        <BookOpen className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400 transition-colors group-hover:text-indigo-500" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">{pub.title}</p>
+                          <div className="mt-0.5 flex items-center gap-2 text-xs">
+                            <span className={`capitalize font-medium ${
+                              pub.status === "published" ? "text-emerald-600 dark:text-emerald-400" :
+                              pub.status === "accepted" ? "text-blue-600 dark:text-blue-400" :
+                              pub.status === "under-review" ? "text-amber-600 dark:text-amber-400" :
+                              pub.status === "rejected" ? "text-rose-600 dark:text-rose-400" :
+                              "text-slate-500 dark:text-slate-400"
+                            }`}>{pub.status.replace("-", " ")}</span>
+                            <span className="text-slate-400">&bull;</span>
+                            <span className="truncate text-slate-500 dark:text-slate-400">{pub.venue}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {publications.length === 0 && (
+                      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-8 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
+                        <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 shadow-inner dark:bg-indigo-500/20 dark:text-indigo-400">
+                          <BookOpen className="h-5 w-5" />
+                        </div>
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white">No publications yet</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
               </div>
 
               {/* Right: Recent Activity */}
               <div className="space-y-6">
                 {/* Upcoming Milestones */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                  <h2 className="mb-4 text-base font-bold text-slate-900 dark:text-white">Upcoming Milestones</h2>
+                  <h2 
+                    onClick={() => handleTabChange("milestones")}
+                    className="mb-4 text-base font-bold text-slate-900 cursor-pointer transition-colors hover:text-emerald-600 dark:text-white dark:hover:text-emerald-400 inline-block"
+                  >
+                    Upcoming Milestones
+                  </h2>
                   <div className="space-y-3">
                     {milestones
                       .filter((m) => m.status !== "completed")
@@ -916,16 +965,27 @@ export default function StudentGroupDetails() {
 
                 {/* Recent Documents */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                  <h2 className="mb-4 text-base font-bold text-slate-900 dark:text-white">Recent Documents</h2>
+                  <h2 
+                    onClick={() => handleTabChange("documents")}
+                    className="mb-4 text-base font-bold text-slate-900 cursor-pointer transition-colors hover:text-blue-600 dark:text-white dark:hover:text-blue-400 inline-block"
+                  >
+                    Recent Documents
+                  </h2>
                   <div className="space-y-3">
                     {documents.slice(0, 3).map((doc) => (
-                      <div key={doc.id} className="group flex items-start gap-3 rounded-lg p-2 -mx-2 transition-all hover:bg-slate-50 dark:hover:bg-[#222]">
+                      <a 
+                        key={doc.id} 
+                        href={doc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group flex cursor-pointer items-start gap-3 rounded-lg p-2 -mx-2 transition-all hover:-translate-y-0.5 hover:bg-slate-50 active:scale-[0.98] dark:hover:bg-[#222]"
+                      >
                         <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400 transition-colors group-hover:text-indigo-500" />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{doc.title}</p>
+                          <p className="truncate text-sm font-semibold text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">{doc.title}</p>
                           <p className="mt-0.5 text-xs capitalize text-slate-500 dark:text-slate-400">{doc.type}</p>
                         </div>
-                      </div>
+                      </a>
                     ))}
                     {documents.length === 0 && (
                       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-8 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
@@ -998,7 +1058,8 @@ export default function StudentGroupDetails() {
                   return (
                     <div
                       key={milestone.id}
-                      className={`relative overflow-hidden rounded-xl border-y border-r border-l-4 p-5 ${borderColor} ${
+                      onClick={() => setViewingMilestone(milestone)}
+                      className={`group relative cursor-pointer overflow-hidden rounded-xl border-y border-r border-l-4 p-5 transition-all hover:-translate-y-1 hover:shadow-md active:scale-[0.99] ${borderColor} ${
                         isOverdue 
                           ? "border-y-rose-200 border-r-rose-200 bg-rose-50/30 dark:border-y-rose-900/50 dark:border-r-rose-900/50 dark:bg-rose-950/10" 
                           : "border-y-slate-200 border-r-slate-200 bg-white dark:border-y-[#333] dark:border-r-[#333] dark:bg-[#1A1A1A]"
@@ -1068,7 +1129,7 @@ export default function StudentGroupDetails() {
                           <h4 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Associated Tasks</h4>
                           <div className="grid gap-2">
                             {milestoneTasks.map(task => (
-                              <div key={task.id} className="flex items-start gap-3 rounded-lg bg-slate-50 p-3 dark:bg-[#111]">
+                              <div key={task.id} className="flex cursor-pointer items-start gap-3 rounded-lg bg-slate-50 p-3 transition-all hover:-translate-y-0.5 hover:shadow-sm active:scale-[0.99] dark:bg-[#111] dark:hover:bg-[#181818]">
                                 <div className="mt-0.5">
                                   {task.status === "completed" ? (
                                     <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -1320,9 +1381,12 @@ export default function StudentGroupDetails() {
                 documents.map((doc) => (
                   <div
                     key={doc.id}
-                    className="group flex items-center justify-between rounded-xl border border-slate-200 p-4 hover:border-indigo-200 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 dark:border-[#2A2A2A] dark:hover:border-indigo-500/30 dark:hover:bg-[#1a1a1a]"
+                    className="group flex items-center justify-between rounded-xl border border-slate-200 p-4 hover:border-indigo-200 hover:shadow-md hover:-translate-y-1 transition-all duration-200 dark:border-[#2A2A2A] dark:hover:border-indigo-500/30 dark:hover:bg-[#1a1a1a]"
                   >
-                    <div className="flex items-center gap-4">
+                    <div 
+                      onClick={() => window.open(doc.url, "_blank")}
+                      className="flex flex-1 cursor-pointer items-center gap-4"
+                    >
                       <div
                         className={`flex h-10 w-10 items-center justify-center rounded-lg ${
                           doc.type === "paper"
@@ -1453,10 +1517,10 @@ export default function StudentGroupDetails() {
                     <div
                       key={meeting.id}
                       onClick={() => setViewingMeeting(meeting)}
-                      className={`relative overflow-hidden rounded-xl border-y border-r border-l-4 p-4 transition-all hover:shadow-md cursor-pointer ${
+                      className={`relative cursor-pointer overflow-hidden rounded-xl border-y border-r border-l-4 p-4 transition-all hover:-translate-y-1 hover:shadow-md active:scale-[0.99] ${
                         isPast 
-                          ? "border-l-slate-400 border-y-slate-200 border-r-slate-200 bg-slate-50 dark:border-l-slate-600 dark:border-y-[#2A2A2A] dark:border-r-[#2A2A2A] dark:bg-[#121212] opacity-75 hover:border-l-slate-500" 
-                          : "border-l-indigo-500 border-y-slate-200 border-r-slate-200 bg-white hover:border-l-indigo-600 dark:border-l-indigo-500 dark:border-y-[#2A2A2A] dark:border-r-[#2A2A2A] dark:bg-[#1A1A1A] hover:border-y-indigo-500/30 hover:border-r-indigo-500/30"
+                          ? "border-l-slate-400 border-y-slate-200 border-r-slate-200 bg-slate-50 opacity-75 hover:border-l-slate-500 dark:border-l-slate-600 dark:border-y-[#2A2A2A] dark:border-r-[#2A2A2A] dark:bg-[#121212]" 
+                          : "border-l-indigo-500 border-y-slate-200 border-r-slate-200 bg-white hover:border-l-indigo-600 hover:border-y-indigo-500/30 hover:border-r-indigo-500/30 dark:border-l-indigo-500 dark:border-y-[#2A2A2A] dark:border-r-[#2A2A2A] dark:bg-[#1A1A1A]"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-4">
@@ -1653,7 +1717,7 @@ export default function StudentGroupDetails() {
                   return (
                     <div
                       key={pub.id}
-                      className={`group relative overflow-hidden rounded-xl border-y border-r border-l-4 p-5 ${borderColor} bg-white dark:border-y-[#2A2A2A] dark:border-r-[#2A2A2A] dark:bg-[#1A1A1A] shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300`}
+                      className={`group relative overflow-hidden rounded-xl border-y border-r border-l-4 p-5 ${borderColor} bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md dark:border-y-[#2A2A2A] dark:border-r-[#2A2A2A] dark:bg-[#1A1A1A]`}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
