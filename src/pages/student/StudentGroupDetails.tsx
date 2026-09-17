@@ -22,6 +22,9 @@ import {
   Minus,
   MessageSquare,
   MapPin,
+  Copy,
+  ExternalLink,
+  Video,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 
@@ -120,13 +123,16 @@ interface Meeting {
   id: string;
   title: string;
   date: string;
+  time?: string;
   duration: string;
   type?: "online" | "offline";
   platform?: "google_meet" | "zoom" | "microsoft_teams" | "other";
   location?: string;
   meetingLink?: string;
   notes?: string;
+  agenda?: string;
   attendees: string[];
+  createdBy?: string;
   createdAt?: unknown;
 }
 
@@ -134,8 +140,8 @@ interface Publication {
   id: string;
   title: string;
   venue: string;
-  type: "conference" | "journal" | "workshop" | "preprint";
-  status: "draft" | "submitted" | "under-review" | "accepted" | "published" | "rejected";
+  type: string;
+  status: string;
   submissionDate?: string;
   acceptanceDate?: string;
   publicationDate?: string;
@@ -145,6 +151,23 @@ interface Publication {
 }
 
 type TabType = "overview" | "milestones" | "tasks" | "chat" | "documents" | "meetings" | "publications";
+type MeetingSubTab = "upcoming" | "past" | "all";
+
+export const getMeetingTime = (meeting: Meeting): number => {
+  let meetingDateTime = new Date(meeting.date).getTime();
+  if (meeting.time) {
+    const timeMatch = meeting.time.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (timeMatch) {
+      let hours = parseInt(timeMatch[1], 10);
+      const minutes = parseInt(timeMatch[2], 10);
+      const period = timeMatch[3].toUpperCase();
+      if (period === 'PM' && hours < 12) hours += 12;
+      if (period === 'AM' && hours === 12) hours = 0;
+      meetingDateTime = new Date(`${meeting.date}T${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`).getTime();
+    }
+  }
+  return meetingDateTime;
+};
 
 export default function StudentGroupDetails() {
   const { id } = useParams<{ id: string }>();
@@ -157,6 +180,7 @@ export default function StudentGroupDetails() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [meetingSubTab, setMeetingSubTab] = useState<MeetingSubTab>("upcoming");
   const [publications, setPublications] = useState<Publication[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -180,6 +204,7 @@ export default function StudentGroupDetails() {
     type: "success",
     message: "",
   });
+  const [copiedMeetingId, setCopiedMeetingId] = useState<string | null>(null);
 
   const showToast = (type: "success" | "error", message: string) => {
     setToast({ show: true, type, message });
@@ -497,14 +522,25 @@ export default function StudentGroupDetails() {
 
   const handleDeletePublication = async () => {
     if (!id || !deletePublicationId) return;
+
     try {
       await deleteDoc(doc(db, "researchGroups", id, "publications", deletePublicationId));
-      showToast("success", "Publication deleted successfully");
-      setDeletePublicationId(null);
+      showToast("success", "Publication removed successfully");
     } catch (error) {
       console.error("Error deleting publication:", error);
-      showToast("error", "Failed to delete publication");
+      showToast("error", "Failed to remove publication");
+    } finally {
+      setDeletePublicationId(null);
     }
+  };
+
+  const handleCopyMeetingLink = (meeting: Meeting) => {
+    if (!meeting.meetingLink) return;
+    navigator.clipboard.writeText(meeting.meetingLink).then(() => {
+      setCopiedMeetingId(meeting.id);
+      showToast("success", "Meeting link copied to clipboard!");
+      setTimeout(() => setCopiedMeetingId(null), 2000);
+    });
   };
 
   if (loading) {
@@ -1190,59 +1226,240 @@ export default function StudentGroupDetails() {
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Meetings & Discussions</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setMeetingSubTab("upcoming")}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                    meetingSubTab === "upcoming"
+                      ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400"
+                      : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  Upcoming
+                </button>
+                <button
+                  onClick={() => setMeetingSubTab("past")}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                    meetingSubTab === "past"
+                      ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400"
+                      : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  Past
+                </button>
+                <button
+                  onClick={() => setMeetingSubTab("all")}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                    meetingSubTab === "all"
+                      ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400"
+                      : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  All
+                </button>
+              </div>
             </div>
             <div className="space-y-4">
-              {meetings.length === 0 ? (
-                <div className="py-12 text-center">
-                  <Calendar className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
-                  <p className="mt-4 text-sm font-medium text-slate-900 dark:text-white">No meetings yet</p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Your supervisor will schedule meetings here.
-                  </p>
-                </div>
-              ) : (
-                meetings.map((meeting) => (
-                  <div
-                    key={meeting.id}
-                    onClick={() => setViewingMeeting(meeting)}
-                    className="rounded-xl border border-slate-200 p-4 transition-all hover:border-indigo-500 hover:shadow-md cursor-pointer dark:border-[#2A2A2A] dark:hover:border-indigo-400 dark:hover:bg-[#1a1a1a]"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-slate-900 dark:text-white">{meeting.title}</h3>
-                        <div className="mt-2 flex items-center gap-4 text-sm text-slate-600 dark:text-slate-300">
-                          <span className="flex items-center gap-1.5">
-                            <Calendar className="h-4 w-4" />
-                            {new Date(meeting.date).toLocaleDateString()}
-                          </span>
-                          <span className="flex items-center gap-1.5">
-                            <Clock className="h-4 w-4" />
-                            {meeting.duration}
-                          </span>
-                        </div>
-                        {meeting.notes && (
-                          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{meeting.notes}</p>
-                        )}
-                        {meeting.type === "offline" && meeting.location ? (
-                          <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
-                            <MapPin className="h-4 w-4" /> {meeting.location}
+              {(() => {
+                const filteredMeetings = meetings.filter((meeting) => {
+                  // Only show meetings created by the supervisor (or legacy without createdBy)
+                  if (meeting.createdBy && topic?.supervisorId && meeting.createdBy !== topic.supervisorId) return false;
+
+                  if (meetingSubTab === "all") return true;
+                  
+                  const meetingDateTime = getMeetingTime(meeting);
+                  const now = new Date().getTime();
+                  if (meetingSubTab === "upcoming") return meetingDateTime >= now;
+                  return meetingDateTime < now;
+                });
+
+                if (filteredMeetings.length === 0) {
+                  return (
+                    <div className="py-12 text-center">
+                      <Calendar className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
+                      <p className="mt-4 text-sm font-medium text-slate-900 dark:text-white">No meetings yet</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Your supervisor will schedule meetings here.
+                      </p>
+                    </div>
+                  );
+                }
+
+                const now = new Date().getTime();
+                const upcomingMeetings = filteredMeetings
+                  .filter((m) => getMeetingTime(m) >= now)
+                  .sort((a, b) => getMeetingTime(a) - getMeetingTime(b));
+                const pastMeetings = filteredMeetings
+                  .filter((m) => getMeetingTime(m) < now)
+                  .sort((a, b) => getMeetingTime(b) - getMeetingTime(a));
+
+                const platformConfig: Record<string, { label: string; color: string; bg: string; darkBg: string; border: string }> = {
+                  zoom: { label: "Zoom", color: "text-blue-700 dark:text-blue-300", bg: "bg-blue-50", darkBg: "dark:bg-blue-500/15", border: "border-blue-200 dark:border-blue-500/30" },
+                  "google-meet": { label: "Google Meet", color: "text-emerald-700 dark:text-emerald-300", bg: "bg-emerald-50", darkBg: "dark:bg-emerald-500/15", border: "border-emerald-200 dark:border-emerald-500/30" },
+                  "google_meet": { label: "Google Meet", color: "text-emerald-700 dark:text-emerald-300", bg: "bg-emerald-50", darkBg: "dark:bg-emerald-500/15", border: "border-emerald-200 dark:border-emerald-500/30" },
+                  "google-classroom": { label: "Google Classroom", color: "text-teal-700 dark:text-teal-300", bg: "bg-teal-50", darkBg: "dark:bg-teal-500/15", border: "border-teal-200 dark:border-teal-500/30" },
+                  teams: { label: "MS Teams", color: "text-violet-700 dark:text-violet-300", bg: "bg-violet-50", darkBg: "dark:bg-violet-500/15", border: "border-violet-200 dark:border-violet-500/30" },
+                  microsoft_teams: { label: "MS Teams", color: "text-violet-700 dark:text-violet-300", bg: "bg-violet-50", darkBg: "dark:bg-violet-500/15", border: "border-violet-200 dark:border-violet-500/30" },
+                  custom: { label: "Online Meeting", color: "text-indigo-700 dark:text-indigo-300", bg: "bg-indigo-50", darkBg: "dark:bg-indigo-500/15", border: "border-indigo-200 dark:border-indigo-500/30" },
+                  other: { label: "Online Meeting", color: "text-indigo-700 dark:text-indigo-300", bg: "bg-indigo-50", darkBg: "dark:bg-indigo-500/15", border: "border-indigo-200 dark:border-indigo-500/30" },
+                };
+
+                const renderMeetingCard = (meeting: Meeting, isPast: boolean) => {
+                  const platform = meeting.platform || "";
+                  const cfg = platformConfig[platform];
+
+                  return (
+                    <div
+                      key={meeting.id}
+                      onClick={() => setViewingMeeting(meeting)}
+                      className={`rounded-xl border border-slate-200 p-4 transition-all hover:border-indigo-500 hover:shadow-md cursor-pointer dark:border-[#2A2A2A] dark:hover:border-indigo-400 dark:hover:bg-[#1a1a1a] ${isPast ? "opacity-75 bg-slate-50 dark:bg-[#121212]" : ""}`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3">
+                            <h3 className="font-semibold text-slate-900 dark:text-white">{meeting.title}</h3>
+                            {isPast && (
+                              <span className="rounded bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">Completed</span>
+                            )}
                           </div>
-                        ) : meeting.meetingLink ? (
-                          <a 
-                            href={meeting.meetingLink} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <LinkIcon className="h-4 w-4" /> Join {meeting.platform === "google_meet" ? "Google Meet" : meeting.platform === "zoom" ? "Zoom" : meeting.platform === "microsoft_teams" ? "Microsoft Teams" : "Online Meeting"}
-                          </a>
-                        ) : null}
+                          <div className="mt-2 flex items-center gap-4 text-sm text-slate-600 dark:text-slate-300">
+                            <span className="flex items-center gap-1.5">
+                              <Calendar className="h-4 w-4" />
+                              {new Date(meeting.date).toLocaleDateString()}
+                            </span>
+                            <span className="flex items-center gap-1.5">
+                              <Clock className="h-4 w-4" />
+                              {meeting.duration}
+                            </span>
+                          </div>
+                          {(meeting.agenda || meeting.notes) && (
+                            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                              {meeting.agenda || meeting.notes}
+                            </p>
+                          )}
+                          
+                          {/* Platform badge + link actions OR offline location */}
+                          {meeting.type === "offline" && meeting.location ? (
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              <span
+                                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
+                                  isPast
+                                    ? "border-slate-200 bg-slate-100 text-slate-400 dark:border-[#222] dark:bg-[#1A1A1A] dark:text-slate-500"
+                                    : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300"
+                                }`}
+                              >
+                                <MapPin className="h-3 w-3" />
+                                {meeting.location}
+                              </span>
+                            </div>
+                          ) : platform && cfg ? (
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              <span
+                                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
+                                  isPast
+                                    ? "border-slate-200 bg-slate-100 text-slate-400 dark:border-[#222] dark:bg-[#1A1A1A] dark:text-slate-500"
+                                    : `${cfg.border} ${cfg.bg} ${cfg.color} ${cfg.darkBg}`
+                                }`}
+                              >
+                                <Video className="h-3 w-3" />
+                                {cfg.label}
+                              </span>
+
+                              {meeting.meetingLink && (
+                                <>
+                                  <a
+                                    href={meeting.meetingLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-all ${
+                                      isPast
+                                        ? "border-slate-200 text-slate-400 hover:bg-slate-100 dark:border-[#222] dark:text-slate-500 dark:hover:bg-[#1A1A1A]"
+                                        : "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-500/15 dark:text-indigo-300 dark:hover:bg-indigo-500/25"
+                                    }`}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <ExternalLink className="h-3 w-3" />
+                                    Join
+                                  </a>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCopyMeetingLink(meeting);
+                                    }}
+                                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-all ${
+                                      copiedMeetingId === meeting.id
+                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300"
+                                        : isPast
+                                        ? "border-slate-200 text-slate-400 hover:bg-slate-100 dark:border-[#222] dark:text-slate-500"
+                                        : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"
+                                    }`}
+                                  >
+                                    <Copy className="h-3 w-3" />
+                                    {copiedMeetingId === meeting.id ? "Copied!" : "Copy Link"}
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
-              )}
+                  );
+                };
+
+                return (
+                  <>
+                    {/* Upcoming */}
+                    {(meetingSubTab === "all" || meetingSubTab === "upcoming") && (
+                      <div>
+                        {upcomingMeetings.length > 0 ? (
+                          <>
+                            <div className="mb-3 flex items-center gap-2">
+                              <span className="relative flex h-2 w-2">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-60" />
+                                <span className="relative inline-flex h-2 w-2 rounded-full bg-indigo-500" />
+                              </span>
+                              <h3 className="text-sm font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                                Upcoming ({upcomingMeetings.length})
+                              </h3>
+                            </div>
+                            <div className="space-y-3">
+                              {upcomingMeetings.map((m) => renderMeetingCard(m, false))}
+                            </div>
+                          </>
+                        ) : meetingSubTab === "upcoming" ? (
+                          <div className="py-8 text-center text-sm font-medium text-slate-500 dark:text-slate-400">
+                            No upcoming meetings
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+
+                    {/* Past */}
+                    {(meetingSubTab === "all" || meetingSubTab === "past") && (
+                      <div className={meetingSubTab === "all" && upcomingMeetings.length > 0 ? "mt-8" : ""}>
+                        {pastMeetings.length > 0 ? (
+                          <>
+                            <div className="mb-3 flex items-center gap-2">
+                              <span className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600" />
+                              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                                Past ({pastMeetings.length})
+                              </h3>
+                            </div>
+                            <div className="space-y-3">
+                              {pastMeetings.map((m) => renderMeetingCard(m, true))}
+                            </div>
+                          </>
+                        ) : meetingSubTab === "past" ? (
+                          <div className="py-8 text-center text-sm font-medium text-slate-500 dark:text-slate-400">
+                            No past meetings
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -1355,7 +1572,7 @@ export default function StudentGroupDetails() {
           setEditingPublication(null);
         }}
         onSave={handleSavePublication}
-        publication={editingPublication}
+        editingPublication={editingPublication as any}
       />
 
       <ConfirmModal
