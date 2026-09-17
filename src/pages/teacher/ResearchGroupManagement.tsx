@@ -242,6 +242,8 @@ export default function ResearchGroupManagement() {
   const [msCadenceFilter, setMsCadenceFilter] = useState<"all" | NonNullable<Milestone["cadence"]>>("all");
   const [msPhaseFilter, setMsPhaseFilter] = useState<"all" | NonNullable<Milestone["phase"]>>("all");
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [expandedMilestoneId, setExpandedMilestoneId] = useState<string | null>(null);
+  const [presetMilestoneId, setPresetMilestoneId] = useState<string | null>(null);
 
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({
     show: false,
@@ -502,10 +504,35 @@ export default function ResearchGroupManagement() {
     };
   }, [id]);
 
+  // Real group progress: a group is one research paper, so progress must reflect
+  // actual work (tasks) — not just manually-toggled milestone flags.
+  // A milestone with linked tasks derives its progress from those tasks;
+  // a milestone without tasks falls back to its manual status.
+  const getMilestoneTaskProgress = (milestoneId: string): number | null => {
+    const linked = tasks.filter((t) => t.milestoneId === milestoneId);
+    if (linked.length === 0) return null;
+    const done = linked.filter((t) => t.status === "completed").length;
+    return Math.round((done / linked.length) * 100);
+  };
+
+  const getMilestoneProgress = (m: Milestone): number => {
+    const taskProgress = getMilestoneTaskProgress(m.id);
+    if (taskProgress !== null) return taskProgress;
+    return m.status === "completed" ? 100 : m.status === "in-progress" ? 50 : 0;
+  };
+
   const getProgressPercentage = () => {
-    if (milestones.length === 0) return 0;
-    const completed = milestones.filter((m) => m.status === "completed").length;
-    return Math.round((completed / milestones.length) * 100);
+    // A published paper means the research is done.
+    if (publications.some((p) => p.status === "published")) return 100;
+    if (milestones.length > 0) {
+      const total = milestones.reduce((sum, m) => sum + getMilestoneProgress(m), 0);
+      return Math.round(total / milestones.length);
+    }
+    if (tasks.length > 0) {
+      const done = tasks.filter((t) => t.status === "completed").length;
+      return Math.round((done / tasks.length) * 100);
+    }
+    return 0;
   };
 
   const getTaskStats = () => {
@@ -551,6 +578,7 @@ export default function ResearchGroupManagement() {
       }
       setIsTaskModalOpen(false);
       setEditingTask(null);
+      setPresetMilestoneId(null);
     } catch (error) {
       console.error("Error saving task:", error);
       showToast("error", "Failed to save task");
@@ -715,28 +743,63 @@ export default function ResearchGroupManagement() {
   const isGroupPublished = publications.some((p) => p.status === "published");
   const publishedCount = publications.filter((p) => p.status === "published").length;
 
+  // Keep milestone flags truthful: a milestone with linked tasks follows the work
+  // (all tasks done -> completed, work started -> in-progress). This also keeps
+  // the milestone-based progress shown on the group cards accurate.
+  useEffect(() => {
+    if (!id || loading) return;
+    if (milestones.length === 0 || tasks.length === 0) return;
+    const updates: { milestoneId: string; next: Milestone["status"] }[] = [];
+    milestones.forEach((m) => {
+      const linked = tasks.filter((t) => t.milestoneId === m.id);
+      if (linked.length === 0) return;
+      const done = linked.filter((t) => t.status === "completed").length;
+      const started = linked.some((t) => t.status !== "todo");
+      if (done === linked.length && m.status !== "completed") {
+        updates.push({ milestoneId: m.id, next: "completed" });
+      } else if (done < linked.length && m.status === "completed") {
+        updates.push({ milestoneId: m.id, next: "in-progress" });
+      } else if (started && m.status === "planned") {
+        updates.push({ milestoneId: m.id, next: "in-progress" });
+      }
+    });
+    if (updates.length === 0) return;
+    (async () => {
+      try {
+        await Promise.all(
+          updates.map(({ milestoneId, next }) =>
+            updateDoc(doc(db, "researchGroups", id, "milestones", milestoneId), { status: next })
+          )
+        );
+      } catch (e) {
+        console.error("Failed to auto-sync milestone status:", e);
+      }
+    })();
+  }, [id, loading, milestones, tasks]);
+
   // Keep the group's state in sync: any published paper => group is "published"
   useEffect(() => {
     if (!id || loading) return;
     const groupStatus = isGroupPublished ? "published" : "ongoing";
+    const progress = getProgressPercentage();
     const sync = async () => {
       try {
         await setDoc(
           doc(db, "researchGroups", id),
-          { groupStatus, publishedCount, updatedAt: serverTimestamp() },
+          { groupStatus, publishedCount, progress, updatedAt: serverTimestamp() },
           { merge: true }
         );
         const topicRef = doc(db, "researchTopics", id);
         const topicSnap = await getDoc(topicRef);
         if (topicSnap.exists()) {
-          await updateDoc(topicRef, { groupStatus, publishedCount, updatedAt: serverTimestamp() });
+          await updateDoc(topicRef, { groupStatus, publishedCount, progress, updatedAt: serverTimestamp() });
         }
       } catch (e) {
         console.error("Failed to sync group publish state:", e);
       }
     };
     sync();
-  }, [id, loading, isGroupPublished, publishedCount]);
+  }, [id, loading, isGroupPublished, publishedCount, milestones, tasks, publications]);
 
   const handleSavePublication = async (data: PublicationFormData) => {
     if (!id || !auth.currentUser) {
@@ -874,9 +937,11 @@ export default function ResearchGroupManagement() {
         onClose={() => {
           setIsTaskModalOpen(false);
           setEditingTask(null);
+          setPresetMilestoneId(null);
         }}
         onSave={handleSaveTask}
         editingTask={editingTask}
+        initialMilestoneId={presetMilestoneId || undefined}
         teamMembers={teamMembers}
         milestones={milestones}
       />
@@ -1218,6 +1283,12 @@ export default function ResearchGroupManagement() {
             const left = daysLeft(m);
             const dueSoon = !isOverdue(m) && m.status !== "completed" && left >= 0 && left <= 7;
             const nextLabel = m.status === "planned" ? "Start" : m.status === "in-progress" ? "Complete" : "Reopen";
+            const linkedTasks = tasks.filter((t) => t.milestoneId === m.id);
+            const doneTasks = linkedTasks.filter((t) => t.status === "completed").length;
+            const activeTasks = linkedTasks.filter((t) => t.status !== "completed").length;
+            const taskProgress = linkedTasks.length === 0 ? 0 : Math.round((doneTasks / linkedTasks.length) * 100);
+            const expanded = expandedMilestoneId === m.id;
+            const memberName = (sid: string) => teamMembers.find((tm) => tm.studentId === sid)?.studentName || "Unknown";
             return (
               <article
                 key={m.id}
@@ -1230,7 +1301,7 @@ export default function ResearchGroupManagement() {
                 }`}
               >
                 {(isOverdue(m) || m.status === "completed") && (
-                  <div className={`h-1 w-full ${isOverdue(m) ? "bg-gradient-to-r from-rose-400 via-rose-500 to-rose-400" : "bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-400"}`} />
+                  <div className={`h-1 w-full ${isOverdue(m) ? "bg-rose-500" : "bg-emerald-500"}`} />
                 )}
                 <div className="flex items-start gap-4 p-5 sm:p-6">
                   <button
@@ -1267,6 +1338,10 @@ export default function ResearchGroupManagement() {
                           Due in {left === 0 ? "today" : `${left}d`}
                         </span>
                       )}
+                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                        <ListTodo className="h-3 w-3" /> {doneTasks}/{linkedTasks.length} tasks
+                        {activeTasks > 0 && ` · ${activeTasks} active`}
+                      </span>
                     </div>
                     <h3 className={`mt-2 font-extrabold leading-snug ${m.status === "completed" ? "text-slate-400 line-through dark:text-slate-500" : "text-slate-900 dark:text-white"}`}>
                       {m.title}
@@ -1282,6 +1357,14 @@ export default function ResearchGroupManagement() {
                         ))}
                       </div>
                     )}
+                    {linkedTasks.length > 0 && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                          <div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${taskProgress}%` }} />
+                        </div>
+                        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">{taskProgress}% tasks done</span>
+                      </div>
+                    )}
                     <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-[#262626] dark:text-slate-400">
                       <span className="flex items-center gap-1.5 font-semibold">
                         <CalendarClock className="h-3.5 w-3.5" />
@@ -1293,7 +1376,92 @@ export default function ResearchGroupManagement() {
                       >
                         <Play className="h-3 w-3" /> {nextLabel}
                       </button>
+                      <button
+                        onClick={() => setExpandedMilestoneId(expanded ? null : m.id)}
+                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-50 dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#0F0F0F]"
+                      >
+                        <ListTodo className="h-3 w-3" />
+                        {expanded ? "Hide tasks" : `View tasks (${linkedTasks.length})`}
+                        {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                      </button>
                     </div>
+                    {expanded && (
+                      <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3 dark:border-[#262626] dark:bg-[#0F0F0F]">
+                        {linkedTasks.length === 0 ? (
+                          <div className="flex flex-wrap items-center justify-between gap-2 py-1">
+                            <p className="text-xs text-slate-500 dark:text-slate-400">No tasks linked to this milestone yet.</p>
+                            <button
+                              onClick={() => {
+                                setEditingTask(null);
+                                setPresetMilestoneId(m.id);
+                                setIsTaskModalOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-indigo-700"
+                            >
+                              <Plus className="h-3 w-3" /> Add task here
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2 px-1">
+                              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                Linked tasks · {activeTasks} active
+                              </p>
+                              <button
+                                onClick={() => {
+                                  setEditingTask(null);
+                                  setPresetMilestoneId(m.id);
+                                  setIsTaskModalOpen(true);
+                                }}
+                                className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:underline dark:text-indigo-400"
+                              >
+                                <Plus className="h-3 w-3" /> Add
+                              </button>
+                            </div>
+                            {linkedTasks
+                              .slice()
+                              .sort((a, b) => {
+                                const rank = (s: Task["status"]) => (s === "in-progress" ? 0 : s === "todo" ? 1 : 2);
+                                return rank(a.status) - rank(b.status);
+                              })
+                              .map((t) => (
+                                <button
+                                  key={t.id}
+                                  onClick={() => setViewingTask(t)}
+                                  className="flex w-full items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left hover:border-indigo-200 hover:bg-indigo-50/50 dark:border-[#333] dark:bg-[#181818] dark:hover:border-indigo-500/40"
+                                >
+                                  <span className="shrink-0">
+                                    {t.status === "completed" ? (
+                                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                    ) : t.status === "in-progress" ? (
+                                      <Clock className="h-4 w-4 text-amber-500" />
+                                    ) : (
+                                      <Circle className="h-4 w-4 text-slate-300 dark:text-slate-600" />
+                                    )}
+                                  </span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className={`block truncate text-xs font-bold ${t.status === "completed" ? "text-slate-400 line-through" : "text-slate-800 dark:text-slate-100"}`}>
+                                      {t.title}
+                                    </span>
+                                    <span className="mt-0.5 block truncate text-[11px] text-slate-500 dark:text-slate-400">
+                                      {t.assignedTo.length > 0 ? t.assignedTo.map(memberName).join(", ") : "Unassigned"}
+                                      {t.dueDate ? ` · Due ${new Date(`${t.dueDate}T00:00:00`).toLocaleDateString()}` : ""}
+                                      {` · ${t.priority}`}
+                                    </span>
+                                  </span>
+                                  <Eye className="h-3.5 w-3.5 shrink-0 text-slate-300 dark:text-slate-600" />
+                                </button>
+                              ))}
+                            <button
+                              onClick={() => setActiveTab("tasks")}
+                              className="w-full rounded-lg py-1.5 text-center text-[11px] font-bold text-slate-500 hover:bg-slate-100 hover:text-indigo-600 dark:text-slate-400 dark:hover:bg-[#181818] dark:hover:text-indigo-400"
+                            >
+                              Open full task board →
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex shrink-0 gap-1">
                     <button
@@ -1321,55 +1489,38 @@ export default function ResearchGroupManagement() {
 
           return (
             <div className="space-y-5">
-              {/* Hero header */}
-              <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-600 via-indigo-600 to-violet-600 p-6 text-white shadow-sm dark:border-indigo-500/20">
-                <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10" />
-                <div className="pointer-events-none absolute -bottom-20 right-24 h-44 w-44 rounded-full bg-white/10" />
-                <div className="relative flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur">
-                        <GitBranch className="h-3.5 w-3.5" /> Research Roadmap
-                      </span>
-                      {overdueCount > 0 && (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-400/25 px-3 py-1 text-xs font-bold text-rose-100">
-                          <Flame className="h-3.5 w-3.5" /> {overdueCount} overdue
-                        </span>
+              {/* Minimal header — matches Meetings/Documents style, no gradients */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-500/10">
+                      <GitBranch className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="text-base font-bold text-slate-900 dark:text-white">Milestones</h2>
+                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                        {completedCount} of {milestones.length} complete
+                        {overdueCount > 0 && <span className="font-bold text-rose-500"> · {overdueCount} overdue</span>}
+                        {inProgressCount > 0 && <span> · {inProgressCount} in progress</span>}
+                      </p>
+                      {milestones.length > 0 && (
+                        <div className="mt-2 flex w-48 items-center gap-2 sm:w-64">
+                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                            <div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${progress}%` }} />
+                          </div>
+                          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">{progress}%</span>
+                        </div>
                       )}
                     </div>
-                    <h2 className="mt-3 text-2xl font-extrabold tracking-tight">Milestones</h2>
-                    <p className="mt-1 max-w-xl text-sm text-indigo-100">
-                      Weekly check-ins, monthly reviews, one-time gates — {completedCount} of {milestones.length} complete.
-                    </p>
-                    {milestones.length > 0 && (
-                      <div className="mt-4 max-w-md">
-                        <div className="flex items-center justify-between text-xs font-bold text-indigo-100">
-                          <span>Overall progress</span>
-                          <span>{progress}%</span>
-                        </div>
-                        <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-white/20">
-                          <div className="h-full rounded-full bg-white transition-all" style={{ width: `${progress}%` }} />
-                        </div>
-                      </div>
-                    )}
                   </div>
-                  <div className="flex shrink-0 flex-col gap-2">
-                    <button
-                      onClick={() => {
-                        setEditingMilestone(null);
-                        setIsMilestoneModalOpen(true);
-                      }}
-                      className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 shadow-sm transition-all hover:bg-indigo-50 hover:shadow"
-                    >
-                      <Plus className="h-4 w-4" /> Add Milestone
-                    </button>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
                     {milestones.length > 0 && (
-                      <div className="flex gap-2">
+                      <>
                         <button
                           onClick={() => generateMilestonePlan(4)}
                           disabled={isGeneratingPlan}
                           title="Auto-create 4 weekly check-ins"
-                          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/15 px-3 py-2 text-xs font-bold text-white backdrop-blur transition-all hover:bg-white/25 disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#0F0F0F]"
                         >
                           <Wand2 className="h-3.5 w-3.5" /> 4-week sprint
                         </button>
@@ -1377,12 +1528,21 @@ export default function ResearchGroupManagement() {
                           onClick={() => generateMilestonePlan(12)}
                           disabled={isGeneratingPlan}
                           title="Auto-create 12 weekly check-ins for the semester"
-                          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/15 px-3 py-2 text-xs font-bold text-white backdrop-blur transition-all hover:bg-white/25 disabled:opacity-50"
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#0F0F0F]"
                         >
                           <Wand2 className="h-3.5 w-3.5" /> Semester plan
                         </button>
-                      </div>
+                      </>
                     )}
+                    <button
+                      onClick={() => {
+                        setEditingMilestone(null);
+                        setIsMilestoneModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+                    >
+                      <Plus className="h-4 w-4" /> Add Milestone
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1468,7 +1628,7 @@ export default function ResearchGroupManagement() {
               {/* List */}
               {milestones.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center dark:border-[#2A2A2A] dark:bg-[#181818]">
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-md">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-md">
                     <GitBranch className="h-8 w-8" />
                   </div>
                   <p className="mt-4 text-base font-bold text-slate-900 dark:text-white">No milestones yet — chart the course</p>
@@ -1727,31 +1887,28 @@ export default function ResearchGroupManagement() {
 
           return (
             <div className="space-y-5">
-              {/* Hero header */}
-              <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-600 via-indigo-600 to-violet-600 p-6 text-white shadow-sm dark:border-indigo-500/20">
-                <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10" />
-                <div className="pointer-events-none absolute -bottom-20 right-24 h-44 w-44 rounded-full bg-white/10" />
-                <div className="relative flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur">
-                        <ListTodo className="h-3.5 w-3.5" /> Task Board
-                      </span>
-                      <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur">
-                        {stats.completed}/{stats.total} done
-                      </span>
+              {/* Minimal header — matches Milestones/Meetings/Documents style, no gradients */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-500/10">
+                      <ListTodo className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                     </div>
-                    <h2 className="mt-3 text-2xl font-extrabold tracking-tight">Tasks & Deliverables</h2>
-                    <p className="mt-1 max-w-xl text-sm text-indigo-100">
-                      Drag cards across the board — every move is stamped with who moved it, so progress is always visible.
-                    </p>
+                    <div className="min-w-0">
+                      <h2 className="text-base font-bold text-slate-900 dark:text-white">Tasks</h2>
+                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                        {stats.completed} of {stats.total} done
+                        {stats.inProgress > 0 && <span> · {stats.inProgress} in progress</span>}
+                        {stats.todo > 0 && <span> · {stats.todo} to do</span>}
+                      </p>
+                    </div>
                   </div>
                   <button
                     onClick={() => {
                       setEditingTask(null);
                       setIsTaskModalOpen(true);
                     }}
-                    className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 shadow-sm transition-all hover:bg-indigo-50 hover:shadow"
+                    className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
                   >
                     <Plus className="h-4 w-4" /> Add Task
                   </button>
@@ -1808,7 +1965,7 @@ export default function ResearchGroupManagement() {
               {/* Board */}
               {tasks.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center dark:border-[#2A2A2A] dark:bg-[#181818]">
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-md">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-md">
                     <ListTodo className="h-8 w-8" />
                   </div>
                   <p className="mt-4 text-base font-bold text-slate-900 dark:text-white">No tasks yet — fill the board</p>
@@ -2394,32 +2551,31 @@ export default function ResearchGroupManagement() {
 
           return (
             <div className="space-y-5">
-              {/* Hero header */}
-              <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-600 via-indigo-600 to-violet-600 p-6 text-white shadow-sm dark:border-indigo-500/20">
-                <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10" />
-                <div className="pointer-events-none absolute -bottom-20 right-24 h-44 w-44 rounded-full bg-white/10" />
-                <div className="relative flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur">
-                        <BookOpen className="h-3.5 w-3.5" /> Research Output
-                      </span>
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${isGroupPublished ? "bg-emerald-400/20 text-emerald-100" : "bg-amber-400/20 text-amber-100"}`}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${isGroupPublished ? "bg-emerald-300" : "bg-amber-300"}`} />
-                        {isGroupPublished ? `Published · ${publishedCount}` : "Ongoing — no published paper yet"}
-                      </span>
+              {/* Minimal header — matches Milestones/Meetings/Documents style, no gradients */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-500/10">
+                      <BookOpen className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                     </div>
-                    <h2 className="mt-3 text-2xl font-extrabold tracking-tight">Publications & Submissions</h2>
-                    <p className="mt-1 max-w-xl text-sm text-indigo-100">
-                      Journals, conferences, preprints — anything this group produces. Add as many as you need, share links, and the group badge flips to Published automatically.
-                    </p>
+                    <div className="min-w-0">
+                      <h2 className="text-base font-bold text-slate-900 dark:text-white">Publications</h2>
+                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                        {publications.length} total
+                        {isGroupPublished ? (
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400"> · Published · {publishedCount}</span>
+                        ) : (
+                          <span> · Ongoing — no published paper yet</span>
+                        )}
+                      </p>
+                    </div>
                   </div>
                   <button
                     onClick={() => {
                       setEditingPublication(null);
                       setIsPublicationModalOpen(true);
                     }}
-                    className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-indigo-700 shadow-sm transition-all hover:bg-indigo-50 hover:shadow"
+                    className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
                   >
                     <Plus className="h-4 w-4" /> Add Publication
                   </button>
@@ -2511,7 +2667,7 @@ export default function ResearchGroupManagement() {
               {/* List */}
               {publications.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center dark:border-[#2A2A2A] dark:bg-[#181818]">
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-md">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-md">
                     <BookOpen className="h-8 w-8" />
                   </div>
                   <p className="mt-4 text-base font-bold text-slate-900 dark:text-white">No publications yet — start the group&apos;s story</p>
@@ -2558,7 +2714,7 @@ export default function ResearchGroupManagement() {
                             : "border-slate-200 dark:border-[#2A2A2A]"
                         }`}
                       >
-                        {pub.status === "published" && <div className="h-1 w-full bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-400" />}
+                        {pub.status === "published" && <div className="h-1 w-full bg-emerald-500" />}
                         <div className="p-5 sm:p-6">
                           {/* Top row */}
                           <div className="flex items-start justify-between gap-4">

@@ -24,11 +24,12 @@ interface TaskModalProps {
   onClose: () => void;
   onSave: (task: Omit<Task, "id">) => Promise<void>;
   editingTask?: Task | null;
+  initialMilestoneId?: string;
   teamMembers: TeamMember[];
   milestones: { id: string; title: string; deadline?: string }[];
 }
 
-export function TaskModal({ isOpen, onClose, onSave, editingTask, teamMembers, milestones }: TaskModalProps) {
+export function TaskModal({ isOpen, onClose, onSave, editingTask, initialMilestoneId, teamMembers, milestones }: TaskModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assignedTo, setAssignedTo] = useState<string[]>([]);
@@ -92,10 +93,10 @@ export function TaskModal({ isOpen, onClose, onSave, editingTask, teamMembers, m
       setStatus("todo");
       setPriority("medium");
       setDueDate("");
-      setMilestoneId("");
+      setMilestoneId(initialMilestoneId || "");
     }
     setError("");
-  }, [editingTask, isOpen]);
+  }, [editingTask, initialMilestoneId, isOpen]);
 
   if (!isOpen) return null;
 
