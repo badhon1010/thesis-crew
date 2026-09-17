@@ -47,6 +47,7 @@ import {
   ChevronUp,
   ChevronDown,
   Minus,
+  MapPin,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
@@ -156,11 +157,14 @@ interface Meeting {
   date: string; // YYYY-MM-DD
   time?: string; // HH:MM
   duration: string;
+  type?: "online" | "offline";
   platform?: MeetingPlatform | "";
+  location?: string;
   meetingLink?: string;
   agenda?: string;
   notes?: string;
   attendees: string[];
+  createdBy?: string;
   createdAt?: unknown;
 }
 
@@ -189,6 +193,7 @@ interface Publication {
 }
 
 type TabType = "overview" | "milestones" | "tasks" | "chat" | "documents" | "meetings" | "publications";
+type MeetingSubTab = "upcoming" | "past" | "all";
 
 export default function ResearchGroupManagement() {
   const { id } = useParams<{ id: string }>();
@@ -201,6 +206,7 @@ export default function ResearchGroupManagement() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [meetingSubTab, setMeetingSubTab] = useState<MeetingSubTab>("upcoming");
   const [publications, setPublications] = useState<Publication[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -671,6 +677,7 @@ export default function ResearchGroupManagement() {
       } else {
         await addDoc(collection(db, "researchGroups", id, "meetings"), {
           ...data,
+          createdBy: auth.currentUser?.uid || "",
           createdAt: serverTimestamp(),
         });
         showToast("success", "Meeting scheduled successfully");
@@ -910,6 +917,8 @@ export default function ResearchGroupManagement() {
           date: editingMeeting.date,
           time: editingMeeting.time || "",
           duration: editingMeeting.duration,
+          type: editingMeeting.type,
+          location: editingMeeting.location,
           platform: editingMeeting.platform || "",
           meetingLink: editingMeeting.meetingLink || "",
           agenda: editingMeeting.agenda || editingMeeting.notes || "",
@@ -1963,15 +1972,30 @@ export default function ResearchGroupManagement() {
         )}
 
         {activeTab === "meetings" && (() => {
-          const now = new Date();
-          const upcomingMeetings = meetings.filter((m) => {
-            const dt = new Date(`${m.date}T${m.time || "00:00"}`);
-            return dt >= now;
-          });
-          const pastMeetings = meetings.filter((m) => {
-            const dt = new Date(`${m.date}T${m.time || "00:00"}`);
-            return dt < now;
-          });
+          const now = new Date().getTime();
+          
+          const getMeetingTime = (m: Meeting) => {
+            let meetingDateTime = new Date(m.date).getTime();
+            if (m.time) {
+              const timeMatch = m.time.match(/(\d+):(\d+)\s*(AM|PM)/i);
+              if (timeMatch) {
+                let hours = parseInt(timeMatch[1], 10);
+                const minutes = parseInt(timeMatch[2], 10);
+                const period = timeMatch[3].toUpperCase();
+                if (period === 'PM' && hours < 12) hours += 12;
+                if (period === 'AM' && hours === 12) hours = 0;
+                meetingDateTime = new Date(`${m.date}T${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`).getTime();
+              }
+            }
+            return meetingDateTime;
+          };
+
+          const upcomingMeetings = meetings
+            .filter((m) => getMeetingTime(m) >= now)
+            .sort((a, b) => getMeetingTime(a) - getMeetingTime(b));
+          const pastMeetings = meetings
+            .filter((m) => getMeetingTime(m) < now)
+            .sort((a, b) => getMeetingTime(b) - getMeetingTime(a));
 
           const platformConfig: Record<string, { label: string; color: string; bg: string; darkBg: string; border: string }> = {
             zoom: { label: "Zoom", color: "text-blue-700 dark:text-blue-300", bg: "bg-blue-50", darkBg: "dark:bg-blue-500/15", border: "border-blue-200 dark:border-blue-500/30" },
@@ -1984,8 +2008,8 @@ export default function ResearchGroupManagement() {
           const renderMeetingCard = (meeting: Meeting, isPast: boolean) => {
             const platform = meeting.platform || "";
             const cfg = platform && platformConfig[platform] ? platformConfig[platform] : null;
-            const meetingDateTime = new Date(`${meeting.date}T${meeting.time || "00:00"}`);
-            const diffMs = meetingDateTime.getTime() - now.getTime();
+            const meetingDateTime = getMeetingTime(meeting);
+            const diffMs = meetingDateTime - now;
             const isLiveSoon = !isPast && diffMs > 0 && diffMs < 30 * 60 * 1000;
 
             return (
@@ -2049,8 +2073,21 @@ export default function ResearchGroupManagement() {
                       </span>
                     </div>
 
-                    {/* Platform badge + link actions */}
-                    {platform && cfg && (
+                    {/* Platform badge + link actions OR offline location */}
+                    {meeting.type === "offline" && meeting.location ? (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
+                            isPast
+                              ? "border-slate-200 bg-slate-100 text-slate-400 dark:border-[#222] dark:bg-[#1A1A1A] dark:text-slate-500"
+                              : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300"
+                          }`}
+                        >
+                          <MapPin className="h-3 w-3" />
+                          {meeting.location}
+                        </span>
+                      </div>
+                    ) : platform && cfg ? (
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <span
                           className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
@@ -2094,7 +2131,7 @@ export default function ResearchGroupManagement() {
                           </>
                         )}
                       </div>
-                    )}
+                    ) : null}
 
                     {/* Agenda */}
                     {(meeting.agenda || meeting.notes) && (
@@ -2173,69 +2210,134 @@ export default function ResearchGroupManagement() {
                       {upcomingMeetings.length} upcoming · {pastMeetings.length} past
                     </p>
                   </div>
-                  <button
-                    onClick={() => {
-                      setEditingMeeting(null);
-                      setIsMeetingModalOpen(true);
-                    }}
-                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-700 hover:shadow-md"
-                  >
-                    <Plus className="h-4 w-4" /> Schedule Meeting
-                  </button>
+                  <div className="flex items-center gap-4">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setMeetingSubTab("upcoming")}
+                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                          meetingSubTab === "upcoming"
+                            ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400"
+                            : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        Upcoming
+                      </button>
+                      <button
+                        onClick={() => setMeetingSubTab("past")}
+                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                          meetingSubTab === "past"
+                            ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400"
+                            : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        Past
+                      </button>
+                      <button
+                        onClick={() => setMeetingSubTab("all")}
+                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                          meetingSubTab === "all"
+                            ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400"
+                            : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        All
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setEditingMeeting(null);
+                        setIsMeetingModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-700 hover:shadow-md"
+                    >
+                      <Plus className="h-4 w-4" /> Schedule Meeting
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {meetings.length === 0 ? (
+              {meetings.filter((meeting) => {
+                const meetingTime = getMeetingTime(meeting);
+                if (meetingSubTab === "all") return true;
+                if (meetingSubTab === "upcoming") return meetingTime >= now;
+                return meetingTime < now;
+              }).length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-white py-16 text-center dark:border-[#2A2A2A] dark:bg-[#181818]">
                   <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 dark:bg-indigo-500/10">
                     <Calendar className="h-8 w-8 text-indigo-500 dark:text-indigo-400" />
                   </div>
-                  <p className="mt-4 text-base font-semibold text-slate-900 dark:text-white">No meetings scheduled yet</p>
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    Schedule a meeting and share a Zoom, Meet, or Teams link with your team.
+                  <p className="mt-4 text-base font-semibold text-slate-900 dark:text-white">
+                    {meetingSubTab === "upcoming"
+                      ? "No upcoming meetings scheduled"
+                      : meetingSubTab === "past"
+                      ? "No past meetings"
+                      : "No meetings scheduled yet"}
                   </p>
-                  <button
-                    onClick={() => {
-                      setEditingMeeting(null);
-                      setIsMeetingModalOpen(true);
-                    }}
-                    className="mt-6 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-indigo-700"
-                  >
-                    <Plus className="h-4 w-4" /> Schedule First Meeting
-                  </button>
+                  {meetingSubTab !== "past" && (
+                    <>
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        Schedule a meeting and share a Zoom, Meet, or Teams link with your team.
+                      </p>
+                      <button
+                        onClick={() => {
+                          setEditingMeeting(null);
+                          setIsMeetingModalOpen(true);
+                        }}
+                        className="mt-6 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:bg-indigo-700"
+                      >
+                        <Plus className="h-4 w-4" /> Schedule First Meeting
+                      </button>
+                    </>
+                  )}
                 </div>
               ) : (
                 <>
                   {/* Upcoming */}
-                  {upcomingMeetings.length > 0 && (
+                  {(meetingSubTab === "all" || meetingSubTab === "upcoming") && (
                     <div>
-                      <div className="mb-3 flex items-center gap-2">
-                        <span className="relative flex h-2 w-2">
-                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-60" />
-                          <span className="relative inline-flex h-2 w-2 rounded-full bg-indigo-500" />
-                        </span>
-                        <h3 className="text-sm font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
-                          Upcoming ({upcomingMeetings.length})
-                        </h3>
-                      </div>
-                      <div className="space-y-3">
-                        {upcomingMeetings.map((m) => renderMeetingCard(m, false))}
-                      </div>
+                      {upcomingMeetings.length > 0 ? (
+                        <>
+                          <div className="mb-3 flex items-center gap-2">
+                            <span className="relative flex h-2 w-2">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-60" />
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-indigo-500" />
+                            </span>
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                              Upcoming ({upcomingMeetings.length})
+                            </h3>
+                          </div>
+                          <div className="space-y-3">
+                            {upcomingMeetings.map((m) => renderMeetingCard(m, false))}
+                          </div>
+                        </>
+                      ) : meetingSubTab === "upcoming" ? (
+                        <div className="py-8 text-center text-sm font-medium text-slate-500 dark:text-slate-400">
+                          No upcoming meetings
+                        </div>
+                      ) : null}
                     </div>
                   )}
 
                   {/* Past */}
-                  {pastMeetings.length > 0 && (
-                    <div>
-                      <div className="mb-3 flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600" />
-                        <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                          Past ({pastMeetings.length})
-                        </h3>
-                      </div>
-                      <div className="space-y-3">
-                        {pastMeetings.map((m) => renderMeetingCard(m, true))}
-                      </div>
+                  {(meetingSubTab === "all" || meetingSubTab === "past") && (
+                    <div className={meetingSubTab === "all" && upcomingMeetings.length > 0 ? "mt-8" : ""}>
+                      {pastMeetings.length > 0 ? (
+                        <>
+                          <div className="mb-3 flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600" />
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                              Past ({pastMeetings.length})
+                            </h3>
+                          </div>
+                          <div className="space-y-3">
+                            {pastMeetings.map((m) => renderMeetingCard(m, true))}
+                          </div>
+                        </>
+                      ) : meetingSubTab === "past" ? (
+                        <div className="py-8 text-center text-sm font-medium text-slate-500 dark:text-slate-400">
+                          No past meetings
+                        </div>
+                      ) : null}
                     </div>
                   )}
                 </>

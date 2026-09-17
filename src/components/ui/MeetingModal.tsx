@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Check, Video, Link as LinkIcon, Clock, Calendar } from "lucide-react";
+import { X, Check, Video, Link as LinkIcon, Clock, Calendar, MapPin } from "lucide-react";
 
 interface TeamMember {
   studentId: string;
@@ -13,10 +13,12 @@ export type MeetingPlatform = "zoom" | "google-meet" | "google-classroom" | "tea
 export interface MeetingFormData {
   title: string;
   date: string; // YYYY-MM-DD
-  time: string; // HH:MM
+  time: string; // e.g. 10:30 AM
   duration: string;
-  platform: MeetingPlatform | "";
-  meetingLink: string;
+  type?: "online" | "offline";
+  location?: string;
+  platform?: MeetingPlatform | "";
+  meetingLink?: string;
   agenda: string;
   attendees: string[];
 }
@@ -48,6 +50,13 @@ const DURATIONS = [
   "3 hours",
 ];
 
+const TIME_OPTIONS = [
+  "08:00 AM", "08:30 AM", "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM",
+  "11:00 AM", "11:30 AM", "12:00 PM", "12:30 PM", "01:00 PM", "01:30 PM",
+  "02:00 PM", "02:30 PM", "03:00 PM", "03:30 PM", "04:00 PM", "04:30 PM",
+  "05:00 PM", "05:30 PM", "06:00 PM"
+];
+
 function getPlatformLinkPlaceholder(platform: MeetingPlatform | ""): string {
   switch (platform) {
     case "zoom":
@@ -74,12 +83,16 @@ export function MeetingModal({
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [duration, setDuration] = useState("1 hour");
+  const [type, setType] = useState<"online" | "offline">("online");
+  const [location, setLocation] = useState("");
   const [platform, setPlatform] = useState<MeetingPlatform | "">("");
   const [meetingLink, setMeetingLink] = useState("");
   const [agenda, setAgenda] = useState("");
   const [attendees, setAttendees] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showDurationPicker, setShowDurationPicker] = useState(false);
 
   // Today's date string for min constraint
   const todayStr = new Date().toISOString().split("T")[0];
@@ -90,6 +103,8 @@ export function MeetingModal({
       setDate(editingMeeting.date);
       setTime(editingMeeting.time || "");
       setDuration(editingMeeting.duration || "1 hour");
+      setType(editingMeeting.type || "online");
+      setLocation(editingMeeting.location || "");
       setPlatform(editingMeeting.platform || "");
       setMeetingLink(editingMeeting.meetingLink || "");
       setAgenda(editingMeeting.agenda || "");
@@ -99,12 +114,16 @@ export function MeetingModal({
       setDate("");
       setTime("");
       setDuration("1 hour");
+      setType("online");
+      setLocation("");
       setPlatform("");
       setMeetingLink("");
       setAgenda("");
       setAttendees([]);
     }
     setError("");
+    setShowTimePicker(false);
+    setShowDurationPicker(false);
   }, [editingMeeting, isOpen]);
 
   if (!isOpen) return null;
@@ -125,21 +144,49 @@ export function MeetingModal({
     }
     // Validate that datetime is in the future for new meetings
     if (!editingMeeting) {
-      const meetingDateTime = new Date(`${date}T${time}`);
+      // time might be "10:30 AM", so we need to parse it for validation.
+      let meetingDateTime = new Date(`${date}T00:00:00`);
+      const timeMatch = time.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (timeMatch) {
+        let hours = parseInt(timeMatch[1], 10);
+        const minutes = parseInt(timeMatch[2], 10);
+        const period = timeMatch[3].toUpperCase();
+        if (period === 'PM' && hours < 12) hours += 12;
+        if (period === 'AM' && hours === 12) hours = 0;
+        meetingDateTime = new Date(`${date}T${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`);
+      } else {
+        meetingDateTime = new Date(`${date}T${time}`);
+      }
+      
       if (meetingDateTime <= new Date()) {
         setError("Meeting date and time must be in the future.");
         return;
       }
     }
-    if (meetingLink && !/^https?:\/\/.+/.test(meetingLink)) {
+    if (type === "online" && meetingLink && !/^https?:\/\/.+/.test(meetingLink)) {
       setError("Meeting link must be a valid URL starting with http:// or https://");
+      return;
+    }
+    if (type === "offline" && !location.trim()) {
+      setError("Please specify a location for the offline meeting.");
       return;
     }
 
     try {
       setIsSubmitting(true);
       setError("");
-      await onSave({ title: title.trim(), date, time, duration, platform, meetingLink: meetingLink.trim(), agenda: agenda.trim(), attendees });
+      await onSave({ 
+        title: title.trim(), 
+        date, 
+        time, 
+        duration, 
+        type,
+        location: type === "offline" ? location.trim() : "",
+        platform: type === "online" ? platform : "", 
+        meetingLink: type === "online" ? meetingLink.trim() : "", 
+        agenda: agenda.trim(), 
+        attendees 
+      });
       onClose();
     } catch (err) {
       console.error("Error saving meeting:", err);
@@ -202,9 +249,9 @@ export function MeetingModal({
               />
             </div>
 
-            {/* Date & Time */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            {/* Date & Time & Duration */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
+              <div className="sm:col-span-5">
                 <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
                   Date <span className="text-rose-500">*</span>
                 </label>
@@ -215,103 +262,211 @@ export function MeetingModal({
                     value={date}
                     min={editingMeeting ? undefined : todayStr}
                     onChange={(e) => setDate(e.target.value)}
+                    onClick={(e) => {
+                      try {
+                        (e.target as HTMLInputElement).showPicker();
+                      } catch (err) {
+                        // fallback for browsers that don't support showPicker
+                      }
+                    }}
                     className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
                     required
                   />
                 </div>
               </div>
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  Time <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <Clock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
+              <div className="sm:col-span-7 flex flex-col sm:flex-row gap-4">
+                <div className="relative flex-1">
+                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    Time <span className="text-rose-500">*</span>
+                  </label>
                   <input
-                    type="time"
+                    type="text"
                     value={time}
                     onChange={(e) => setTime(e.target.value)}
-                    className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
+                    onFocus={() => {
+                      setShowTimePicker(true);
+                      setShowDurationPicker(false);
+                    }}
+                    placeholder="e.g., 10:30 AM"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
                     required
                   />
+                  {showTimePicker && (
+                    <div className="absolute top-full z-20 mt-2 animate-in fade-in zoom-in-95 duration-200 w-full bg-white dark:bg-[#181818] shadow-xl rounded-xl border border-slate-200 dark:border-[#333] p-2">
+                      <div className="overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 shadow-sm dark:border-[#333] dark:bg-[#0F0F0F] h-[280px]">
+                        {TIME_OPTIONS.map(t => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => {
+                              setTime(t);
+                              setShowTimePicker(false);
+                            }}
+                            className={`block w-full text-center px-3 py-2.5 text-sm rounded-lg mb-1 transition-colors ${
+                              time === t 
+                                ? 'bg-indigo-100 text-indigo-700 font-bold dark:bg-indigo-500/20 dark:text-indigo-400' 
+                                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-[#181818] font-medium'
+                            }`}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            </div>
-
-            {/* Duration */}
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                Duration
-              </label>
-              <div className="relative">
-                <Clock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <select
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  className="w-full appearance-none rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
-                >
-                  {DURATIONS.map((d) => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Platform */}
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                Platform
-              </label>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {PLATFORMS.map((p) => {
-                  const isSelected = platform === p.value;
-                  return (
-                    <button
-                      key={p.value}
-                      type="button"
-                      onClick={() => {
-                        setPlatform(isSelected ? "" : p.value);
-                        if (isSelected) setMeetingLink("");
-                      }}
-                      className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-semibold transition-all ${
-                        isSelected
-                          ? `border-indigo-400 ${p.bg} ${p.color} ${p.darkBg} ring-1 ring-indigo-400`
-                          : "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"
-                      }`}
-                    >
-                      <Video className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">{p.label}</span>
-                      {isSelected && <Check className="ml-auto h-3 w-3 shrink-0" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Meeting Link — only shown when a platform is selected */}
-            {platform && (
-              <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-bold ${selectedPlatformInfo?.bg} ${selectedPlatformInfo?.color} ${selectedPlatformInfo?.darkBg}`}
-                  >
-                    <Video className="h-3 w-3" />
-                    {selectedPlatformInfo?.label} Link
-                  </span>
-                </label>
-                <div className="relative">
-                  <LinkIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                
+                <div className="relative flex-1">
+                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    Duration <span className="text-rose-500">*</span>
+                  </label>
                   <input
-                    type="url"
-                    value={meetingLink}
-                    onChange={(e) => setMeetingLink(e.target.value)}
-                    placeholder={getPlatformLinkPlaceholder(platform)}
-                    className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white dark:placeholder:text-slate-600 dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
+                    type="text"
+                    value={duration}
+                    onChange={(e) => setDuration(e.target.value)}
+                    onFocus={() => {
+                      setShowDurationPicker(true);
+                      setShowTimePicker(false);
+                    }}
+                    placeholder="e.g., 1 hour"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
+                    required
                   />
+                  {showDurationPicker && (
+                    <div className="absolute top-full right-0 z-20 mt-2 animate-in fade-in zoom-in-95 duration-200 w-full bg-white dark:bg-[#181818] shadow-xl rounded-xl border border-slate-200 dark:border-[#333] p-2">
+                      <div className="overflow-y-auto rounded-lg border border-slate-200 bg-white p-2 shadow-sm dark:border-[#333] dark:bg-[#0F0F0F] h-[280px]">
+                        {DURATIONS.map(d => (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => {
+                              setDuration(d);
+                              setShowDurationPicker(false);
+                            }}
+                            className={`block w-full text-center px-3 py-2.5 text-sm rounded-lg mb-1 transition-colors ${
+                              duration === d 
+                                ? 'bg-indigo-100 text-indigo-700 font-bold dark:bg-indigo-500/20 dark:text-indigo-400' 
+                                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-[#181818] font-medium'
+                            }`}
+                          >
+                            {d}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-500">
-                  This link will be shared with all attendees
-                </p>
               </div>
+            </div>
+
+            {/* Meeting Type */}
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                Meeting Type
+              </label>
+              <div className="inline-flex rounded-xl bg-slate-100 p-1.5 dark:bg-[#0F0F0F] border border-slate-200 dark:border-[#333]">
+                <button
+                  type="button"
+                  onClick={() => setType("online")}
+                  className={`flex items-center gap-2 rounded-lg px-6 py-2 text-sm font-semibold transition-all ${
+                    type === "online"
+                      ? "bg-white text-indigo-600 shadow-sm dark:bg-[#181818] dark:text-indigo-400"
+                      : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                  }`}
+                >
+                  <Video className="h-4 w-4" />
+                  Online
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setType("offline")}
+                  className={`flex items-center gap-2 rounded-lg px-6 py-2 text-sm font-semibold transition-all ${
+                    type === "offline"
+                      ? "bg-white text-indigo-600 shadow-sm dark:bg-[#181818] dark:text-indigo-400"
+                      : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                  }`}
+                >
+                  <MapPin className="h-4 w-4" />
+                  Offline
+                </button>
+              </div>
+            </div>
+
+            {type === "offline" ? (
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  Location <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="E.g., Room 402, Dept Building"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white dark:placeholder:text-slate-600 dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
+                  required={type === "offline"}
+                />
+              </div>
+            ) : (
+              <>
+                {/* Platform */}
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    Platform
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {PLATFORMS.map((p) => {
+                      const isSelected = platform === p.value;
+                      return (
+                        <button
+                          key={p.value}
+                          type="button"
+                          onClick={() => {
+                            setPlatform(isSelected ? "" : p.value);
+                            if (isSelected) setMeetingLink("");
+                          }}
+                          className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-semibold transition-all ${
+                            isSelected
+                              ? `border-indigo-400 ${p.bg} ${p.color} ${p.darkBg} ring-1 ring-indigo-400`
+                              : "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"
+                          }`}
+                        >
+                          <Video className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{p.label}</span>
+                          {isSelected && <Check className="ml-auto h-3 w-3 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Meeting Link — only shown when a platform is selected */}
+                {platform && (
+                  <div>
+                    <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-bold ${selectedPlatformInfo?.bg} ${selectedPlatformInfo?.color} ${selectedPlatformInfo?.darkBg}`}
+                      >
+                        <Video className="h-3 w-3" />
+                        {selectedPlatformInfo?.label} Link
+                      </span>
+                    </label>
+                    <div className="relative">
+                      <LinkIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="url"
+                        value={meetingLink}
+                        onChange={(e) => setMeetingLink(e.target.value)}
+                        placeholder={getPlatformLinkPlaceholder(platform)}
+                        className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white dark:placeholder:text-slate-600 dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
+                      />
+                    </div>
+                    <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-500">
+                      This link will be shared with all attendees
+                    </p>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Agenda / Notes */}
