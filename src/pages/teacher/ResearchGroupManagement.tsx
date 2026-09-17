@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -60,8 +60,8 @@ import { MeetingModal, type MeetingFormData, type MeetingPlatform } from "@/comp
 import { PublicationModal, type PublicationFormData, type PublicationStatus, type PublicationType } from "@/components/ui/PublicationModal";
 import { GroupChat } from "@/components/chat/GroupChat";
 import { auth } from "@/firebase/auth";
-import { storage } from "@/firebase/storage";
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { rtdb } from "@/firebase/database";
+import { ref as dbRef, set as dbSet, get as dbGet, remove as dbRemove } from "firebase/database";
 import {
   doc,
   getDoc,
@@ -147,7 +147,9 @@ interface Document {
   uploadedBy: string;
   uploadedAt?: unknown;
   isLink?: boolean;
-  storagePath?: string;
+  rtdbPath?: string;
+  fileName?: string;
+  fileType?: string;
 }
 
 interface Meeting {
@@ -200,6 +202,32 @@ export default function ResearchGroupManagement() {
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [documentFilter, setDocumentFilter] = useState<"all" | "files" | "links">("all");
+
+  // Timestamp helper: serverTimestamp() is null until the write round-trips,
+  // so a just-added doc without a resolved timestamp yet is treated as "now"
+  // (Infinity) rather than sinking to the bottom until the server confirms it.
+  const toMillis = (value: unknown): number => {
+    if (!value) return Infinity;
+    if (typeof value === "object" && value !== null && "toMillis" in value) {
+      return (value as { toMillis: () => number }).toMillis();
+    }
+    if (value instanceof Date) return value.getTime();
+    return Infinity;
+  };
+
+  const sortedDocuments = useMemo(
+    () => [...documents].sort((a, b) => toMillis(b.uploadedAt) - toMillis(a.uploadedAt)),
+    [documents]
+  );
+
+  const filteredDocuments = useMemo(
+    () =>
+      sortedDocuments.filter((d) =>
+        documentFilter === "all" ? true : documentFilter === "links" ? !!d.isLink : !d.isLink
+      ),
+    [sortedDocuments, documentFilter]
+  );
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [publications, setPublications] = useState<Publication[]>([]);
   const [loading, setLoading] = useState(true);
@@ -638,34 +666,59 @@ export default function ResearchGroupManagement() {
     await moveTask(task, newStatus);
   };
 
+  // Reads a File into a base64 data URL (e.g. "data:application/pdf;base64,....").
+  // Realtime Database can only store strings/JSON, not raw binary, so files are
+  // base64-encoded before being written.
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error || new Error("Failed to read file"));
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleSaveDocument = async (data: { title: string; type: string; url: string; file: File | null; isLink: boolean }) => {
     if (!id || !auth.currentUser) return;
     try {
       let documentUrl = data.url;
-      let storagePath = null;
+      let rtdbPath: string | null = null;
 
       if (!data.isLink && data.file) {
-        console.log("Starting Firebase Storage upload for:", data.file.name, "Size:", data.file.size);
-        storagePath = `researchGroups/${id}/documents/${Date.now()}_${data.file.name}`;
-        const fileRef = ref(storage, storagePath);
-        console.log("FileRef created, uploading bytes...");
-        const uploadResult = await uploadBytes(fileRef, data.file);
-        console.log("Upload bytes finished. Result:", uploadResult);
-        documentUrl = await getDownloadURL(uploadResult.ref);
-        console.log("Got download URL:", documentUrl);
+        console.log("Reading file for Realtime Database upload:", data.file.name, "Size:", data.file.size);
+        const base64Data = await fileToBase64(data.file);
+
+        // Firebase keys can't contain ".", "#", "$", "[", "]", or "/"
+        const safeFileName = data.file.name.replace(/[.#$/\[\]]/g, "_");
+        const docKey = `${Date.now()}_${safeFileName}`;
+        rtdbPath = `researchGroupDocuments/${id}/${docKey}`;
+
+        console.log("Writing file bytes to Realtime Database at:", rtdbPath);
+        await dbSet(dbRef(rtdb, rtdbPath), {
+          name: data.file.name,
+          type: data.file.type,
+          size: data.file.size,
+          data: base64Data,
+        });
+        console.log("Realtime Database write finished.");
+        // Files stored in Realtime Database don't have a static download URL —
+        // the "url" field stays empty and the viewer fetches by rtdbPath instead.
+        documentUrl = "";
       }
 
-      console.log("Saving document to Firestore...");
+      console.log("Saving document metadata to Firestore...");
       await addDoc(collection(db, "researchGroups", id, "documents"), {
         title: data.title,
         type: data.type,
         url: documentUrl,
         isLink: data.isLink,
-        storagePath,
+        rtdbPath,
+        fileName: data.file?.name || null,
+        fileType: data.file?.type || null,
         uploadedBy: auth.currentUser.displayName || "Teacher",
         uploadedAt: serverTimestamp(),
       });
-      
+
       showToast("success", "Resource added successfully");
     } catch (error) {
       console.error("Error saving document:", error);
@@ -676,15 +729,49 @@ export default function ResearchGroupManagement() {
   const handleDeleteDocument = async (docData: Document) => {
     if (!id || !window.confirm("Are you sure you want to delete this resource?")) return;
     try {
-      if (!docData.isLink && docData.storagePath) {
-        const fileRef = ref(storage, docData.storagePath);
-        await deleteObject(fileRef).catch(e => console.error("Error deleting from storage", e));
+      if (!docData.isLink && docData.rtdbPath) {
+        await dbRemove(dbRef(rtdb, docData.rtdbPath)).catch(e => console.error("Error deleting from Realtime Database", e));
       }
       await deleteDoc(doc(db, "researchGroups", id, "documents", docData.id));
       showToast("success", "Resource deleted successfully");
     } catch (error) {
       console.error("Error deleting document:", error);
       showToast("error", "Failed to delete resource");
+    }
+  };
+
+  const [viewingDocId, setViewingDocId] = useState<string | null>(null);
+
+  // Base64 data URLs can't be top-level-navigated to in most browsers (they're
+  // blocked for security), so we convert to a Blob + object URL, which can.
+  const handleViewDocument = async (docData: Document) => {
+    if (docData.isLink) {
+      window.open(docData.url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (!docData.rtdbPath) {
+      showToast("error", "This file is no longer available.");
+      return;
+    }
+    setViewingDocId(docData.id);
+    try {
+      const snapshot = await dbGet(dbRef(rtdb, docData.rtdbPath));
+      if (!snapshot.exists()) {
+        showToast("error", "This file is no longer available.");
+        return;
+      }
+      const stored = snapshot.val() as { data: string; type?: string; name?: string };
+      const res = await fetch(stored.data);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      window.open(objectUrl, "_blank", "noopener,noreferrer");
+      // Give the new tab time to load the blob before revoking it.
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    } catch (error) {
+      console.error("Error opening document:", error);
+      showToast("error", "Failed to open this file.");
+    } finally {
+      setViewingDocId(null);
     }
   };
 
@@ -1182,7 +1269,7 @@ export default function ResearchGroupManagement() {
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
                   <h2 className="mb-4 text-base font-bold text-slate-900 dark:text-white">Recent Documents</h2>
                   <div className="space-y-3">
-                    {documents.slice(0, 3).map((doc) => (
+                    {sortedDocuments.slice(0, 3).map((doc) => (
                       <div key={doc.id} className="flex items-start gap-3">
                         <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400" />
                         <div className="min-w-0 flex-1">
@@ -2051,7 +2138,7 @@ export default function ResearchGroupManagement() {
 
         {activeTab === "documents" && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-            <div className="mb-6 flex items-center justify-between">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Documents & Resources</h2>
               <button 
                 onClick={() => setIsDocumentModalOpen(true)}
@@ -2060,6 +2147,31 @@ export default function ResearchGroupManagement() {
                 <Upload className="h-4 w-4" /> Add Resource
               </button>
             </div>
+
+            {documents.length > 0 && (
+              <div className="mb-6 flex gap-2">
+                {(
+                  [
+                    { key: "all", label: "All", count: documents.length },
+                    { key: "files", label: "Files", count: documents.filter((d) => !d.isLink).length },
+                    { key: "links", label: "Links", count: documents.filter((d) => !!d.isLink).length },
+                  ] as const
+                ).map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => setDocumentFilter(f.key)}
+                    className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                      documentFilter === f.key
+                        ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300"
+                        : "border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:border-[#2A2A2A] dark:text-slate-400 dark:hover:text-slate-200"
+                    }`}
+                  >
+                    {f.label} <span className="text-xs opacity-70">({f.count})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="space-y-3">
               {documents.length === 0 ? (
                 <div className="py-12 text-center">
@@ -2069,8 +2181,25 @@ export default function ResearchGroupManagement() {
                     Upload papers, datasets, code, and other resources
                   </p>
                 </div>
+              ) : filteredDocuments.length === 0 ? (
+                <div className="py-12 text-center">
+                  {documentFilter === "links" ? (
+                    <LinkIcon className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
+                  ) : (
+                    <FileText className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
+                  )}
+                  <p className="mt-4 text-sm font-medium text-slate-900 dark:text-white">
+                    No {documentFilter} to show
+                  </p>
+                  <button
+                    onClick={() => setDocumentFilter("all")}
+                    className="mt-2 text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                  >
+                    Show all resources
+                  </button>
+                </div>
               ) : (
-                documents.map((doc) => (
+                filteredDocuments.map((doc) => (
                   <div
                     key={doc.id}
                     className="flex items-center justify-between rounded-xl border border-slate-200 p-4 dark:border-[#2A2A2A]"
@@ -2097,14 +2226,17 @@ export default function ResearchGroupManagement() {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <a
-                        href={doc.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
+                      <button
+                        onClick={() => handleViewDocument(doc)}
+                        disabled={viewingDocId === doc.id}
+                        className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50 disabled:opacity-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
                       >
-                        <Eye className="h-4 w-4" />
-                      </a>
+                        {viewingDocId === doc.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
                       <button 
                         onClick={() => handleDeleteDocument(doc)}
                         className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
