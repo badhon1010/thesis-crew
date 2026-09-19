@@ -4,6 +4,7 @@ import { ArrowLeft, Loader2, Save, Send, Calendar } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 import { createResearchTopic, type ResearchTopicInput } from "@/firebase/researchTopics";
+import { notifyStudentsOfNewTopic } from "@/firebase/notifications";
 import { auth } from "@/firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
@@ -63,7 +64,14 @@ export default function CreateTopic() {
         status,
       };
 
-      await createResearchTopic(newTopic);
+      const topicId = await createResearchTopic(newTopic);
+      if (status === "published") {
+        try {
+          await notifyStudentsOfNewTopic(topicId, newTopic.title, newTopic.supervisorName);
+        } catch (notificationError) {
+          console.error("Topic published but notifications could not be created:", notificationError);
+        }
+      }
       setToastConfig({
         message: status === "published" ? "Topic published successfully!" : "Draft saved successfully!",
         type: "success",

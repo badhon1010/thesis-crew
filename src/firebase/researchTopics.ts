@@ -18,6 +18,7 @@ export interface ResearchTopic extends ResearchTopicInput {
   id: string;
   createdAt?: unknown;
   updatedAt?: unknown;
+  publishedAt?: unknown;
 }
 
 const researchTopicsCollection = collection(db, "researchTopics");
@@ -29,6 +30,14 @@ export async function createResearchTopic(
     ...topic,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
+    ...(topic.status === "published" ? { publishedAt: serverTimestamp() } : {}),
+  });
+
+  // Auto-create "General" chat group
+  await addDoc(collection(db, "researchGroups", docRef.id, "conversations"), {
+    name: "General",
+    createdAt: serverTimestamp(),
+    hiddenBy: []
   });
 
   return docRef.id;
@@ -85,9 +94,12 @@ export async function getResearchTopicById(id: string): Promise<ResearchTopic | 
 
 export async function updateResearchTopic(id: string, data: Partial<ResearchTopicInput>): Promise<void> {
   const docRef = doc(db, "researchTopics", id);
+  const currentTopic = await getDoc(docRef);
+  const isBeingPublished = data.status === "published" && currentTopic.exists() && currentTopic.data().status !== "published";
   await updateDoc(docRef, {
     ...data,
     updatedAt: serverTimestamp(),
+    ...(isBeingPublished ? { publishedAt: serverTimestamp() } : {}),
   });
 }
 

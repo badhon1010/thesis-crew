@@ -7,6 +7,7 @@ import {
   X,
   SquarePen,
   SquareLibrary,
+  Users,
 } from "lucide-react";
 import { auth } from "../../firebase/auth";
 import { signOut } from "firebase/auth";
@@ -35,11 +36,14 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
       ? [
           { name: "Dashboard", path: "/student/dashboard", icon: LayoutDashboard },
           { name: "Research Topics", path: "/student/research-topics", icon: BookOpen },
+          { name: "My Research Groups", path: "/student/my-groups", icon: Users },
         ]
       : [
           { name: "Dashboard", path: "/teacher/dashboard", icon: LayoutDashboard },
           { name: "Create Research Topic", path: "/teacher/topics/create", icon: SquarePen },
-          { name: "My Research Topics", path: "/teacher/topics", icon: SquareLibrary }
+          { name: "My Research Topics", path: "/teacher/topics", icon: SquareLibrary },
+          { name: "Research Group", path: "/teacher/research-groups", icon: Users },
+          { name: "Team Requests", path: "/teacher/requests", icon: Users }
         ];
 
   return (

@@ -1,21 +1,20 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { Plus, Edit, Trash2, Clock3, ArrowLeft, Search, Eye, Filter } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Plus, Edit, Trash2, Clock3, ArrowLeft, Search, Filter } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 
 import { auth } from "@/firebase/auth";
-import { getFirestore } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { getTeacherResearchTopics, deleteResearchTopic, type ResearchTopic } from "@/firebase/researchTopics";
-
-const db = getFirestore();
+import { getFullCapacityTeams } from "@/firebase/teamFormation";
 
 export default function TeacherResearchTopics() {
+  const navigate = useNavigate();
   const [topics, setTopics] = useState<ResearchTopic[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "running" | "completed" | "cancelled">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "closed">("all");
 
   const [toast, setToast] = useState<{
     show: boolean;
@@ -38,8 +37,12 @@ export default function TeacherResearchTopics() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
-          const data = await getTeacherResearchTopics(user.uid);
-          setTopics(data);
+          const [data, fullTeams] = await Promise.all([
+            getTeacherResearchTopics(user.uid),
+            getFullCapacityTeams(user.uid),
+          ]);
+          const fullProjectIds = new Set(fullTeams.map((t) => t.projectId));
+          setTopics(data.filter((t) => !fullProjectIds.has(t.id)));
         } catch (error) {
           console.error("Failed to load research topics:", error);
           showToast("error", "Failed to load research topics.");
@@ -54,7 +57,8 @@ export default function TeacherResearchTopics() {
     return () => unsubscribe();
   }, []);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
     if (window.confirm("Are you sure you want to delete this topic?")) {
       try {
         await deleteResearchTopic(id);
@@ -67,16 +71,63 @@ export default function TeacherResearchTopics() {
     }
   };
 
-  const filteredTopics = topics.filter((t) => {
-    const matchesSearch =
-      t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.category.toLowerCase().includes(searchQuery.toLowerCase());
+  // Helper to check if deadline has passed
+  const isTopicClosed = (deadline?: string) => {
+    if (!deadline) return false;
+    const deadlineDate = new Date(deadline);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return deadlineDate < today;
+  };
 
-    const matchesStatus =
-      statusFilter === "all" ? true : t.status?.toLowerCase() === statusFilter;
+  const filteredTopics = topics
+    .filter((t) => {
+      const matchesSearch =
+        t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.category.toLowerCase().includes(searchQuery.toLowerCase());
 
-    return matchesSearch && matchesStatus;
-  });
+      const closed = isTopicClosed(t.applicationDeadline);
+
+      let matchesStatus = true;
+      if (statusFilter === "open") {
+        matchesStatus = !closed;
+      } else if (statusFilter === "closed") {
+        matchesStatus = closed;
+      }
+
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+
+      const aDeadline = a.applicationDeadline ? new Date(a.applicationDeadline) : null;
+      const bDeadline = b.applicationDeadline ? new Date(b.applicationDeadline) : null;
+
+      const aIsClosed = aDeadline ? aDeadline < now : false;
+      const bIsClosed = bDeadline ? bDeadline < now : false;
+
+      // No deadline topics go to the end
+      if (!aDeadline && !bDeadline) return 0;
+      if (!aDeadline) return 1;
+      if (!bDeadline) return -1;
+
+      // Open topics before closed topics
+      if (!aIsClosed && bIsClosed) return -1;
+      if (aIsClosed && !bIsClosed) return 1;
+
+      // Within open topics: sort by nearest deadline first (ascending)
+      if (!aIsClosed && !bIsClosed) {
+        return aDeadline.getTime() - bDeadline.getTime();
+      }
+
+      // Within closed topics: sort by most recent deadline first (descending)
+      if (aIsClosed && bIsClosed) {
+        return bDeadline.getTime() - aDeadline.getTime();
+      }
+
+      return 0;
+    });
 
   return (
     <DashboardLayout role="teacher">
@@ -125,16 +176,15 @@ export default function TeacherResearchTopics() {
           </div>
 
           <div className="relative flex items-center gap-2">
-            <Filter className="h-4 w-4 text-slate-400 hidden sm:block" />
+            <Filter className="hidden h-4 w-4 text-slate-400 sm:block" />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
               className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-slate-300 sm:w-auto"
             >
-              <option value="all">All Statuses</option>
-              <option value="running">Running</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
+              <option value="all">All States</option>
+              <option value="open">Open (Deadline active)</option>
+              <option value="closed">Closed (Deadline passed)</option>
             </select>
           </div>
         </div>
@@ -147,72 +197,78 @@ export default function TeacherResearchTopics() {
             ) : filteredTopics.length === 0 ? (
               <div className="px-6 py-12 text-center text-sm text-slate-500">No research topics found.</div>
             ) : (
-              filteredTopics.map((topic) => (
-                <div key={topic.id} className="p-6 transition-colors hover:bg-slate-50 dark:hover:bg-[#222222]">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-bold text-slate-900 dark:text-white">{topic.title}</h3>
-                        {topic.status && (
+              filteredTopics.map((topic) => {
+                const closed = isTopicClosed(topic.applicationDeadline);
+
+                return (
+                  <div
+                    key={topic.id}
+                    onClick={() => navigate(`/teacher/topics/details/${topic.id}`)}
+                    className="group cursor-pointer p-6 transition-colors hover:bg-slate-50 dark:hover:bg-[#222222]"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">
+                            {topic.title}
+                          </h3>
                           <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold capitalize ${
-                              topic.status.toLowerCase() === "running"
-                                ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
-                                : topic.status.toLowerCase() === "completed"
-                                ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400"
-                                : "bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400"
+                            className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold capitalize ${
+                              closed
+                                ? "bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400"
+                                : "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400"
                             }`}
                           >
-                            {topic.status}
+                            {closed ? "Closed" : "Open"}
                           </span>
-                        )}
+                        </div>
+
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                          <span className="font-semibold text-indigo-600 dark:text-indigo-400">{topic.category}</span>
+                          <span>•</span>
+                          <span>Max Team Size: {topic.maxTeamSize}</span>
+                          {topic.applicationDeadline && (
+                            <>
+                              <span>•</span>
+                              <span
+                                className={`inline-flex items-center gap-1 font-medium ${
+                                  closed
+                                    ? "text-rose-600 dark:text-rose-400"
+                                    : "text-amber-600 dark:text-amber-400"
+                                }`}
+                              >
+                                <Clock3 className="h-3 w-3" />
+                                Deadline: {new Date(topic.applicationDeadline).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                        <span className="font-semibold text-indigo-600 dark:text-indigo-400">{topic.category}</span>
-                        <span>•</span>
-                        <span>Max Team Size: {topic.maxTeamSize}</span>
-                        {topic.applicationDeadline && (
-                          <>
-                            <span>•</span>
-                            <span className="inline-flex items-center gap-1 font-medium text-amber-600 dark:text-amber-400">
-                              <Clock3 className="h-3 w-3" />
-                              Deadline: {new Date(topic.applicationDeadline).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                            </span>
-                          </>
-                        )}
+                      <div className="flex items-center gap-2">
+                        <Link
+                          to={`/teacher/topics/edit/${topic.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="rounded-lg bg-indigo-50 p-2 text-indigo-600 transition-colors hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
+                          title="Edit Topic"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Link>
+                        <button
+                          onClick={(e) => handleDelete(e, topic.id)}
+                          className="rounded-lg bg-red-50 p-2 text-red-600 transition-colors hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+                          title="Delete Topic"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      <Link
-                        to={`/teacher/topics/details/${topic.id}`}
-                        className="rounded-lg bg-slate-100 p-2 text-slate-600 transition-colors hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                        title="View Topic Details"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Link>
-                      <Link
-                        to={`/teacher/topics/edit/${topic.id}`}
-                        className="rounded-lg bg-indigo-50 p-2 text-indigo-600 transition-colors hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
-                        title="Edit Topic"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Link>
-                      <button
-                        onClick={() => handleDelete(topic.id)}
-                        className="rounded-lg bg-red-50 p-2 text-red-600 transition-colors hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
-                        title="Delete Topic"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
+                    <p className="mt-3 text-xs leading-relaxed text-slate-600 dark:text-slate-400 line-clamp-2">
+                      {topic.description}
+                    </p>
                   </div>
-                  <p className="mt-3 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
-                    {topic.description}
-                  </p>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
