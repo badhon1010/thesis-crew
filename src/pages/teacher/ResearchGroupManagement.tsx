@@ -906,14 +906,14 @@ export default function ResearchGroupManagement() {
     );
   }
 
-  const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
-    { id: "overview", label: "Overview", icon: <Target className="h-4 w-4" /> },
-    { id: "milestones", label: "Milestones", icon: <GitBranch className="h-4 w-4" /> },
-    { id: "tasks", label: "Tasks", icon: <CheckCircle2 className="h-4 w-4" /> },
-    { id: "chat", label: "Group Chat", icon: <MessageSquare className="h-4 w-4" /> },
-    { id: "documents", label: "Documents", icon: <FileText className="h-4 w-4" /> },
-    { id: "meetings", label: "Meetings", icon: <Calendar className="h-4 w-4" /> },
-    { id: "publications", label: "Publications", icon: <BookOpen className="h-4 w-4" /> },
+  const tabs = [
+    { id: "overview" as TabType, label: "Overview", icon: Target },
+    { id: "milestones" as TabType, label: "Milestones", icon: GitBranch },
+    { id: "tasks" as TabType, label: "Tasks", icon: CheckCircle2 },
+    { id: "chat" as TabType, label: "Group Chat", icon: MessageSquare },
+    { id: "documents" as TabType, label: "Documents", icon: FileText },
+    { id: "meetings" as TabType, label: "Meetings", icon: Calendar },
+    { id: "publications" as TabType, label: "Publications", icon: BookOpen },
   ];
 
   return (
@@ -1044,64 +1044,98 @@ export default function ResearchGroupManagement() {
         </div>
 
         {/* Tabs */}
-        <div className="mb-6 overflow-x-auto">
-          <div className="flex gap-2 border-b border-slate-200 dark:border-[#2A2A2A]">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
-                  activeTab === tab.id
-                    ? "border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400"
-                    : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"
-                }`}
-              >
-                {tab.icon}
-                {tab.label}
-              </button>
-            ))}
+        <div className="sticky top-20 z-20 -mx-6 mb-8 bg-[#fcfcfd]/90 px-6 py-3 backdrop-blur-xl transition-all dark:bg-[#000000]/90 border-b border-slate-200/50 dark:border-slate-800/50 lg:-mx-10 lg:px-10">
+          <div className="overflow-x-auto pb-1">
+            <div className="flex w-full min-w-max items-center gap-1 rounded-full bg-slate-100/80 p-1.5 dark:bg-[#181818]">
+              {tabs.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`relative flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 ${
+                    isActive
+                      ? "bg-white text-indigo-600 shadow-sm dark:bg-[#2A2A2A] dark:text-indigo-400"
+                      : "text-slate-600 hover:bg-slate-200/50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-[#222] dark:hover:text-slate-200"
+                  }`}
+                >
+                  <tab.icon className={`h-5 w-5 ${isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400 dark:text-slate-500"}`} />
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
         </div>
+      </div>
 
         {/* Tab Content */}
         {activeTab === "overview" && (
           <div className="space-y-6">
             {/* Stats Grid */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                <div className="flex items-center gap-3">
-                  <Users className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-                  <span className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Team Size</span>
+              <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md dark:border-[#2A2A2A] dark:bg-[#181818]">
+                <div className="absolute bottom-0 left-0 h-1 w-0 bg-indigo-500 transition-all duration-300 group-hover:w-full"></div>
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 transition-transform duration-300 group-hover:scale-110 dark:bg-indigo-500/10 dark:text-indigo-400">
+                    <Users className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Team Size</span>
+                    <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">
+                      {teamMembers.length} <span className="text-sm font-medium text-slate-400">/ {topic.maxTeamSize}</span>
+                    </p>
+                  </div>
                 </div>
-                <p className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white">
-                  {teamMembers.length} / {topic.maxTeamSize}
-                </p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                <div className="flex items-center gap-3">
-                  <GitBranch className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                  <span className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Progress</span>
+              <div 
+                onClick={() => setActiveTab("milestones")}
+                className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md cursor-pointer dark:border-[#2A2A2A] dark:bg-[#181818]"
+              >
+                <div className="absolute bottom-0 left-0 h-1 w-0 bg-emerald-500 transition-all duration-300 group-hover:w-full"></div>
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-transform duration-300 group-hover:scale-110 dark:bg-emerald-500/10 dark:text-emerald-400">
+                    <GitBranch className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 transition-colors group-hover:text-emerald-600 dark:text-slate-400 dark:group-hover:text-emerald-400">Progress</span>
+                    <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">{getProgressPercentage()}%</p>
+                  </div>
                 </div>
-                <p className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white">{getProgressPercentage()}%</p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  <span className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Tasks</span>
+              <div 
+                onClick={() => setActiveTab("tasks")}
+                className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md cursor-pointer dark:border-[#2A2A2A] dark:bg-[#181818]"
+              >
+                <div className="absolute bottom-0 left-0 h-1 w-0 bg-blue-500 transition-all duration-300 group-hover:w-full"></div>
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-transform duration-300 group-hover:scale-110 dark:bg-blue-500/10 dark:text-blue-400">
+                    <CheckCircle2 className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 transition-colors group-hover:text-blue-600 dark:text-slate-400 dark:group-hover:text-blue-400">Tasks</span>
+                    <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">
+                      {getTaskStats().completed} <span className="text-sm font-medium text-slate-400">/ {getTaskStats().total}</span>
+                    </p>
+                  </div>
                 </div>
-                <p className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white">
-                  {getTaskStats().completed} / {getTaskStats().total}
-                </p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                <div className="flex items-center gap-3">
-                  <BookOpen className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                  <span className="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Publications</span>
+              <div 
+                onClick={() => setActiveTab("publications")}
+                className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md cursor-pointer dark:border-[#2A2A2A] dark:bg-[#181818]"
+              >
+                <div className="absolute bottom-0 left-0 h-1 w-0 bg-amber-500 transition-all duration-300 group-hover:w-full"></div>
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-amber-600 transition-transform duration-300 group-hover:scale-110 dark:bg-amber-500/10 dark:text-amber-400">
+                    <BookOpen className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 transition-colors group-hover:text-amber-600 dark:text-slate-400 dark:group-hover:text-amber-400">Publications</span>
+                    <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">{publications.length}</p>
+                  </div>
                 </div>
-                <p className="mt-2 text-2xl font-extrabold text-slate-900 dark:text-white">{publications.length}</p>
               </div>
             </div>
 
@@ -1129,23 +1163,77 @@ export default function ResearchGroupManagement() {
                     {teamMembers.map((member) => (
                       <div
                         key={member.studentId}
-                        className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-[#2A2A2A] dark:bg-[#0F0F0F]"
+                        onClick={() => setSelectedStudentId(member.studentId)}
+                        className="group relative flex cursor-pointer items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md active:scale-[0.98] dark:border-[#2A2A2A] dark:bg-[#0F0F0F] dark:hover:bg-[#181818]"
                       >
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 text-sm font-bold text-indigo-700 dark:from-indigo-500/20 dark:to-violet-500/20 dark:text-indigo-300">
+                          {member.studentName.charAt(0).toUpperCase()}
+                        </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{member.studentName}</p>
                           {member.department && (
                             <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">{member.department}</p>
                           )}
                         </div>
-                        <button
-                          onClick={() => setSelectedStudentId(member.studentId)}
-                          className="ml-2 rounded-lg p-1.5 text-indigo-600 transition-colors hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
-                          title="View Profile"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
+                        
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedStudentId(member.studentId);
+                            }}
+                            className="flex items-center gap-1.5 rounded-lg bg-indigo-50 px-2.5 py-1.5 text-xs font-semibold text-indigo-600 transition-colors hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
+                            title="View Profile"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            <span>View</span>
+                          </button>
+                        </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                {/* Recent Publications */}
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+                  <h2 
+                    onClick={() => setActiveTab("publications")}
+                    className="mb-4 text-base font-bold text-slate-900 cursor-pointer transition-colors hover:text-orange-600 dark:text-white dark:hover:text-orange-400 inline-block"
+                  >
+                    Recent Publications
+                  </h2>
+                  <div className="space-y-3">
+                    {publications.slice(0, 3).map((pub) => (
+                      <div 
+                        key={pub.id} 
+                        onClick={() => setActiveTab("publications")}
+                        className="group flex cursor-pointer items-start gap-3 rounded-lg p-2 -mx-2 transition-all hover:-translate-y-0.5 hover:bg-slate-50 active:scale-[0.98] dark:hover:bg-[#222]"
+                      >
+                        <BookOpen className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400 transition-colors group-hover:text-indigo-500" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">{pub.title}</p>
+                          <div className="mt-0.5 flex items-center gap-2 text-xs">
+                            <span className={`capitalize font-medium ${
+                              pub.status === "published" ? "text-emerald-600 dark:text-emerald-400" :
+                              pub.status === "accepted" ? "text-blue-600 dark:text-blue-400" :
+                              pub.status === "under-review" ? "text-amber-600 dark:text-amber-400" :
+                              pub.status === "rejected" ? "text-rose-600 dark:text-rose-400" :
+                              "text-slate-500 dark:text-slate-400"
+                            }`}>{pub.status.replace("-", " ")}</span>
+                            <span className="text-slate-400">&bull;</span>
+                            <span className="truncate text-slate-500 dark:text-slate-400">{pub.venue}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {publications.length === 0 && (
+                      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-8 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
+                        <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 shadow-inner dark:bg-indigo-500/20 dark:text-indigo-400">
+                          <BookOpen className="h-5 w-5" />
+                        </div>
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white">No publications yet</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1154,7 +1242,12 @@ export default function ResearchGroupManagement() {
               <div className="space-y-6">
                 {/* Upcoming Milestones */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                  <h2 className="mb-4 text-base font-bold text-slate-900 dark:text-white">Upcoming Milestones</h2>
+                  <h2 
+                    onClick={() => setActiveTab("milestones")}
+                    className="mb-4 text-base font-bold text-slate-900 cursor-pointer transition-colors hover:text-emerald-600 dark:text-white dark:hover:text-emerald-400 inline-block"
+                  >
+                    Upcoming Milestones
+                  </h2>
                   <div className="space-y-3">
                     {milestones
                       .filter((m) => m.status !== "completed")
@@ -1163,10 +1256,14 @@ export default function ResearchGroupManagement() {
                         const due = new Date(`${milestone.deadline}T00:00:00`).getTime();
                         const overdue = !Number.isNaN(due) && due < new Date(new Date().setHours(0, 0, 0, 0)).getTime();
                         return (
-                          <div key={milestone.id} className="flex items-start gap-3">
-                            <Circle className={`mt-0.5 h-4 w-4 flex-shrink-0 ${overdue ? "text-rose-400" : "text-slate-400"}`} />
+                          <div 
+                            key={milestone.id} 
+                            onClick={() => setActiveTab("milestones")}
+                            className="group flex cursor-pointer items-start gap-3 rounded-lg p-2 -mx-2 transition-all hover:-translate-y-0.5 hover:bg-slate-50 active:scale-[0.98] dark:hover:bg-[#222]"
+                          >
+                            <Circle className={`mt-0.5 h-4 w-4 flex-shrink-0 transition-colors group-hover:text-indigo-500 ${overdue ? "text-rose-400" : "text-slate-400"}`} />
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold text-slate-900 dark:text-white">{milestone.title}</p>
+                              <p className="text-sm font-semibold text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">{milestone.title}</p>
                               <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
                                 <span className={overdue ? "font-bold text-rose-500" : ""}>
                                   Due: {new Date(milestone.deadline).toLocaleDateString()}{overdue ? " · overdue" : ""}
@@ -1182,25 +1279,85 @@ export default function ResearchGroupManagement() {
                         );
                       })}
                     {milestones.filter((m) => m.status !== "completed").length === 0 && (
-                      <p className="text-sm text-slate-500 dark:text-slate-400">No upcoming milestones</p>
+                      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-8 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
+                        <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 shadow-inner dark:bg-indigo-500/20 dark:text-indigo-400">
+                          <Circle className="h-5 w-5" />
+                        </div>
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white">No upcoming milestones</p>
+                      </div>
                     )}
                   </div>
                 </div>
 
                 {/* Recent Documents */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                  <h2 className="mb-4 text-base font-bold text-slate-900 dark:text-white">Recent Documents</h2>
+                  <h2 
+                    onClick={() => setActiveTab("documents")}
+                    className="mb-4 text-base font-bold text-slate-900 cursor-pointer transition-colors hover:text-blue-600 dark:text-white dark:hover:text-blue-400 inline-block"
+                  >
+                    Recent Documents
+                  </h2>
                   <div className="space-y-3">
                     {documents.slice(0, 3).map((doc) => (
-                      <div key={doc.id} className="flex items-start gap-3">
-                        <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400" />
+                      <div 
+                        key={doc.id} 
+                        onClick={() => setActiveTab("documents")}
+                        className="group flex cursor-pointer items-start gap-3 rounded-lg p-2 -mx-2 transition-all hover:-translate-y-0.5 hover:bg-slate-50 active:scale-[0.98] dark:hover:bg-[#222]"
+                      >
+                        <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400 transition-colors group-hover:text-indigo-500" />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{doc.title}</p>
+                          <p className="truncate text-sm font-semibold text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">{doc.title}</p>
                           <p className="mt-0.5 text-xs capitalize text-slate-500 dark:text-slate-400">{doc.type}</p>
                         </div>
                       </div>
                     ))}
-                    {documents.length === 0 && <p className="text-sm text-slate-500 dark:text-slate-400">No documents yet</p>}
+                    {documents.length === 0 && (
+                      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-8 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
+                        <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 shadow-inner dark:bg-indigo-500/20 dark:text-indigo-400">
+                          <FileText className="h-5 w-5" />
+                        </div>
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white">No documents yet</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Upcoming Meetings */}
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+                  <h2 
+                    onClick={() => setActiveTab("meetings")}
+                    className="mb-4 text-base font-bold text-slate-900 cursor-pointer transition-colors hover:text-violet-600 dark:text-white dark:hover:text-violet-400 inline-block"
+                  >
+                    Upcoming Meetings
+                  </h2>
+                  <div className="space-y-3">
+                    {meetings
+                      .filter((m) => new Date(m.date).getTime() > new Date().getTime())
+                      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                      .slice(0, 3)
+                      .map((meeting) => (
+                        <div 
+                          key={meeting.id} 
+                          onClick={() => setActiveTab("meetings")}
+                          className="group flex cursor-pointer items-start gap-3 rounded-lg p-2 -mx-2 transition-all hover:-translate-y-0.5 hover:bg-slate-50 active:scale-[0.98] dark:hover:bg-[#222]"
+                        >
+                          <Calendar className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400 transition-colors group-hover:text-indigo-500" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">{meeting.title}</p>
+                            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                              {new Date(meeting.date).toLocaleDateString()} at {meeting.time}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    {meetings.filter((m) => new Date(m.date).getTime() > new Date().getTime()).length === 0 && (
+                      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-8 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
+                        <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 shadow-inner dark:bg-indigo-500/20 dark:text-indigo-400">
+                          <Calendar className="h-5 w-5" />
+                        </div>
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white">No upcoming meetings</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1551,16 +1708,20 @@ export default function ResearchGroupManagement() {
               {milestones.length > 0 && (
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                   {[
-                    { label: "Total", value: milestones.length, icon: <GitBranch className="h-4 w-4" />, cls: "text-indigo-600 dark:text-indigo-400" },
-                    { label: "Completed", value: completedCount, icon: <CheckCircle2 className="h-4 w-4" />, cls: "text-emerald-600 dark:text-emerald-400" },
-                    { label: "In progress", value: inProgressCount, icon: <Clock className="h-4 w-4" />, cls: "text-amber-600 dark:text-amber-400" },
-                    { label: "Overdue", value: overdueCount, icon: <Flame className="h-4 w-4" />, cls: "text-rose-600 dark:text-rose-400" },
+                    { label: "Total", filter: "all", value: milestones.length, icon: <GitBranch className="h-4 w-4" />, cls: "text-indigo-600 dark:text-indigo-400 border-transparent hover:border-indigo-300 dark:hover:border-indigo-500/50" },
+                    { label: "Completed", filter: "completed", value: completedCount, icon: <CheckCircle2 className="h-4 w-4" />, cls: "text-emerald-600 dark:text-emerald-400 border-transparent hover:border-emerald-300 dark:hover:border-emerald-500/50" },
+                    { label: "In progress", filter: "in-progress", value: inProgressCount, icon: <Clock className="h-4 w-4" />, cls: "text-amber-600 dark:text-amber-400 border-transparent hover:border-amber-300 dark:hover:border-amber-500/50" },
+                    { label: "Overdue", filter: "overdue", value: overdueCount, icon: <Flame className="h-4 w-4" />, cls: "text-rose-600 dark:text-rose-400 border-transparent hover:border-rose-300 dark:hover:border-rose-500/50" },
                   ].map((s) => (
-                    <div key={s.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                      <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wide ${s.cls}`}>
-                        {s.icon} {s.label}
+                    <div 
+                      key={s.label} 
+                      onClick={() => setMsStatusFilter(s.filter as any)}
+                      className={`group cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md active:scale-95 dark:border-[#2A2A2A] dark:bg-[#181818] ${s.cls}`}
+                    >
+                      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide opacity-80 group-hover:opacity-100 transition-opacity">
+                        {s.icon} <span className="group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{s.label}</span>
                       </div>
-                      <p className="mt-1.5 text-2xl font-extrabold text-slate-900 dark:text-white">{s.value}</p>
+                      <p className="mt-1.5 text-2xl font-extrabold text-slate-900 group-hover:scale-105 origin-left transition-transform dark:text-white">{s.value}</p>
                     </div>
                   ))}
                 </div>
@@ -1764,7 +1925,7 @@ export default function ResearchGroupManagement() {
                 draggable
                 onDragStart={(e) => handleTaskDragStart(e, task.id)}
                 onClick={() => setViewingTask(task)}
-                className={`group cursor-grab rounded-xl border p-3.5 shadow-sm transition-all hover:shadow-md active:cursor-grabbing ${
+                className={`group cursor-grab rounded-xl border p-3.5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg active:cursor-grabbing ${
                   isOverdue
                     ? "border-rose-200 bg-rose-50/60 hover:border-rose-300 dark:border-rose-500/30 dark:bg-rose-500/10"
                     : "border-slate-200 bg-white hover:border-slate-300 dark:border-[#333] dark:bg-[#1C1C1E] dark:hover:border-slate-600"
@@ -1918,16 +2079,19 @@ export default function ResearchGroupManagement() {
               {/* Stats */}
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {[
-                  { label: "Total", value: stats.total, icon: <ListTodo className="h-4 w-4" />, cls: "text-slate-500 dark:text-slate-400" },
-                  { label: "To Do", value: stats.todo, icon: <Circle className="h-4 w-4" />, cls: "text-blue-600 dark:text-blue-400" },
-                  { label: "In Progress", value: stats.inProgress, icon: <Clock className="h-4 w-4" />, cls: "text-amber-600 dark:text-amber-400" },
-                  { label: "Completed", value: stats.completed, icon: <CheckCircle2 className="h-4 w-4" />, cls: "text-emerald-600 dark:text-emerald-400" },
+                  { label: "Total", value: stats.total, icon: <ListTodo className="h-4 w-4" />, cls: "text-slate-500 dark:text-slate-400 border-transparent hover:border-slate-300 dark:hover:border-slate-500/50" },
+                  { label: "To Do", value: stats.todo, icon: <Circle className="h-4 w-4" />, cls: "text-blue-600 dark:text-blue-400 border-transparent hover:border-blue-300 dark:hover:border-blue-500/50" },
+                  { label: "In Progress", value: stats.inProgress, icon: <Clock className="h-4 w-4" />, cls: "text-amber-600 dark:text-amber-400 border-transparent hover:border-amber-300 dark:hover:border-amber-500/50" },
+                  { label: "Completed", value: stats.completed, icon: <CheckCircle2 className="h-4 w-4" />, cls: "text-emerald-600 dark:text-emerald-400 border-transparent hover:border-emerald-300 dark:hover:border-emerald-500/50" },
                 ].map((s) => (
-                  <div key={s.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                    <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wide ${s.cls}`}>
-                      {s.icon} {s.label}
+                  <div 
+                    key={s.label} 
+                    className={`group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md dark:border-[#2A2A2A] dark:bg-[#181818] ${s.cls}`}
+                  >
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide opacity-80 group-hover:opacity-100 transition-opacity">
+                      {s.icon} <span className="group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{s.label}</span>
                     </div>
-                    <p className="mt-1.5 text-2xl font-extrabold text-slate-900 dark:text-white">{s.value}</p>
+                    <p className="mt-1.5 text-2xl font-extrabold text-slate-900 group-hover:scale-105 origin-left transition-transform dark:text-white">{s.value}</p>
                   </div>
                 ))}
               </div>
@@ -1990,7 +2154,10 @@ export default function ResearchGroupManagement() {
                       : visibleTasks.filter((t) => t.milestoneId === g.id);
                     if (g.id === "unassigned" && groupTasks.length === 0) return null;
                     return (
-                      <div key={g.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+                      <div 
+                        key={g.id} 
+                        className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-indigo-300 dark:border-[#2A2A2A] dark:bg-[#181818] dark:hover:border-indigo-500/50"
+                      >
                         <div className="mb-4 flex flex-wrap items-center gap-2">
                           <h3 className="flex items-center gap-2 text-sm font-extrabold text-slate-800 dark:text-slate-100">
                             <GitBranch className="h-4 w-4 text-indigo-500" />
@@ -2082,9 +2249,10 @@ export default function ResearchGroupManagement() {
                 documents.map((doc) => (
                   <div
                     key={doc.id}
-                    className="flex items-center justify-between rounded-xl border border-slate-200 p-4 dark:border-[#2A2A2A]"
+                    onClick={() => window.open(doc.url, "_blank")}
+                    className="group flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 p-4 hover:border-indigo-200 hover:shadow-md hover:-translate-y-1 transition-all duration-200 dark:border-[#2A2A2A] dark:hover:border-indigo-500/30 dark:hover:bg-[#1a1a1a]"
                   >
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-1 items-center gap-4">
                       <div
                         className={`flex h-10 w-10 items-center justify-center rounded-lg ${
                           doc.type === "paper"
@@ -2106,16 +2274,16 @@ export default function ResearchGroupManagement() {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <a
-                        href={doc.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </a>
+                      <div className="flex flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10">
+                          <ExternalLink className="h-4 w-4" />
+                        </span>
+                      </div>
                       <button 
-                        onClick={() => handleDeleteDocument(doc)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteDocument(doc);
+                        }}
                         className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -2172,10 +2340,14 @@ export default function ResearchGroupManagement() {
             return (
               <div
                 key={meeting.id}
-                className={`group relative overflow-hidden rounded-2xl border p-5 transition-all ${
+                onClick={() => {
+                  setEditingMeeting(meeting);
+                  setIsMeetingModalOpen(true);
+                }}
+                className={`group relative cursor-pointer overflow-hidden rounded-2xl border p-5 transition-all active:scale-[0.99] hover:-translate-y-1 ${
                   isPast
-                    ? "border-slate-100 bg-slate-50/50 dark:border-[#222] dark:bg-[#111]"
-                    : "border-slate-200 bg-white shadow-sm hover:shadow-md dark:border-[#2A2A2A] dark:bg-[#181818]"
+                    ? "border-slate-100 bg-slate-50/50 hover:border-slate-200 dark:border-[#222] dark:bg-[#111] dark:hover:border-[#333]"
+                    : "border-slate-200 bg-white shadow-sm hover:shadow-md hover:border-indigo-300 dark:border-[#2A2A2A] dark:bg-[#181818] dark:hover:border-indigo-500/30"
                 }`}
               >
                 {/* Top row: title + actions */}
@@ -2183,10 +2355,10 @@ export default function ResearchGroupManagement() {
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3
-                        className={`font-bold ${
+                        className={`font-bold transition-colors ${
                           isPast
                             ? "text-slate-500 dark:text-slate-500"
-                            : "text-slate-900 dark:text-white"
+                            : "text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400"
                         }`}
                       >
                         {meeting.title}
@@ -2258,7 +2430,7 @@ export default function ResearchGroupManagement() {
                         </span>
 
                         {meeting.meetingLink && (
-                          <>
+                          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                             <a
                               href={meeting.meetingLink}
                               target="_blank"
@@ -2285,7 +2457,7 @@ export default function ResearchGroupManagement() {
                               <Copy className="h-3 w-3" />
                               {copiedMeetingId === meeting.id ? "Copied!" : "Copy Link"}
                             </button>
-                          </>
+                          </div>
                         )}
                       </div>
                     ) : null}
@@ -2332,24 +2504,31 @@ export default function ResearchGroupManagement() {
                   </div>
 
                   {/* Action buttons */}
-                  <div className="flex shrink-0 gap-1">
-                    <button
-                      onClick={() => {
-                        setEditingMeeting(meeting);
-                        setIsMeetingModalOpen(true);
-                      }}
-                      className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-                      title="Edit meeting"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => setDeleteMeetingId(meeting.id)}
-                      className="rounded-lg p-2 text-rose-500 transition-colors hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-300"
-                      title="Delete meeting"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                  <div className="flex items-center gap-3">
+                    <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => {
+                          setEditingMeeting(meeting);
+                          setIsMeetingModalOpen(true);
+                        }}
+                        className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                        title="Edit meeting"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteMeetingId(meeting.id)}
+                        className="rounded-lg p-2 text-rose-500 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:text-rose-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-300"
+                        title="Delete meeting"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="flex shrink-0 items-center justify-center opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0">
+                      <div className="rounded-full bg-slate-100 p-2 text-indigo-600 dark:bg-slate-800 dark:text-indigo-400">
+                        <ChevronRight className="h-4 w-4" />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2368,33 +2547,33 @@ export default function ResearchGroupManagement() {
                     </p>
                   </div>
                   <div className="flex items-center gap-4">
-                    <div className="flex gap-2">
+                    <div className="flex gap-1.5 rounded-xl bg-slate-100 p-1 dark:bg-[#222]">
                       <button
                         onClick={() => setMeetingSubTab("upcoming")}
-                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
                           meetingSubTab === "upcoming"
-                            ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400"
-                            : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
+                            ? "bg-white text-indigo-600 shadow-sm dark:bg-[#333] dark:text-indigo-400"
+                            : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                         }`}
                       >
                         Upcoming
                       </button>
                       <button
                         onClick={() => setMeetingSubTab("past")}
-                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
                           meetingSubTab === "past"
-                            ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400"
-                            : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
+                            ? "bg-white text-indigo-600 shadow-sm dark:bg-[#333] dark:text-indigo-400"
+                            : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                         }`}
                       >
                         Past
                       </button>
                       <button
                         onClick={() => setMeetingSubTab("all")}
-                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
                           meetingSubTab === "all"
-                            ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400"
-                            : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800"
+                            ? "bg-white text-indigo-600 shadow-sm dark:bg-[#333] dark:text-indigo-400"
+                            : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                         }`}
                       >
                         All
@@ -2602,16 +2781,20 @@ export default function ResearchGroupManagement() {
               {/* Stats */}
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {[
-                  { label: "Total outputs", value: publications.length, icon: <BookOpen className="h-4 w-4" />, cls: "text-indigo-600 dark:text-indigo-400" },
-                  { label: "Published", value: publishedCount, icon: <CheckCircle2 className="h-4 w-4" />, cls: "text-emerald-600 dark:text-emerald-400" },
-                  { label: "In pipeline", value: inPipeline, icon: <Send className="h-4 w-4" />, cls: "text-amber-600 dark:text-amber-400" },
-                  { label: "Acceptance rate", value: `${acceptanceRate}%`, icon: <Sparkles className="h-4 w-4" />, cls: "text-violet-600 dark:text-violet-400" },
+                  { label: "Total outputs", filter: "all", value: publications.length, icon: <BookOpen className="h-4 w-4" />, cls: "text-indigo-600 dark:text-indigo-400 border-transparent hover:border-indigo-300 dark:hover:border-indigo-500/50" },
+                  { label: "Published", filter: "published", value: publishedCount, icon: <CheckCircle2 className="h-4 w-4" />, cls: "text-emerald-600 dark:text-emerald-400 border-transparent hover:border-emerald-300 dark:hover:border-emerald-500/50" },
+                  { label: "In pipeline", filter: "under-review", value: inPipeline, icon: <Send className="h-4 w-4" />, cls: "text-amber-600 dark:text-amber-400 border-transparent hover:border-amber-300 dark:hover:border-amber-500/50" },
+                  { label: "Acceptance rate", filter: "accepted", value: `${acceptanceRate}%`, icon: <Sparkles className="h-4 w-4" />, cls: "text-violet-600 dark:text-violet-400 border-transparent hover:border-violet-300 dark:hover:border-violet-500/50" },
                 ].map((s) => (
-                  <div key={s.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                    <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wide ${s.cls}`}>
-                      {s.icon} {s.label}
+                  <div 
+                    key={s.label} 
+                    onClick={() => setPubStatusFilter(s.filter as any)}
+                    className={`group cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md active:scale-95 dark:border-[#2A2A2A] dark:bg-[#181818] ${s.cls}`}
+                  >
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide opacity-80 group-hover:opacity-100 transition-opacity">
+                      {s.icon} <span className="group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{s.label}</span>
                     </div>
-                    <p className="mt-1.5 text-2xl font-extrabold text-slate-900 dark:text-white">{s.value}</p>
+                    <p className="mt-1.5 text-2xl font-extrabold text-slate-900 group-hover:scale-105 origin-left transition-transform dark:text-white">{s.value}</p>
                   </div>
                 ))}
               </div>
@@ -2708,10 +2891,10 @@ export default function ResearchGroupManagement() {
                     return (
                       <article
                         key={pub.id}
-                        className={`group relative overflow-hidden rounded-2xl border bg-white shadow-sm transition-all hover:shadow-md dark:bg-[#181818] ${
+                        className={`group relative overflow-hidden rounded-2xl border bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:bg-[#181818] ${
                           pub.status === "published"
-                            ? "border-emerald-200 dark:border-emerald-500/30"
-                            : "border-slate-200 dark:border-[#2A2A2A]"
+                            ? "border-emerald-200 hover:border-emerald-400 dark:border-emerald-500/30 dark:hover:border-emerald-400/60"
+                            : "border-slate-200 hover:border-indigo-300 dark:border-[#2A2A2A] dark:hover:border-indigo-500/50"
                         }`}
                       >
                         {pub.status === "published" && <div className="h-1 w-full bg-emerald-500" />}
@@ -2734,7 +2917,14 @@ export default function ResearchGroupManagement() {
                                     {pub.status.replace("-", " ")}
                                   </span>
                                 </div>
-                                <h3 className="mt-1.5 text-lg font-extrabold leading-snug text-slate-900 dark:text-white">
+                                <h3
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingPublication(pub);
+                                    setIsPublicationModalOpen(true);
+                                  }}
+                                  className="mt-1.5 text-lg font-extrabold leading-snug text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors cursor-pointer"
+                                >
                                   {pub.title}
                                 </h3>
                                 {(pub.authors?.length || pub.publisher || pub.volume || pub.pages) && (
@@ -2747,24 +2937,35 @@ export default function ResearchGroupManagement() {
                                 )}
                               </div>
                             </div>
-                            <div className="flex shrink-0 gap-1">
-                              <button
-                                onClick={() => {
-                                  setEditingPublication(pub);
-                                  setIsPublicationModalOpen(true);
-                                }}
-                                title="Edit publication"
-                                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => setDeletePublicationId(pub.id)}
-                                title="Remove publication"
-                                className="rounded-lg p-2 text-rose-500 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
+                            <div className="flex items-center gap-3">
+                              <div className="flex shrink-0 gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingPublication(pub);
+                                    setIsPublicationModalOpen(true);
+                                  }}
+                                  title="Edit publication"
+                                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDeletePublicationId(pub.id);
+                                  }}
+                                  title="Remove publication"
+                                  className="rounded-lg p-2 text-rose-500 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                              <div className="flex shrink-0 items-center justify-center opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0">
+                                <div className="rounded-full bg-slate-100 p-2 text-indigo-600 dark:bg-slate-800 dark:text-indigo-400">
+                                  <ChevronRight className="h-4 w-4" />
+                                </div>
+                              </div>
                             </div>
                           </div>
 
@@ -2822,35 +3023,35 @@ export default function ResearchGroupManagement() {
                           {/* Link bar */}
                           <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4 dark:border-[#262626]">
                             {pub.doi && (
-                              <a href={doiUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/20">
+                              <a href={doiUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-100 hover:scale-105 active:scale-95 transition-all dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/20">
                                 <LinkIcon className="h-3 w-3" /> DOI: {pub.doi.length > 28 ? `${pub.doi.slice(0, 28)}…` : pub.doi}
                               </a>
                             )}
                             {pub.paperUrl && (
-                              <a href={pub.paperUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700">
+                              <a href={pub.paperUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 hover:scale-105 active:scale-95 transition-all shadow-sm hover:shadow-md">
                                 <FileDown className="h-3 w-3" /> Paper / PDF <ExternalLink className="h-3 w-3" />
                               </a>
                             )}
                             {pub.codeUrl && (
-                              <a href={pub.codeUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#0F0F0F]">
+                              <a href={pub.codeUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:scale-105 active:scale-95 transition-all dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#0F0F0F]">
                                 <Code2 className="h-3 w-3" /> Code
                               </a>
                             )}
                             {pub.projectUrl && (
-                              <a href={pub.projectUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#0F0F0F]">
+                              <a href={pub.projectUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:scale-105 active:scale-95 transition-all dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#0F0F0F]">
                                 <Globe className="h-3 w-3" /> Project page
                               </a>
                             )}
                             <div className="ml-auto flex items-center gap-1.5">
                               <button
                                 onClick={() => handleCopyPublicationLink(pub)}
-                                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition-all ${copiedPubId === pub.id ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300" : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"}`}
+                                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition-all hover:scale-105 active:scale-95 ${copiedPubId === pub.id ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300" : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"}`}
                               >
                                 <Copy className="h-3 w-3" /> {copiedPubId === pub.id ? "Copied!" : "Copy link"}
                               </button>
                               <button
                                 onClick={() => handleNativeSharePublication(pub)}
-                                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"
+                                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 hover:scale-105 active:scale-95 transition-all dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"
                               >
                                 <Share2 className="h-3 w-3" /> Share
                               </button>

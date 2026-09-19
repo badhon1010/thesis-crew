@@ -23,7 +23,10 @@ import {
   MapPin,
   Copy,
   ExternalLink,
+  ChevronRight,
   Video,
+  ListTodo,
+  Quote,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 
@@ -141,6 +144,7 @@ interface Publication {
   venue: string;
   type: string;
   status: string;
+  abstract?: string;
   submissionDate?: string;
   acceptanceDate?: string;
   publicationDate?: string;
@@ -152,7 +156,7 @@ interface Publication {
 type TabType = "overview" | "milestones" | "tasks" | "chat" | "documents" | "meetings" | "publications";
 type MeetingSubTab = "upcoming" | "past" | "all";
 
-export const getMeetingTime = (meeting: Meeting): number => {
+  const getMeetingTime = (meeting: Meeting): number => {
   let meetingDateTime = new Date(meeting.date).getTime();
   if (meeting.time) {
     const timeMatch = meeting.time.match(/(\d+):(\d+)\s*(AM|PM)/i);
@@ -173,6 +177,7 @@ export default function StudentGroupDetails() {
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<TabType>("overview");
+  const [expandedPubId, setExpandedPubId] = useState<string | null>(null);
   const [topic, setTopic] = useState<ResearchTopic | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -190,6 +195,7 @@ export default function StudentGroupDetails() {
     return stored ? JSON.parse(stored) : { overview: Date.now() };
   });
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [expandedMilestoneId, setExpandedMilestoneId] = useState<string | null>(null);
   const [viewingMilestone, setViewingMilestone] = useState<Milestone | null>(null);
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
   const [viewingMeeting, setViewingMeeting] = useState<Meeting | null>(null);
@@ -784,27 +790,33 @@ export default function StudentGroupDetails() {
                 </div>
               </div>
 
-              <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md dark:border-[#2A2A2A] dark:bg-[#181818]">
+              <div 
+                onClick={() => handleTabChange("milestones")}
+                className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md cursor-pointer dark:border-[#2A2A2A] dark:bg-[#181818]"
+              >
                 <div className="absolute bottom-0 left-0 h-1 w-0 bg-emerald-500 transition-all duration-300 group-hover:w-full"></div>
                 <div className="flex items-center gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-transform duration-300 group-hover:scale-110 dark:bg-emerald-500/10 dark:text-emerald-400">
                     <GitBranch className="h-6 w-6" />
                   </div>
                   <div>
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Progress</span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 transition-colors group-hover:text-emerald-600 dark:text-slate-400 dark:group-hover:text-emerald-400">Progress</span>
                     <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">{getProgressPercentage()}%</p>
                   </div>
                 </div>
               </div>
 
-              <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md dark:border-[#2A2A2A] dark:bg-[#181818]">
+              <div 
+                onClick={() => handleTabChange("tasks")}
+                className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md cursor-pointer dark:border-[#2A2A2A] dark:bg-[#181818]"
+              >
                 <div className="absolute bottom-0 left-0 h-1 w-0 bg-blue-500 transition-all duration-300 group-hover:w-full"></div>
                 <div className="flex items-center gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-transform duration-300 group-hover:scale-110 dark:bg-blue-500/10 dark:text-blue-400">
                     <CheckCircle2 className="h-6 w-6" />
                   </div>
                   <div>
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Tasks</span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 transition-colors group-hover:text-blue-600 dark:text-slate-400 dark:group-hover:text-blue-400">Tasks</span>
                     <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">
                       {getTaskStats().completed} <span className="text-sm font-medium text-slate-400">/ {getTaskStats().total}</span>
                     </p>
@@ -812,14 +824,17 @@ export default function StudentGroupDetails() {
                 </div>
               </div>
 
-              <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md dark:border-[#2A2A2A] dark:bg-[#181818]">
+              <div 
+                onClick={() => handleTabChange("publications")}
+                className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md cursor-pointer dark:border-[#2A2A2A] dark:bg-[#181818]"
+              >
                 <div className="absolute bottom-0 left-0 h-1 w-0 bg-amber-500 transition-all duration-300 group-hover:w-full"></div>
                 <div className="flex items-center gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-amber-600 transition-transform duration-300 group-hover:scale-110 dark:bg-amber-500/10 dark:text-amber-400">
                     <BookOpen className="h-6 w-6" />
                   </div>
                   <div>
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Publications</span>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500 transition-colors group-hover:text-amber-600 dark:text-slate-400 dark:group-hover:text-amber-400">Publications</span>
                     <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">{publications.length}</p>
                   </div>
                 </div>
@@ -997,6 +1012,45 @@ export default function StudentGroupDetails() {
                     )}
                   </div>
                 </div>
+
+                {/* Upcoming Meetings */}
+                <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+                  <h2 
+                    onClick={() => handleTabChange("meetings")}
+                    className="mb-4 text-base font-bold text-slate-900 cursor-pointer transition-colors hover:text-violet-600 dark:text-white dark:hover:text-violet-400 inline-block"
+                  >
+                    Upcoming Meetings
+                  </h2>
+                  <div className="space-y-3">
+                    {meetings
+                      .filter((m) => new Date(m.date).getTime() > new Date().getTime())
+                      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                      .slice(0, 3)
+                      .map((meeting) => (
+                        <div 
+                          key={meeting.id} 
+                          onClick={() => handleTabChange("meetings")}
+                          className="group flex cursor-pointer items-start gap-3 rounded-lg p-2 -mx-2 transition-all hover:-translate-y-0.5 hover:bg-slate-50 active:scale-[0.98] dark:hover:bg-[#222]"
+                        >
+                          <Calendar className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400 transition-colors group-hover:text-indigo-500" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">{meeting.title}</p>
+                            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                              {new Date(meeting.date).toLocaleDateString()} at {meeting.time}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    {meetings.filter((m) => new Date(m.date).getTime() > new Date().getTime()).length === 0 && (
+                      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-8 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
+                        <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 shadow-inner dark:bg-indigo-500/20 dark:text-indigo-400">
+                          <Calendar className="h-5 w-5" />
+                        </div>
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white">No upcoming meetings</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1009,21 +1063,21 @@ export default function StudentGroupDetails() {
             </div>
             
             {/* Overall Progress Bar */}
-            <div className="mb-8 rounded-xl bg-slate-50 p-4 dark:bg-[#111]">
+            <div className="mb-8 rounded-xl bg-slate-50 p-4 transition-all hover:bg-slate-100 hover:shadow-inner dark:bg-[#111] dark:hover:bg-[#151515] group/progress cursor-default">
               <div className="mb-2 flex items-center justify-between text-sm">
-                <span className="font-semibold text-slate-700 dark:text-slate-300">Overall Progress</span>
-                <span className="font-bold text-indigo-600 dark:text-indigo-400">{getProgressPercentage()}%</span>
+                <span className="font-semibold text-slate-700 transition-colors group-hover/progress:text-indigo-600 dark:text-slate-300 dark:group-hover/progress:text-indigo-400">Overall Progress</span>
+                <span className="font-bold text-indigo-600 transition-transform group-hover/progress:scale-110 dark:text-indigo-400">{getProgressPercentage()}%</span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
                 <div 
-                  className="h-full bg-indigo-500 transition-all duration-1000 ease-out"
+                  className="h-full bg-indigo-500 transition-all duration-1000 ease-out group-hover/progress:bg-indigo-600 group-hover/progress:shadow-[0_0_10px_rgba(99,102,241,0.5)] dark:group-hover/progress:bg-indigo-400"
                   style={{ width: `${getProgressPercentage()}%` }}
                 ></div>
               </div>
-              <div className="mt-3 flex gap-4 text-xs font-medium text-slate-500 dark:text-slate-400">
-                <div className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-emerald-500"></div>Completed</div>
-                <div className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-amber-500"></div>In Progress</div>
-                <div className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-rose-500"></div>Overdue</div>
+              <div className="mt-3 flex gap-4 text-xs font-medium text-slate-500 transition-all group-hover/progress:opacity-100 opacity-80 dark:text-slate-400">
+                <div className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-emerald-500 shadow-sm"></div>Completed</div>
+                <div className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-amber-500 shadow-sm"></div>In Progress</div>
+                <div className="flex items-center gap-1.5"><div className="h-2 w-2 rounded-full bg-rose-500 shadow-sm"></div>Overdue</div>
               </div>
             </div>
 
@@ -1055,14 +1109,18 @@ export default function StudentGroupDetails() {
                     ? "border-l-amber-500"
                     : "border-l-blue-500";
 
+                  const isExpanded = expandedMilestoneId === milestone.id;
+
                   return (
                     <div
                       key={milestone.id}
                       onClick={() => setViewingMilestone(milestone)}
-                      className={`group relative cursor-pointer overflow-hidden rounded-xl border-y border-r border-l-4 p-5 transition-all hover:-translate-y-1 hover:shadow-md active:scale-[0.99] ${borderColor} ${
+                      className={`group relative cursor-pointer overflow-hidden rounded-xl border-y border-r border-l-4 p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg active:scale-[0.99] ${borderColor} ${
                         isOverdue 
-                          ? "border-y-rose-200 border-r-rose-200 bg-rose-50/30 dark:border-y-rose-900/50 dark:border-r-rose-900/50 dark:bg-rose-950/10" 
-                          : "border-y-slate-200 border-r-slate-200 bg-white dark:border-y-[#333] dark:border-r-[#333] dark:bg-[#1A1A1A]"
+                          ? "border-y-rose-200 border-r-rose-200 bg-rose-50/30 hover:border-y-rose-400 hover:border-r-rose-400 dark:border-y-rose-900/50 dark:border-r-rose-900/50 dark:hover:border-y-rose-500/60 dark:hover:border-r-rose-500/60 dark:bg-rose-950/10" 
+                          : milestone.status === "completed" 
+                          ? "border-y-slate-200 border-r-slate-200 bg-white hover:border-y-emerald-400 hover:border-r-emerald-400 dark:border-y-[#333] dark:border-r-[#333] dark:hover:border-y-emerald-500/60 dark:hover:border-r-emerald-500/60 dark:bg-[#1A1A1A]" 
+                          : "border-y-slate-200 border-r-slate-200 bg-white hover:border-y-indigo-300 hover:border-r-indigo-300 dark:border-y-[#333] dark:border-r-[#333] dark:hover:border-y-indigo-500/50 dark:hover:border-r-indigo-500/50 dark:bg-[#1A1A1A]"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-4">
@@ -1112,6 +1170,18 @@ export default function StudentGroupDetails() {
                                 <div className="h-full rounded-full bg-indigo-500" style={{ width: `${taskProgress}%` }}></div>
                               </div>
                             </div>
+                            
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedMilestoneId(isExpanded ? null : milestone.id);
+                              }}
+                              className="ml-auto inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-50 dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#0F0F0F] transition-colors"
+                            >
+                              <ListTodo className="h-3 w-3" />
+                              {isExpanded ? "Hide tasks" : `View tasks (${totalTasksCount})`}
+                              {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                            </button>
                           </div>
                         </div>
                         
@@ -1124,12 +1194,19 @@ export default function StudentGroupDetails() {
                       </div>
                       
                       {/* Tasks under this milestone */}
-                      {milestoneTasks.length > 0 && (
+                      {isExpanded && milestoneTasks.length > 0 && (
                         <div className="mt-6 border-t border-slate-100 pt-4 dark:border-[#2A2A2A]">
                           <h4 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">Associated Tasks</h4>
                           <div className="grid gap-2">
                             {milestoneTasks.map(task => (
-                              <div key={task.id} className="flex cursor-pointer items-start gap-3 rounded-lg bg-slate-50 p-3 transition-all hover:-translate-y-0.5 hover:shadow-sm active:scale-[0.99] dark:bg-[#111] dark:hover:bg-[#181818]">
+                              <div 
+                                key={task.id} 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setViewingTask(task);
+                                }}
+                                className="group/task flex cursor-pointer items-start gap-3 rounded-lg bg-slate-50 p-3 transition-all hover:-translate-y-0.5 hover:bg-slate-100 hover:shadow-sm active:scale-[0.99] dark:bg-[#111] dark:hover:bg-[#181818]"
+                              >
                                 <div className="mt-0.5">
                                   {task.status === "completed" ? (
                                     <CheckCircle2 className="h-4 w-4 text-emerald-500" />
@@ -1139,10 +1216,13 @@ export default function StudentGroupDetails() {
                                     <Circle className="h-4 w-4 text-slate-300 dark:text-slate-600" />
                                   )}
                                 </div>
-                                <div>
+                                <div className="flex-1">
                                   <p className={`text-sm font-medium ${task.status === "completed" ? "text-slate-400 line-through" : "text-slate-700 dark:text-slate-200"}`}>
                                     {task.title}
                                   </p>
+                                </div>
+                                <div className="opacity-0 transition-opacity group-hover/task:opacity-100 flex items-center justify-center">
+                                  <Eye className="h-4 w-4 text-indigo-400" />
                                 </div>
                               </div>
                             ))}
@@ -1275,10 +1355,11 @@ export default function StudentGroupDetails() {
                                         if (isAssigned) handleDragStart(e, task.id);
                                         else e.preventDefault();
                                       }}
-                                      className={`group ${isAssigned ? 'cursor-grab active:cursor-grabbing hover:-translate-y-1' : 'cursor-not-allowed opacity-75'} rounded-xl p-3.5 shadow-sm hover:shadow-md transition-all duration-200 border ${
+                                      onClick={() => setViewingTask(task)}
+                                      className={`group ${isAssigned ? 'cursor-grab active:cursor-grabbing hover:-translate-y-1' : 'cursor-not-allowed opacity-75'} rounded-xl p-3.5 shadow-sm transition-all duration-300 hover:shadow-lg border ${
                                         isOverdue
-                                          ? "bg-rose-50/50 border-rose-200 hover:border-rose-300 dark:bg-rose-950/20 dark:border-rose-900/50 dark:hover:border-rose-800"
-                                          : "bg-white hover:bg-slate-50 dark:bg-[#1C1C1E] dark:hover:bg-[#252528] border-slate-200 dark:border-slate-700/50 hover:border-slate-300 dark:hover:border-slate-600"
+                                          ? "bg-rose-50/50 border-rose-200 hover:border-rose-400 dark:bg-rose-950/20 dark:border-rose-900/50 dark:hover:border-rose-500/60"
+                                          : "bg-white border-slate-200 hover:border-indigo-300 dark:bg-[#1C1C1E] dark:border-[#333] dark:hover:border-indigo-500/50"
                                       }`}
                                     >
                                       <div className="mb-2 flex items-start justify-between gap-2">
@@ -1381,12 +1462,10 @@ export default function StudentGroupDetails() {
                 documents.map((doc) => (
                   <div
                     key={doc.id}
-                    className="group flex items-center justify-between rounded-xl border border-slate-200 p-4 hover:border-indigo-200 hover:shadow-md hover:-translate-y-1 transition-all duration-200 dark:border-[#2A2A2A] dark:hover:border-indigo-500/30 dark:hover:bg-[#1a1a1a]"
+                    onClick={() => window.open(doc.url, "_blank")}
+                    className="group flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 p-4 hover:border-indigo-200 hover:shadow-md hover:-translate-y-1 transition-all duration-200 dark:border-[#2A2A2A] dark:hover:border-indigo-500/30 dark:hover:bg-[#1a1a1a]"
                   >
-                    <div 
-                      onClick={() => window.open(doc.url, "_blank")}
-                      className="flex flex-1 cursor-pointer items-center gap-4"
-                    >
+                    <div className="flex flex-1 items-center gap-4">
                       <div
                         className={`flex h-10 w-10 items-center justify-center rounded-lg ${
                           doc.type === "paper"
@@ -1408,15 +1487,15 @@ export default function StudentGroupDetails() {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <a
-                        href={doc.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
+                      <div className="flex flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10">
+                          <ExternalLink className="h-4 w-4" />
+                        </span>
+                      </div>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); }} // Implement delete logic if needed
+                        className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
                       >
-                        <LinkIcon className="h-4 w-4" />
-                      </a>
-                      <button className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
@@ -1517,7 +1596,7 @@ export default function StudentGroupDetails() {
                     <div
                       key={meeting.id}
                       onClick={() => setViewingMeeting(meeting)}
-                      className={`relative cursor-pointer overflow-hidden rounded-xl border-y border-r border-l-4 p-4 transition-all hover:-translate-y-1 hover:shadow-md active:scale-[0.99] ${
+                      className={`group relative cursor-pointer overflow-hidden rounded-xl border-y border-r border-l-4 p-4 transition-all hover:-translate-y-1 hover:shadow-md active:scale-[0.99] ${
                         isPast 
                           ? "border-l-slate-400 border-y-slate-200 border-r-slate-200 bg-slate-50 opacity-75 hover:border-l-slate-500 dark:border-l-slate-600 dark:border-y-[#2A2A2A] dark:border-r-[#2A2A2A] dark:bg-[#121212]" 
                           : "border-l-indigo-500 border-y-slate-200 border-r-slate-200 bg-white hover:border-l-indigo-600 hover:border-y-indigo-500/30 hover:border-r-indigo-500/30 dark:border-l-indigo-500 dark:border-y-[#2A2A2A] dark:border-r-[#2A2A2A] dark:bg-[#1A1A1A]"
@@ -1526,7 +1605,7 @@ export default function StudentGroupDetails() {
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
                           <div className="flex items-center gap-3">
-                            <h3 className="font-semibold text-slate-900 dark:text-white">{meeting.title}</h3>
+                            <h3 className="font-semibold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{meeting.title}</h3>
                             {isPast && (
                               <span className="rounded bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">Completed</span>
                             )}
@@ -1610,6 +1689,11 @@ export default function StudentGroupDetails() {
                               )}
                             </div>
                           ) : null}
+                        </div>
+                        <div className="flex shrink-0 items-center justify-center opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0">
+                          <div className="rounded-full bg-slate-100 p-2 text-indigo-600 dark:bg-slate-800 dark:text-indigo-400">
+                            <ChevronRight className="h-4 w-4" />
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1717,12 +1801,13 @@ export default function StudentGroupDetails() {
                   return (
                     <div
                       key={pub.id}
-                      className={`group relative overflow-hidden rounded-xl border-y border-r border-l-4 p-5 ${borderColor} bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md dark:border-y-[#2A2A2A] dark:border-r-[#2A2A2A] dark:bg-[#1A1A1A]`}
+                      onClick={() => pub.paperUrl ? window.open(pub.paperUrl, "_blank") : null}
+                      className={`group relative overflow-hidden rounded-xl border-y border-r border-l-4 p-5 ${borderColor} bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-y-indigo-300 hover:border-r-indigo-300 ${pub.paperUrl ? "cursor-pointer" : ""} dark:border-y-[#2A2A2A] dark:border-r-[#2A2A2A] dark:hover:border-y-indigo-500/50 dark:hover:border-r-indigo-500/50 dark:bg-[#1A1A1A]`}
                     >
                       <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-bold text-lg text-slate-900 dark:text-white">{pub.title}</h3>
+                            <h3 className="font-bold text-lg text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{pub.title}</h3>
                             <span
                               className={`rounded-full px-2.5 py-0.5 text-xs font-bold capitalize ${
                                 pub.status === "published"
@@ -1757,20 +1842,44 @@ export default function StudentGroupDetails() {
                             )}
                           </div>
                           
+                          {/* Abstract */}
+                          {pub.abstract && (
+                            <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-[#262626] dark:bg-[#0F0F0F]">
+                              <p className="flex items-start gap-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-300">
+                                <Quote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-300 dark:text-slate-600" />
+                                <span className={expandedPubId === pub.id ? "" : "line-clamp-2"}>{pub.abstract}</span>
+                              </p>
+                              {pub.abstract.length > 180 && (
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setExpandedPubId(expandedPubId === pub.id ? null : pub.id);
+                                  }}
+                                  className="mt-1.5 text-xs font-bold text-indigo-600 hover:underline dark:text-indigo-400"
+                                >
+                                  {expandedPubId === pub.id ? "Show less" : "Read abstract"}
+                                </button>
+                              )}
+                            </div>
+                          )}
+
                           {pub.paperUrl && (
                             <a 
                               href={pub.paperUrl} 
                               target="_blank" 
-                              rel="noopener noreferrer" 
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
                               className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-600 transition-colors hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
                             >
                               <ExternalLink className="h-4 w-4" /> View Paper
                             </a>
                           )}
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex items-center gap-3">
+                          <div className="flex shrink-0 gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button 
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setEditingPublication(pub);
                               setIsPublicationModalOpen(true);
                             }}
@@ -1779,11 +1888,20 @@ export default function StudentGroupDetails() {
                             <Edit2 className="h-5 w-5" />
                           </button>
                           <button 
-                            onClick={() => setDeletePublicationId(pub.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletePublicationId(pub.id);
+                            }}
                             className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
                           >
                             <Trash2 className="h-5 w-5" />
                           </button>
+                        </div>
+                        <div className="flex shrink-0 items-center justify-center opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0">
+                          <div className="rounded-full bg-slate-100 p-2 text-indigo-600 dark:bg-slate-800 dark:text-indigo-400">
+                            <ChevronRight className="h-4 w-4" />
+                          </div>
+                          </div>
                         </div>
                       </div>
                     </div>
