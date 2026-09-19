@@ -14,6 +14,7 @@ import {
   FileArchive,
   FileSpreadsheet,
   CheckCircle2,
+  XCircle,
 } from "lucide-react";
 
 type DocumentType = "paper" | "dataset" | "code" | "presentation" | "other";
@@ -93,6 +94,16 @@ export function DocumentModal({ isOpen, onClose, onSave }: DocumentModalProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Guards against setState calls after Cancel/X closes the modal while a
+  // save is still in flight in the background.
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const resetForm = () => {
     setIsLink(false);
@@ -113,9 +124,18 @@ export function DocumentModal({ isOpen, onClose, onSave }: DocumentModalProps) {
 
   if (!isOpen) return null;
 
+  // Cancel/X always closes the modal immediately, even mid-save. Any save
+  // already in flight keeps running in the background (handled by the
+  // parent's onSave); isMountedRef just stops it from touching state here
+  // once we've unmounted.
   const handleClose = () => {
-    if (isSaving) return;
     onClose();
+  };
+
+  const handleRemoveFile = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -164,13 +184,17 @@ export function DocumentModal({ isOpen, onClose, onSave }: DocumentModalProps) {
         file: isLink ? null : file,
         isLink,
       });
+      // The user may have already hit Cancel while this was in flight —
+      // in that case the modal is unmounted, so skip touching its state.
+      if (!isMountedRef.current) return;
       resetForm();
       onClose();
     } catch (err) {
       console.error("DocumentModal: save failed", err);
+      if (!isMountedRef.current) return;
       setError(err instanceof Error ? err.message : "Couldn't save this resource. Try again.");
     } finally {
-      setIsSaving(false);
+      if (isMountedRef.current) setIsSaving(false);
     }
   };
 
@@ -190,8 +214,7 @@ export function DocumentModal({ isOpen, onClose, onSave }: DocumentModalProps) {
           </div>
           <button
             onClick={handleClose}
-            disabled={isSaving}
-            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
           >
             <X className="h-5 w-5" />
           </button>
@@ -294,7 +317,7 @@ export function DocumentModal({ isOpen, onClose, onSave }: DocumentModalProps) {
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onClick={() => fileInputRef.current?.click()}
-                  className={`group flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-8 text-center transition-all ${
+                  className={`group relative flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-8 text-center transition-all ${
                     isDragging
                       ? "scale-[1.01] border-indigo-500 bg-indigo-50 dark:bg-indigo-500/10"
                       : file
@@ -303,6 +326,16 @@ export function DocumentModal({ isOpen, onClose, onSave }: DocumentModalProps) {
                   }`}
                 >
                   <input ref={fileInputRef} type="file" onChange={handleFileInputChange} className="hidden" />
+                  {file && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveFile}
+                      aria-label="Remove selected file"
+                      className="absolute right-3 top-3 rounded-full text-slate-400 transition-colors hover:text-rose-500 dark:text-slate-500 dark:hover:text-rose-400"
+                    >
+                      <XCircle className="h-5 w-5" />
+                    </button>
+                  )}
                   <div
                     className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors ${
                       file
@@ -318,7 +351,7 @@ export function DocumentModal({ isOpen, onClose, onSave }: DocumentModalProps) {
                         {file.name}
                       </p>
                       <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                        {formatBytes(file.size)} &middot; click or drop to replace
+                        {formatBytes(file.size)} &middot; click, drop, or clear to replace
                       </p>
                     </>
                   ) : (
@@ -346,8 +379,7 @@ export function DocumentModal({ isOpen, onClose, onSave }: DocumentModalProps) {
           <button
             type="button"
             onClick={handleClose}
-            disabled={isSaving}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-[#2A2A2A] dark:text-slate-300 dark:hover:bg-slate-800"
+            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-[#2A2A2A] dark:text-slate-300 dark:hover:bg-slate-800"
           >
             Cancel
           </button>
