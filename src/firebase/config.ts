@@ -5,6 +5,7 @@ const firebaseConfig = {
   authDomain: "thesiscrew-f0846.firebaseapp.com",
   projectId: "thesiscrew-f0846",
   storageBucket: "thesiscrew-f0846.firebasestorage.app",
+  databaseURL: "https://thesiscrew-f0846-default-rtdb.asia-southeast1.firebasedatabase.app",
   messagingSenderId: "333015099036",
   appId: "1:333015099036:web:ccf2cf6cde05b4e38c2f59",
   measurementId: "G-STMZNM60VZ"

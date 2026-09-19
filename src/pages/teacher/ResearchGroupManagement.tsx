@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -61,8 +61,8 @@ import { MeetingModal, type MeetingFormData, type MeetingPlatform } from "@/comp
 import { PublicationModal, type PublicationFormData, type PublicationStatus, type PublicationType } from "@/components/ui/PublicationModal";
 import { GroupChat } from "@/components/chat/GroupChat";
 import { auth } from "@/firebase/auth";
-import { storage } from "@/firebase/storage";
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { rtdb } from "@/firebase/database";
+import { ref as dbRef, set as dbSet, get as dbGet, remove as dbRemove } from "firebase/database";
 import {
   doc,
   getDoc,
@@ -148,7 +148,9 @@ interface Document {
   uploadedBy: string;
   uploadedAt?: unknown;
   isLink?: boolean;
-  storagePath?: string;
+  rtdbPath?: string;
+  fileName?: string;
+  fileType?: string;
 }
 
 interface Meeting {
@@ -205,6 +207,32 @@ export default function ResearchGroupManagement() {
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [documentFilter, setDocumentFilter] = useState<"all" | "files" | "links">("all");
+
+  // Timestamp helper: serverTimestamp() is null until the write round-trips,
+  // so a just-added doc without a resolved timestamp yet is treated as "now"
+  // (Infinity) rather than sinking to the bottom until the server confirms it.
+  const toMillis = (value: unknown): number => {
+    if (!value) return Infinity;
+    if (typeof value === "object" && value !== null && "toMillis" in value) {
+      return (value as { toMillis: () => number }).toMillis();
+    }
+    if (value instanceof Date) return value.getTime();
+    return Infinity;
+  };
+
+  const sortedDocuments = useMemo(
+    () => [...documents].sort((a, b) => toMillis(b.uploadedAt) - toMillis(a.uploadedAt)),
+    [documents]
+  );
+
+  const filteredDocuments = useMemo(
+    () =>
+      sortedDocuments.filter((d) =>
+        documentFilter === "all" ? true : documentFilter === "links" ? !!d.isLink : !d.isLink
+      ),
+    [sortedDocuments, documentFilter]
+  );
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [meetingSubTab, setMeetingSubTab] = useState<MeetingSubTab>("upcoming");
   const [publications, setPublications] = useState<Publication[]>([]);
@@ -644,34 +672,59 @@ export default function ResearchGroupManagement() {
     await moveTask(task, newStatus);
   };
 
+  // Reads a File into a base64 data URL (e.g. "data:application/pdf;base64,....").
+  // Realtime Database can only store strings/JSON, not raw binary, so files are
+  // base64-encoded before being written.
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error || new Error("Failed to read file"));
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleSaveDocument = async (data: { title: string; type: string; url: string; file: File | null; isLink: boolean }) => {
     if (!id || !auth.currentUser) return;
     try {
       let documentUrl = data.url;
-      let storagePath = null;
+      let rtdbPath: string | null = null;
 
       if (!data.isLink && data.file) {
-        console.log("Starting Firebase Storage upload for:", data.file.name, "Size:", data.file.size);
-        storagePath = `researchGroups/${id}/documents/${Date.now()}_${data.file.name}`;
-        const fileRef = ref(storage, storagePath);
-        console.log("FileRef created, uploading bytes...");
-        const uploadResult = await uploadBytes(fileRef, data.file);
-        console.log("Upload bytes finished. Result:", uploadResult);
-        documentUrl = await getDownloadURL(uploadResult.ref);
-        console.log("Got download URL:", documentUrl);
+        console.log("Reading file for Realtime Database upload:", data.file.name, "Size:", data.file.size);
+        const base64Data = await fileToBase64(data.file);
+
+        // Firebase keys can't contain ".", "#", "$", "[", "]", or "/"
+        const safeFileName = data.file.name.replace(/[.#$/\[\]]/g, "_");
+        const docKey = `${Date.now()}_${safeFileName}`;
+        rtdbPath = `researchGroupDocuments/${id}/${docKey}`;
+
+        console.log("Writing file bytes to Realtime Database at:", rtdbPath);
+        await dbSet(dbRef(rtdb, rtdbPath), {
+          name: data.file.name,
+          type: data.file.type,
+          size: data.file.size,
+          data: base64Data,
+        });
+        console.log("Realtime Database write finished.");
+        // Files stored in Realtime Database don't have a static download URL —
+        // the "url" field stays empty and the viewer fetches by rtdbPath instead.
+        documentUrl = "";
       }
 
-      console.log("Saving document to Firestore...");
+      console.log("Saving document metadata to Firestore...");
       await addDoc(collection(db, "researchGroups", id, "documents"), {
         title: data.title,
         type: data.type,
         url: documentUrl,
         isLink: data.isLink,
-        storagePath,
+        rtdbPath,
+        fileName: data.file?.name || null,
+        fileType: data.file?.type || null,
         uploadedBy: auth.currentUser.displayName || "Teacher",
         uploadedAt: serverTimestamp(),
       });
-      
+
       showToast("success", "Resource added successfully");
     } catch (error) {
       console.error("Error saving document:", error);
@@ -682,15 +735,49 @@ export default function ResearchGroupManagement() {
   const handleDeleteDocument = async (docData: Document) => {
     if (!id || !window.confirm("Are you sure you want to delete this resource?")) return;
     try {
-      if (!docData.isLink && docData.storagePath) {
-        const fileRef = ref(storage, docData.storagePath);
-        await deleteObject(fileRef).catch(e => console.error("Error deleting from storage", e));
+      if (!docData.isLink && docData.rtdbPath) {
+        await dbRemove(dbRef(rtdb, docData.rtdbPath)).catch(e => console.error("Error deleting from Realtime Database", e));
       }
       await deleteDoc(doc(db, "researchGroups", id, "documents", docData.id));
       showToast("success", "Resource deleted successfully");
     } catch (error) {
       console.error("Error deleting document:", error);
       showToast("error", "Failed to delete resource");
+    }
+  };
+
+  const [viewingDocId, setViewingDocId] = useState<string | null>(null);
+
+  // Base64 data URLs can't be top-level-navigated to in most browsers (they're
+  // blocked for security), so we convert to a Blob + object URL, which can.
+  const handleViewDocument = async (docData: Document) => {
+    if (docData.isLink) {
+      window.open(docData.url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (!docData.rtdbPath) {
+      showToast("error", "This file is no longer available.");
+      return;
+    }
+    setViewingDocId(docData.id);
+    try {
+      const snapshot = await dbGet(dbRef(rtdb, docData.rtdbPath));
+      if (!snapshot.exists()) {
+        showToast("error", "This file is no longer available.");
+        return;
+      }
+      const stored = snapshot.val() as { data: string; type?: string; name?: string };
+      const res = await fetch(stored.data);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      window.open(objectUrl, "_blank", "noopener,noreferrer");
+      // Give the new tab time to load the blob before revoking it.
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    } catch (error) {
+      console.error("Error opening document:", error);
+      showToast("error", "Failed to open this file.");
+    } finally {
+      setViewingDocId(null);
     }
   };
 
@@ -1023,11 +1110,10 @@ export default function ResearchGroupManagement() {
                   {topic.category}
                 </span>
                 <span
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-bold capitalize ${
-                    isGroupPublished
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-bold capitalize ${isGroupPublished
                       ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
                       : "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
-                  }`}
+                    }`}
                 >
                   {isGroupPublished ? "Published" : "Ongoing"}
                 </span>
@@ -1048,25 +1134,24 @@ export default function ResearchGroupManagement() {
           <div className="overflow-x-auto pb-1">
             <div className="flex w-full min-w-max items-center gap-1 rounded-full bg-slate-100/80 p-1.5 dark:bg-[#181818]">
               {tabs.map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`relative flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 ${
-                    isActive
-                      ? "bg-white text-indigo-600 shadow-sm dark:bg-[#2A2A2A] dark:text-indigo-400"
-                      : "text-slate-600 hover:bg-slate-200/50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-[#222] dark:hover:text-slate-200"
-                  }`}
-                >
-                  <tab.icon className={`h-5 w-5 ${isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400 dark:text-slate-500"}`} />
-                  {tab.label}
-                </button>
-              );
-            })}
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`relative flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 ${isActive
+                        ? "bg-white text-indigo-600 shadow-sm dark:bg-[#2A2A2A] dark:text-indigo-400"
+                        : "text-slate-600 hover:bg-slate-200/50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-[#222] dark:hover:text-slate-200"
+                      }`}
+                  >
+                    <tab.icon className={`h-5 w-5 ${isActive ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400 dark:text-slate-500"}`} />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
 
         {/* Tab Content */}
         {activeTab === "overview" && (
@@ -1088,7 +1173,7 @@ export default function ResearchGroupManagement() {
                 </div>
               </div>
 
-              <div 
+              <div
                 onClick={() => setActiveTab("milestones")}
                 className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md cursor-pointer dark:border-[#2A2A2A] dark:bg-[#181818]"
               >
@@ -1104,7 +1189,7 @@ export default function ResearchGroupManagement() {
                 </div>
               </div>
 
-              <div 
+              <div
                 onClick={() => setActiveTab("tasks")}
                 className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md cursor-pointer dark:border-[#2A2A2A] dark:bg-[#181818]"
               >
@@ -1122,7 +1207,7 @@ export default function ResearchGroupManagement() {
                 </div>
               </div>
 
-              <div 
+              <div
                 onClick={() => setActiveTab("publications")}
                 className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md cursor-pointer dark:border-[#2A2A2A] dark:bg-[#181818]"
               >
@@ -1175,7 +1260,7 @@ export default function ResearchGroupManagement() {
                             <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">{member.department}</p>
                           )}
                         </div>
-                        
+
                         <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100">
                           <button
                             onClick={(e) => {
@@ -1196,7 +1281,7 @@ export default function ResearchGroupManagement() {
 
                 {/* Recent Publications */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                  <h2 
+                  <h2
                     onClick={() => setActiveTab("publications")}
                     className="mb-4 text-base font-bold text-slate-900 cursor-pointer transition-colors hover:text-orange-600 dark:text-white dark:hover:text-orange-400 inline-block"
                   >
@@ -1204,8 +1289,8 @@ export default function ResearchGroupManagement() {
                   </h2>
                   <div className="space-y-3">
                     {publications.slice(0, 3).map((pub) => (
-                      <div 
-                        key={pub.id} 
+                      <div
+                        key={pub.id}
                         onClick={() => setActiveTab("publications")}
                         className="group flex cursor-pointer items-start gap-3 rounded-lg p-2 -mx-2 transition-all hover:-translate-y-0.5 hover:bg-slate-50 active:scale-[0.98] dark:hover:bg-[#222]"
                       >
@@ -1213,13 +1298,12 @@ export default function ResearchGroupManagement() {
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">{pub.title}</p>
                           <div className="mt-0.5 flex items-center gap-2 text-xs">
-                            <span className={`capitalize font-medium ${
-                              pub.status === "published" ? "text-emerald-600 dark:text-emerald-400" :
-                              pub.status === "accepted" ? "text-blue-600 dark:text-blue-400" :
-                              pub.status === "under-review" ? "text-amber-600 dark:text-amber-400" :
-                              pub.status === "rejected" ? "text-rose-600 dark:text-rose-400" :
-                              "text-slate-500 dark:text-slate-400"
-                            }`}>{pub.status.replace("-", " ")}</span>
+                            <span className={`capitalize font-medium ${pub.status === "published" ? "text-emerald-600 dark:text-emerald-400" :
+                                pub.status === "accepted" ? "text-blue-600 dark:text-blue-400" :
+                                  pub.status === "under-review" ? "text-amber-600 dark:text-amber-400" :
+                                    pub.status === "rejected" ? "text-rose-600 dark:text-rose-400" :
+                                      "text-slate-500 dark:text-slate-400"
+                              }`}>{pub.status.replace("-", " ")}</span>
                             <span className="text-slate-400">&bull;</span>
                             <span className="truncate text-slate-500 dark:text-slate-400">{pub.venue}</span>
                           </div>
@@ -1242,7 +1326,7 @@ export default function ResearchGroupManagement() {
               <div className="space-y-6">
                 {/* Upcoming Milestones */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                  <h2 
+                  <h2
                     onClick={() => setActiveTab("milestones")}
                     className="mb-4 text-base font-bold text-slate-900 cursor-pointer transition-colors hover:text-emerald-600 dark:text-white dark:hover:text-emerald-400 inline-block"
                   >
@@ -1256,8 +1340,8 @@ export default function ResearchGroupManagement() {
                         const due = new Date(`${milestone.deadline}T00:00:00`).getTime();
                         const overdue = !Number.isNaN(due) && due < new Date(new Date().setHours(0, 0, 0, 0)).getTime();
                         return (
-                          <div 
-                            key={milestone.id} 
+                          <div
+                            key={milestone.id}
                             onClick={() => setActiveTab("milestones")}
                             className="group flex cursor-pointer items-start gap-3 rounded-lg p-2 -mx-2 transition-all hover:-translate-y-0.5 hover:bg-slate-50 active:scale-[0.98] dark:hover:bg-[#222]"
                           >
@@ -1291,40 +1375,47 @@ export default function ResearchGroupManagement() {
 
                 {/* Recent Documents */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                  <h2 
+                  <h2
                     onClick={() => setActiveTab("documents")}
                     className="mb-4 text-base font-bold text-slate-900 cursor-pointer transition-colors hover:text-blue-600 dark:text-white dark:hover:text-blue-400 inline-block"
                   >
                     Recent Documents
                   </h2>
                   <div className="space-y-3">
-                    {documents.slice(0, 3).map((doc) => (
-                      <div 
-                        key={doc.id} 
-                        onClick={() => setActiveTab("documents")}
-                        className="group flex cursor-pointer items-start gap-3 rounded-lg p-2 -mx-2 transition-all hover:-translate-y-0.5 hover:bg-slate-50 active:scale-[0.98] dark:hover:bg-[#222]"
-                      >
-                        <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400 transition-colors group-hover:text-indigo-500" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">{doc.title}</p>
-                          <p className="mt-0.5 text-xs capitalize text-slate-500 dark:text-slate-400">{doc.type}</p>
-                        </div>
-                      </div>
-                    ))}
-                    {documents.length === 0 && (
-                      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-8 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
-                        <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 shadow-inner dark:bg-indigo-500/20 dark:text-indigo-400">
-                          <FileText className="h-5 w-5" />
-                        </div>
-                        <p className="text-sm font-semibold text-slate-900 dark:text-white">No documents yet</p>
-                      </div>
-                    )}
+                    {(() => {
+                      const sortedDocuments = documents;
+                      return (
+                        <>
+                          {sortedDocuments.slice(0, 3).map((doc) => (
+                            <div
+                              key={doc.id}
+                              onClick={() => setActiveTab("documents")}
+                              className="group flex cursor-pointer items-start gap-3 rounded-lg p-2 -mx-2 transition-all hover:-translate-y-0.5 hover:bg-slate-50 active:scale-[0.98] dark:hover:bg-[#222]"
+                            >
+                              <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400 transition-colors group-hover:text-indigo-500" />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-semibold text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">{doc.title}</p>
+                                <p className="mt-0.5 text-xs capitalize text-slate-500 dark:text-slate-400">{doc.type}</p>
+                              </div>
+                            </div>
+                          ))}
+                          {sortedDocuments.length === 0 && (
+                            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-8 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
+                              <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 shadow-inner dark:bg-indigo-500/20 dark:text-indigo-400">
+                                <FileText className="h-5 w-5" />
+                              </div>
+                              <p className="text-sm font-semibold text-slate-900 dark:text-white">No documents yet</p>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
 
                 {/* Upcoming Meetings */}
                 <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-                  <h2 
+                  <h2
                     onClick={() => setActiveTab("meetings")}
                     className="mb-4 text-base font-bold text-slate-900 cursor-pointer transition-colors hover:text-violet-600 dark:text-white dark:hover:text-violet-400 inline-block"
                   >
@@ -1336,8 +1427,8 @@ export default function ResearchGroupManagement() {
                       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
                       .slice(0, 3)
                       .map((meeting) => (
-                        <div 
-                          key={meeting.id} 
+                        <div
+                          key={meeting.id}
                           onClick={() => setActiveTab("meetings")}
                           className="group flex cursor-pointer items-start gap-3 rounded-lg p-2 -mx-2 transition-all hover:-translate-y-0.5 hover:bg-slate-50 active:scale-[0.98] dark:hover:bg-[#222]"
                         >
@@ -1366,11 +1457,11 @@ export default function ResearchGroupManagement() {
         )}
 
         {activeTab === "chat" && (
-          <GroupChat 
-            groupId={id!} 
-            currentUserId={auth.currentUser?.uid || ""} 
-            currentUserName={topic?.supervisorName || auth.currentUser?.displayName || "Supervisor"} 
-            currentUserRole="teacher" 
+          <GroupChat
+            groupId={id!}
+            currentUserId={auth.currentUser?.uid || ""}
+            currentUserName={topic?.supervisorName || auth.currentUser?.displayName || "Supervisor"}
+            currentUserRole="teacher"
             members={[
               ...(topic?.supervisorId ? [{ id: topic.supervisorId, name: topic.supervisorName || "Supervisor", role: "teacher" as const }] : []),
               ...teamMembers.map(m => ({ id: m.studentId, name: m.studentName, role: "student" as const }))
@@ -1449,13 +1540,12 @@ export default function ResearchGroupManagement() {
             return (
               <article
                 key={m.id}
-                className={`relative overflow-hidden rounded-2xl border bg-white shadow-sm transition-all hover:shadow-md dark:bg-[#181818] ${
-                  m.status === "completed"
+                className={`relative overflow-hidden rounded-2xl border bg-white shadow-sm transition-all hover:shadow-md dark:bg-[#181818] ${m.status === "completed"
                     ? "border-emerald-200 dark:border-emerald-500/30"
                     : isOverdue(m)
-                    ? "border-rose-200 dark:border-rose-500/30"
-                    : "border-slate-200 dark:border-[#2A2A2A]"
-                }`}
+                      ? "border-rose-200 dark:border-rose-500/30"
+                      : "border-slate-200 dark:border-[#2A2A2A]"
+                  }`}
               >
                 {(isOverdue(m) || m.status === "completed") && (
                   <div className={`h-1 w-full ${isOverdue(m) ? "bg-rose-500" : "bg-emerald-500"}`} />
@@ -1713,8 +1803,8 @@ export default function ResearchGroupManagement() {
                     { label: "In progress", filter: "in-progress", value: inProgressCount, icon: <Clock className="h-4 w-4" />, cls: "text-amber-600 dark:text-amber-400 border-transparent hover:border-amber-300 dark:hover:border-amber-500/50" },
                     { label: "Overdue", filter: "overdue", value: overdueCount, icon: <Flame className="h-4 w-4" />, cls: "text-rose-600 dark:text-rose-400 border-transparent hover:border-rose-300 dark:hover:border-rose-500/50" },
                   ].map((s) => (
-                    <div 
-                      key={s.label} 
+                    <div
+                      key={s.label}
                       onClick={() => setMsStatusFilter(s.filter as any)}
                       className={`group cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md active:scale-95 dark:border-[#2A2A2A] dark:bg-[#181818] ${s.cls}`}
                     >
@@ -1744,11 +1834,10 @@ export default function ResearchGroupManagement() {
                       <button
                         key={s}
                         onClick={() => setMsStatusFilter(s)}
-                        className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize transition-all ${
-                          msStatusFilter === s
+                        className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize transition-all ${msStatusFilter === s
                             ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
                             : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                        }`}
+                          }`}
                       >
                         {s === "in-progress" ? "In progress" : s}
                       </button>
@@ -1925,20 +2014,18 @@ export default function ResearchGroupManagement() {
                 draggable
                 onDragStart={(e) => handleTaskDragStart(e, task.id)}
                 onClick={() => setViewingTask(task)}
-                className={`group cursor-grab rounded-xl border p-3.5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg active:cursor-grabbing ${
-                  isOverdue
+                className={`group cursor-grab rounded-xl border p-3.5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg active:cursor-grabbing ${isOverdue
                     ? "border-rose-200 bg-rose-50/60 hover:border-rose-300 dark:border-rose-500/30 dark:bg-rose-500/10"
                     : "border-slate-200 bg-white hover:border-slate-300 dark:border-[#333] dark:bg-[#1C1C1E] dark:hover:border-slate-600"
-                }`}
+                  }`}
               >
                 <div className="mb-1.5 flex items-start justify-between gap-2">
-                  <h4 className={`text-sm font-semibold leading-snug ${
-                    task.status === "completed"
+                  <h4 className={`text-sm font-semibold leading-snug ${task.status === "completed"
                       ? "text-slate-400 line-through dark:text-slate-500"
                       : isOverdue
-                      ? "text-rose-700 dark:text-rose-300"
-                      : "text-slate-800 dark:text-slate-100"
-                  }`}>
+                        ? "text-rose-700 dark:text-rose-300"
+                        : "text-slate-800 dark:text-slate-100"
+                    }`}>
                     {task.title}
                   </h4>
                   <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
@@ -2084,8 +2171,8 @@ export default function ResearchGroupManagement() {
                   { label: "In Progress", value: stats.inProgress, icon: <Clock className="h-4 w-4" />, cls: "text-amber-600 dark:text-amber-400 border-transparent hover:border-amber-300 dark:hover:border-amber-500/50" },
                   { label: "Completed", value: stats.completed, icon: <CheckCircle2 className="h-4 w-4" />, cls: "text-emerald-600 dark:text-emerald-400 border-transparent hover:border-emerald-300 dark:hover:border-emerald-500/50" },
                 ].map((s) => (
-                  <div 
-                    key={s.label} 
+                  <div
+                    key={s.label}
                     className={`group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md dark:border-[#2A2A2A] dark:bg-[#181818] ${s.cls}`}
                   >
                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide opacity-80 group-hover:opacity-100 transition-opacity">
@@ -2113,11 +2200,10 @@ export default function ResearchGroupManagement() {
                       <button
                         key={p}
                         onClick={() => setTaskPriorityFilter(p)}
-                        className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize transition-all ${
-                          taskPriorityFilter === p
+                        className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize transition-all ${taskPriorityFilter === p
                             ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
                             : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                        }`}
+                          }`}
                       >
                         {p === "all" ? "All priorities" : p}
                       </button>
@@ -2154,8 +2240,8 @@ export default function ResearchGroupManagement() {
                       : visibleTasks.filter((t) => t.milestoneId === g.id);
                     if (g.id === "unassigned" && groupTasks.length === 0) return null;
                     return (
-                      <div 
-                        key={g.id} 
+                      <div
+                        key={g.id}
                         className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-indigo-300 dark:border-[#2A2A2A] dark:bg-[#181818] dark:hover:border-indigo-500/50"
                       >
                         <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -2192,9 +2278,8 @@ export default function ResearchGroupManagement() {
                                   key={col.status}
                                   onDragOver={handleTaskDragOver}
                                   onDrop={(e) => handleTaskDrop(e, col.status, g.id)}
-                                  className={`flex min-h-[180px] flex-col rounded-xl ${col.columnBg} p-3 transition-colors ${
-                                    draggedTaskId ? "outline-2 outline-dashed outline-indigo-300 dark:outline-indigo-500/50" : "outline-none"
-                                  }`}
+                                  className={`flex min-h-[180px] flex-col rounded-xl ${col.columnBg} p-3 transition-colors ${draggedTaskId ? "outline-2 outline-dashed outline-indigo-300 dark:outline-indigo-500/50" : "outline-none"
+                                    }`}
                                 >
                                   <div className="mb-3 flex items-center justify-between px-1 pt-1">
                                     <h4 className={`text-xs font-extrabold tracking-wide ${col.headerColor}`}>{col.title}</h4>
@@ -2227,15 +2312,39 @@ export default function ResearchGroupManagement() {
 
         {activeTab === "documents" && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-            <div className="mb-6 flex items-center justify-between">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Documents & Resources</h2>
-              <button 
+              <button
                 onClick={() => setIsDocumentModalOpen(true)}
                 className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
               >
                 <Upload className="h-4 w-4" /> Add Resource
               </button>
             </div>
+
+            {documents.length > 0 && (
+              <div className="mb-6 flex gap-2">
+                {(
+                  [
+                    { key: "all", label: "All", count: documents.length },
+                    { key: "files", label: "Files", count: documents.filter((d) => !d.isLink).length },
+                    { key: "links", label: "Links", count: documents.filter((d) => !!d.isLink).length },
+                  ] as const
+                ).map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => setDocumentFilter(f.key)}
+                    className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${documentFilter === f.key
+                        ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300"
+                        : "border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:border-[#2A2A2A] dark:text-slate-400 dark:hover:text-slate-200"
+                      }`}
+                  >
+                    {f.label} <span className="text-xs opacity-70">({f.count})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="space-y-3">
               {documents.length === 0 ? (
                 <div className="py-12 text-center">
@@ -2245,8 +2354,25 @@ export default function ResearchGroupManagement() {
                     Upload papers, datasets, code, and other resources
                   </p>
                 </div>
+              ) : filteredDocuments.length === 0 ? (
+                <div className="py-12 text-center">
+                  {documentFilter === "links" ? (
+                    <LinkIcon className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
+                  ) : (
+                    <FileText className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
+                  )}
+                  <p className="mt-4 text-sm font-medium text-slate-900 dark:text-white">
+                    No {documentFilter} to show
+                  </p>
+                  <button
+                    onClick={() => setDocumentFilter("all")}
+                    className="mt-2 text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                  >
+                    Show all resources
+                  </button>
+                </div>
               ) : (
-                documents.map((doc) => (
+                filteredDocuments.map((doc) => (
                   <div
                     key={doc.id}
                     onClick={() => window.open(doc.url, "_blank")}
@@ -2254,15 +2380,14 @@ export default function ResearchGroupManagement() {
                   >
                     <div className="flex flex-1 items-center gap-4">
                       <div
-                        className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-                          doc.type === "paper"
+                        className={`flex h-10 w-10 items-center justify-center rounded-lg ${doc.type === "paper"
                             ? "bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400"
                             : doc.type === "code"
-                            ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400"
-                            : doc.type === "dataset"
-                            ? "bg-violet-100 text-violet-600 dark:bg-violet-500/20 dark:text-violet-400"
-                            : "bg-slate-100 text-slate-600 dark:bg-slate-500/20 dark:text-slate-400"
-                        }`}
+                              ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400"
+                              : doc.type === "dataset"
+                                ? "bg-violet-100 text-violet-600 dark:bg-violet-500/20 dark:text-violet-400"
+                                : "bg-slate-100 text-slate-600 dark:bg-slate-500/20 dark:text-slate-400"
+                          }`}
                       >
                         {doc.isLink ? <LinkIcon className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
                       </div>
@@ -2275,11 +2400,22 @@ export default function ResearchGroupManagement() {
                     </div>
                     <div className="flex gap-2">
                       <div className="flex flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10">
-                          <ExternalLink className="h-4 w-4" />
-                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewDocument(doc);
+                          }}
+                          disabled={viewingDocId === doc.id}
+                          className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50 disabled:opacity-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
+                        >
+                          {viewingDocId === doc.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </button>
                       </div>
-                      <button 
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDeleteDocument(doc);
@@ -2298,7 +2434,7 @@ export default function ResearchGroupManagement() {
 
         {activeTab === "meetings" && (() => {
           const now = new Date().getTime();
-          
+
           const getMeetingTime = (m: Meeting) => {
             let meetingDateTime = new Date(m.date).getTime();
             if (m.time) {
@@ -2344,22 +2480,20 @@ export default function ResearchGroupManagement() {
                   setEditingMeeting(meeting);
                   setIsMeetingModalOpen(true);
                 }}
-                className={`group relative cursor-pointer overflow-hidden rounded-2xl border p-5 transition-all active:scale-[0.99] hover:-translate-y-1 ${
-                  isPast
+                className={`group relative cursor-pointer overflow-hidden rounded-2xl border p-5 transition-all active:scale-[0.99] hover:-translate-y-1 ${isPast
                     ? "border-slate-100 bg-slate-50/50 hover:border-slate-200 dark:border-[#222] dark:bg-[#111] dark:hover:border-[#333]"
                     : "border-slate-200 bg-white shadow-sm hover:shadow-md hover:border-indigo-300 dark:border-[#2A2A2A] dark:bg-[#181818] dark:hover:border-indigo-500/30"
-                }`}
+                  }`}
               >
                 {/* Top row: title + actions */}
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3
-                        className={`font-bold transition-colors ${
-                          isPast
+                        className={`font-bold transition-colors ${isPast
                             ? "text-slate-500 dark:text-slate-500"
                             : "text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400"
-                        }`}
+                          }`}
                       >
                         {meeting.title}
                       </h3>
@@ -2381,12 +2515,12 @@ export default function ResearchGroupManagement() {
 
                     {/* Date, time & duration row */}
                     <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
-                      <span className={`flex items-center gap-1.5 ${ isPast ? "text-slate-400 dark:text-slate-500" : "text-slate-600 dark:text-slate-300" }`}>
+                      <span className={`flex items-center gap-1.5 ${isPast ? "text-slate-400 dark:text-slate-500" : "text-slate-600 dark:text-slate-300"}`}>
                         <Calendar className="h-3.5 w-3.5" />
                         {new Date(meeting.date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
                       </span>
                       {meeting.time && (
-                        <span className={`flex items-center gap-1.5 ${ isPast ? "text-slate-400 dark:text-slate-500" : "text-slate-600 dark:text-slate-300" }`}>
+                        <span className={`flex items-center gap-1.5 ${isPast ? "text-slate-400 dark:text-slate-500" : "text-slate-600 dark:text-slate-300"}`}>
                           <Clock className="h-3.5 w-3.5" />
                           {(() => {
                             const [h, m] = meeting.time.split(":").map(Number);
@@ -2396,7 +2530,7 @@ export default function ResearchGroupManagement() {
                           })()}
                         </span>
                       )}
-                      <span className={`flex items-center gap-1.5 ${ isPast ? "text-slate-400 dark:text-slate-500" : "text-slate-500 dark:text-slate-400" }`}>
+                      <span className={`flex items-center gap-1.5 ${isPast ? "text-slate-400 dark:text-slate-500" : "text-slate-500 dark:text-slate-400"}`}>
                         <Clock className="h-3.5 w-3.5 opacity-60" />
                         {meeting.duration}
                       </span>
@@ -2406,11 +2540,10 @@ export default function ResearchGroupManagement() {
                     {meeting.type === "offline" && meeting.location ? (
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <span
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
-                            isPast
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${isPast
                               ? "border-slate-200 bg-slate-100 text-slate-400 dark:border-[#222] dark:bg-[#1A1A1A] dark:text-slate-500"
                               : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300"
-                          }`}
+                            }`}
                         >
                           <MapPin className="h-3 w-3" />
                           {meeting.location}
@@ -2419,11 +2552,10 @@ export default function ResearchGroupManagement() {
                     ) : platform && cfg ? (
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <span
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${
-                            isPast
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${isPast
                               ? "border-slate-200 bg-slate-100 text-slate-400 dark:border-[#222] dark:bg-[#1A1A1A] dark:text-slate-500"
                               : `${cfg.border} ${cfg.bg} ${cfg.color} ${cfg.darkBg}`
-                          }`}
+                            }`}
                         >
                           <Video className="h-3 w-3" />
                           {cfg.label}
@@ -2435,24 +2567,22 @@ export default function ResearchGroupManagement() {
                               href={meeting.meetingLink}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-all ${
-                                isPast
+                              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-all ${isPast
                                   ? "border-slate-200 text-slate-400 hover:bg-slate-100 dark:border-[#222] dark:text-slate-500 dark:hover:bg-[#1A1A1A]"
                                   : "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-500/15 dark:text-indigo-300 dark:hover:bg-indigo-500/25"
-                              }`}
+                                }`}
                             >
                               <ExternalLink className="h-3 w-3" />
                               Join
                             </a>
                             <button
                               onClick={() => handleCopyMeetingLink(meeting)}
-                              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-all ${
-                                copiedMeetingId === meeting.id
+                              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-all ${copiedMeetingId === meeting.id
                                   ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300"
                                   : isPast
-                                  ? "border-slate-200 text-slate-400 hover:bg-slate-100 dark:border-[#222] dark:text-slate-500"
-                                  : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"
-                              }`}
+                                    ? "border-slate-200 text-slate-400 hover:bg-slate-100 dark:border-[#222] dark:text-slate-500"
+                                    : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"
+                                }`}
                             >
                               <Copy className="h-3 w-3" />
                               {copiedMeetingId === meeting.id ? "Copied!" : "Copy Link"}
@@ -2464,11 +2594,10 @@ export default function ResearchGroupManagement() {
 
                     {/* Agenda */}
                     {(meeting.agenda || meeting.notes) && (
-                      <p className={`mt-3 rounded-lg border p-3 text-sm ${
-                        isPast
+                      <p className={`mt-3 rounded-lg border p-3 text-sm ${isPast
                           ? "border-slate-100 bg-slate-50/50 text-slate-400 dark:border-[#222] dark:bg-[#0F0F0F] dark:text-slate-500"
                           : "border-slate-100 bg-slate-50 text-slate-600 dark:border-[#222] dark:bg-[#0F0F0F] dark:text-slate-300"
-                      }`}>
+                        }`}>
                         {meeting.agenda || meeting.notes}
                       </p>
                     )}
@@ -2476,18 +2605,17 @@ export default function ResearchGroupManagement() {
                     {/* Attendees */}
                     {meeting.attendees && meeting.attendees.length > 0 && (
                       <div className="mt-3 flex items-center gap-2">
-                        <Users2 className={`h-3.5 w-3.5 ${ isPast ? "text-slate-400" : "text-slate-400 dark:text-slate-500" }`} />
+                        <Users2 className={`h-3.5 w-3.5 ${isPast ? "text-slate-400" : "text-slate-400 dark:text-slate-500"}`} />
                         <div className="flex flex-wrap gap-1">
                           {meeting.attendees.slice(0, 4).map((attendeeId) => {
                             const member = teamMembers.find((m) => m.studentId === attendeeId);
                             return member ? (
                               <span
                                 key={attendeeId}
-                                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                                  isPast
+                                className={`rounded-full px-2 py-0.5 text-xs font-medium ${isPast
                                     ? "bg-slate-100 text-slate-400 dark:bg-slate-700/30 dark:text-slate-500"
                                     : "bg-slate-100 text-slate-600 dark:bg-slate-700/50 dark:text-slate-300"
-                                }`}
+                                  }`}
                               >
                                 {member.studentName.split(" ")[0]}
                               </span>
@@ -2550,31 +2678,28 @@ export default function ResearchGroupManagement() {
                     <div className="flex gap-1.5 rounded-xl bg-slate-100 p-1 dark:bg-[#222]">
                       <button
                         onClick={() => setMeetingSubTab("upcoming")}
-                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
-                          meetingSubTab === "upcoming"
+                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${meetingSubTab === "upcoming"
                             ? "bg-white text-indigo-600 shadow-sm dark:bg-[#333] dark:text-indigo-400"
                             : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-                        }`}
+                          }`}
                       >
                         Upcoming
                       </button>
                       <button
                         onClick={() => setMeetingSubTab("past")}
-                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
-                          meetingSubTab === "past"
+                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${meetingSubTab === "past"
                             ? "bg-white text-indigo-600 shadow-sm dark:bg-[#333] dark:text-indigo-400"
                             : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-                        }`}
+                          }`}
                       >
                         Past
                       </button>
                       <button
                         onClick={() => setMeetingSubTab("all")}
-                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
-                          meetingSubTab === "all"
+                        className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${meetingSubTab === "all"
                             ? "bg-white text-indigo-600 shadow-sm dark:bg-[#333] dark:text-indigo-400"
                             : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-                        }`}
+                          }`}
                       >
                         All
                       </button>
@@ -2606,8 +2731,8 @@ export default function ResearchGroupManagement() {
                     {meetingSubTab === "upcoming"
                       ? "No upcoming meetings scheduled"
                       : meetingSubTab === "past"
-                      ? "No past meetings"
-                      : "No meetings scheduled yet"}
+                        ? "No past meetings"
+                        : "No meetings scheduled yet"}
                   </p>
                   {meetingSubTab !== "past" && (
                     <>
@@ -2786,8 +2911,8 @@ export default function ResearchGroupManagement() {
                   { label: "In pipeline", filter: "under-review", value: inPipeline, icon: <Send className="h-4 w-4" />, cls: "text-amber-600 dark:text-amber-400 border-transparent hover:border-amber-300 dark:hover:border-amber-500/50" },
                   { label: "Acceptance rate", filter: "accepted", value: `${acceptanceRate}%`, icon: <Sparkles className="h-4 w-4" />, cls: "text-violet-600 dark:text-violet-400 border-transparent hover:border-violet-300 dark:hover:border-violet-500/50" },
                 ].map((s) => (
-                  <div 
-                    key={s.label} 
+                  <div
+                    key={s.label}
                     onClick={() => setPubStatusFilter(s.filter as any)}
                     className={`group cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md active:scale-95 dark:border-[#2A2A2A] dark:bg-[#181818] ${s.cls}`}
                   >
@@ -2816,11 +2941,10 @@ export default function ResearchGroupManagement() {
                       <button
                         key={s}
                         onClick={() => setPubStatusFilter(s)}
-                        className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize transition-all ${
-                          pubStatusFilter === s
+                        className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize transition-all ${pubStatusFilter === s
                             ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
                             : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                        }`}
+                          }`}
                       >
                         {s === "all" ? "All" : s.replace("-", " ")}
                       </button>
@@ -2891,11 +3015,10 @@ export default function ResearchGroupManagement() {
                     return (
                       <article
                         key={pub.id}
-                        className={`group relative overflow-hidden rounded-2xl border bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:bg-[#181818] ${
-                          pub.status === "published"
+                        className={`group relative overflow-hidden rounded-2xl border bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:bg-[#181818] ${pub.status === "published"
                             ? "border-emerald-200 hover:border-emerald-400 dark:border-emerald-500/30 dark:hover:border-emerald-400/60"
                             : "border-slate-200 hover:border-indigo-300 dark:border-[#2A2A2A] dark:hover:border-indigo-500/50"
-                        }`}
+                          }`}
                       >
                         {pub.status === "published" && <div className="h-1 w-full bg-emerald-500" />}
                         <div className="p-5 sm:p-6">
