@@ -121,5 +121,7 @@ src/
 ## 👨‍💻 Author
 
 **Team Zero**
-Department of Computer Science and Engineering (CSE)<br>
+
+Department of Computer Science and Engineering (CSE)
+
 United International University, Dhaka, Bangladesh
