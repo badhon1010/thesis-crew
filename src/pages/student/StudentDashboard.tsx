@@ -9,6 +9,7 @@ import { db } from "@/firebase/firestore";
 import type { ResearchTopic } from "@/firebase/researchTopics";
 import { calculateSkillMatch } from "@/utils/skillMatching";
 import { isNewlyPublishedTopic } from "@/utils/topicStatus";
+import { generateTopRecommendations, type AIRecommendationResult } from "@/lib/ai";
 
 interface StudentProfile { name?: string; department?: string; cgpa?: string; researchInterests?: string; skills?: string[]; }
 interface RecommendedTopic extends ResearchTopic { matchScore: number; }
@@ -40,6 +41,9 @@ export default function StudentDashboard() {
   const [skillInput, setSkillInput] = useState("");
   const [savingSkill, setSavingSkill] = useState(false);
   const [skillError, setSkillError] = useState("");
+  const [aiRecommendations, setAiRecommendations] = useState<AIRecommendationResult[] | null>(null);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiError, setAiError] = useState("");
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -141,11 +145,32 @@ export default function StudentDashboard() {
     }
   };
 
+  const handleGenerateAI = async () => {
+    if (recommendedTopics.length === 0) {
+      setAiError("No topics available to analyze.");
+      return;
+    }
+    
+    setIsGeneratingAI(true);
+    setAiError("");
+    try {
+      // Send top 5 locally matched topics to AI to save tokens and time
+      const topTopics = recommendedTopics.slice(0, 5);
+      const results = await generateTopRecommendations(profile, topTopics);
+      setAiRecommendations(results);
+    } catch (err: any) {
+      console.error(err);
+      setAiError("Failed to generate AI recommendations. Please try again later.");
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  };
+
   return <DashboardLayout role="student"><div className="mx-auto max-w-5xl px-2 sm:px-0">
     <div className="mb-12 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div>
       <div className="mb-3 flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-[#3B82F6]"><Clock3 className="h-4 w-4" /><span>{formattedDate}</span><span className="text-slate-300 dark:text-slate-600">•</span><div className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-600 dark:bg-[#3B82F6]" /><span className="tabular-nums">{formattedTime}</span></div></div>
       <h1 className="text-4xl font-semibold tracking-tighter text-slate-900 dark:text-white">{greeting}, {userName}.</h1><p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Live research opportunities and profile insights from your workspace.</p>
-    </div><Link to="/student/research-topics" className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-blue-700 dark:bg-[#3B82F6] dark:hover:bg-blue-500">Explore topics <ArrowUpRight className="h-4 w-4" /></Link></div>
+    </div></div>
     <div className="mb-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <StatCard icon={FolderKanban} value={String(topics.length).padStart(2, "0")} label="Published topics" trend="Live updates" />
       <StatCard icon={Sparkles} value={String(matchedTopicCount).padStart(2, "0")} label="Matching topics" trend="Based on your profile" />
@@ -153,17 +178,76 @@ export default function StudentDashboard() {
       <StatCard icon={FileText} value={String(profile.skills?.length ?? 0).padStart(2, "0")} label="Profile skills" trend="Used for matching" />
     </div>
     {loading ? <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-blue-600" /></div> : <>
-      <div className="mb-6 grid gap-6 xl:grid-cols-[1.5fr_1fr]"><section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-[#2A2A2A] dark:bg-[#181818]"><SectionHeader title="Recommended for you" description="Live published topics ranked against your profile." action={<Link to="/student/research-topics" className="text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-[#3B82F6]">View all</Link>} /><div className="p-4">{recommendedTopics.slice(0, 3).map((topic) => <TopicRow key={topic.id} topic={topic} />)}{!recommendedTopics.length && <EmptyState message="No published research topics are available yet." />}</div></section>
+      <div className="mb-6 grid gap-6 items-start xl:grid-cols-[1.5fr_1fr]">
+        <section className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-[#2A2A2A] dark:bg-[#181818]">
+          <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5 dark:border-[#2A2A2A]">
+            <div>
+              <h2 className="font-semibold text-slate-900 dark:text-white">Recommended for you</h2>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Live published topics ranked against your profile.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={handleGenerateAI}
+                disabled={isGeneratingAI || recommendedTopics.length === 0}
+                className="flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-100 disabled:opacity-50 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
+              >
+                {isGeneratingAI ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                Ask AI
+              </button>
+              <Link to="/student/research-topics" className="text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-[#3B82F6]">View all</Link>
+            </div>
+          </div>
+          
+          <div className="p-4 flex-1 overflow-y-auto">
+            {aiError && (
+              <div className="mb-4 rounded-xl bg-rose-50 p-3 text-xs text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+                {aiError}
+              </div>
+            )}
+            
+            {aiRecommendations ? (
+              <div className="space-y-4">
+                {aiRecommendations.map((aiRec) => {
+                  const topic = recommendedTopics.find(t => t.id === aiRec.topicId);
+                  if (!topic) return null;
+                  return (
+                    <div key={aiRec.topicId} className="group overflow-hidden rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md hover:border-indigo-300 dark:border-indigo-500/30 dark:from-indigo-950/40 dark:to-[#121212]">
+                      <TopicRow topic={topic} />
+                      <div className="border-t border-indigo-100/60 bg-white/60 px-4 py-3 backdrop-blur-sm transition-colors group-hover:bg-indigo-50/50 dark:border-indigo-500/20 dark:bg-black/20 dark:group-hover:bg-indigo-900/30">
+                        <div className="flex items-start gap-2">
+                          <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-600 dark:text-indigo-400" />
+                          <div>
+                            <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-300">
+                              AI Analysis ({aiRec.matchPercentage}% match)
+                            </p>
+                            <p className="mt-1 text-xs text-indigo-800 dark:text-indigo-200">
+                              {aiRec.rationale}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {recommendedTopics.slice(0, 3).map((topic) => <TopicRow key={topic.id} topic={topic} />)}
+                {!recommendedTopics.length && <EmptyState message="No published research topics are available yet." />}
+              </div>
+            )}
+          </div>
+        </section>
       <section className="rounded-2xl border border-slate-200 bg-white dark:border-[#2A2A2A] dark:bg-[#181818]"><SectionHeader title="Upcoming deadlines" description="Published topics closing soon." /><div className="space-y-5 p-6">{upcomingDeadlines.map((topic) => <DeadlineRow key={topic.id} topic={topic} />)}{!upcomingDeadlines.length && <EmptyState message="There are no upcoming application deadlines." />}</div></section></div>
-      <div className="grid gap-6 lg:grid-cols-2"><section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-[#2A2A2A] dark:bg-[#181818]"><SectionHeader title="Latest opportunities" description="Most recently added published topics." /><div className="divide-y divide-slate-100 dark:divide-[#2A2A2A]">{recentTopics.map((topic) => <RecentTopic key={topic.id} topic={topic} />)}{!recentTopics.length && <EmptyState message="New published topics will appear here." />}</div></section>
+      <div className="grid gap-6 items-start lg:grid-cols-2"><section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-[#2A2A2A] dark:bg-[#181818]"><SectionHeader title="Latest opportunities" description="Most recently added published topics." /><div className="divide-y divide-slate-100 dark:divide-[#2A2A2A]">{recentTopics.map((topic) => <RecentTopic key={topic.id} topic={topic} />)}{!recentTopics.length && <EmptyState message="New published topics will appear here." />}</div></section>
       <section className="rounded-2xl border border-slate-200 bg-white dark:border-[#2A2A2A] dark:bg-[#181818]"><SectionHeader title="Your research profile" description="This information powers topic matching." action={<Link to="/student/profile" className="text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-[#3B82F6]">Edit profile</Link>} /><div className="space-y-5 p-6 text-sm"><ProfileField label="Department" value={profile.department || "Not added"} /><ProfileField label="CGPA" value={profile.cgpa || "Not added"} /><ProfileField label="Research interests" value={profile.researchInterests || "Add interests in your profile"} /><div><p className="text-xs text-slate-500 dark:text-slate-400">Skills</p><div className="mt-2 flex flex-wrap gap-2">{profile.skills?.length ? profile.skills.map((skill) => <span key={skill} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">{skill}<button type="button" onClick={() => handleRemoveSkill(skill)} className="rounded-full p-0.5 hover:bg-blue-200 dark:hover:bg-blue-500/40"><X className="h-3 w-3" /></button></span>) : <span className="text-sm text-slate-500 dark:text-slate-400">Add skills to receive better matches.</span>}</div><form onSubmit={handleAddSkill} className="mt-4 flex gap-2"><input value={skillInput} onChange={(event) => setSkillInput(event.target.value)} placeholder="Add a skill, e.g. Python" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-[#121212] dark:text-white" /><button type="submit" disabled={savingSkill || !skillInput.trim()} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">{savingSkill ? "Adding..." : "Add skill"}</button></form>{skillError && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{skillError}</p>}</div></div></section></div>
     </>}</div></DashboardLayout>;
 }
 
 function SectionHeader({ title, description, action }: { title: string; description: string; action?: React.ReactNode }) { return <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5 dark:border-[#2A2A2A]"><div><h2 className="font-semibold text-slate-900 dark:text-white">{title}</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{description}</p></div>{action}</div>; }
-function TopicRow({ topic }: { topic: RecommendedTopic }) { return <Link to={`/student/research-topics/${topic.id}`} className="flex items-center justify-between rounded-xl p-4 transition-colors hover:bg-slate-50 dark:hover:bg-[#222222]"><div className="flex min-w-0 items-center gap-4"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-[#3B82F6]/10 dark:text-[#3B82F6]"><BookOpen className="h-4 w-4" /></div><div className="min-w-0"><div className="flex items-center gap-2"><p className="truncate text-sm font-medium text-slate-900 dark:text-white">{topic.title}</p>{isNewlyPublishedTopic(topic) && <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[9px] font-bold text-white">NEW</span>}</div><p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">{topic.supervisorName || "Unknown supervisor"} · {topic.requiredSkills?.join(" · ") || topic.category}</p></div></div><div className="ml-4 shrink-0 text-right"><p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">{topic.matchScore}%</p><p className="mt-0.5 text-[10px] text-slate-400">match</p></div></Link>; }
-function DeadlineRow({ topic }: { topic: ResearchTopic }) { return <div><div className="flex items-center justify-between gap-4"><p className="truncate text-sm font-medium text-slate-900 dark:text-white">{topic.title}</p><CalendarDays className="h-4 w-4 shrink-0 text-blue-600 dark:text-[#3B82F6]" /></div><p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Apply by {formatDeadline(topic.applicationDeadline)}</p></div>; }
-function RecentTopic({ topic }: { topic: ResearchTopic }) { return <Link to={`/student/research-topics/${topic.id}`} className="flex items-center gap-4 px-6 py-5 transition-colors hover:bg-slate-50 dark:hover:bg-[#222222]"><div className="h-2.5 w-2.5 rounded-full bg-blue-500 dark:bg-[#3B82F6]" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-slate-900 dark:text-white">{topic.title}</p><p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">{topic.category} · {topic.supervisorName || "Unknown supervisor"}</p></div><span className="text-xs text-slate-400">{formatDeadline(topic.applicationDeadline)}</span></Link>; }
+function TopicRow({ topic }: { topic: RecommendedTopic }) { return <Link to={`/student/research-topics/${topic.id}`} className="group flex items-center justify-between rounded-xl p-4 transition-all duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-md hover:ring-1 hover:ring-slate-200 dark:hover:bg-[#222222] dark:hover:ring-[#333]"><div className="flex min-w-0 items-center gap-4"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-colors group-hover:bg-blue-100 dark:bg-[#3B82F6]/10 dark:text-[#3B82F6] dark:group-hover:bg-[#3B82F6]/20"><BookOpen className="h-4 w-4 transition-transform group-hover:scale-110" /></div><div className="min-w-0"><div className="flex items-center gap-2"><p className="truncate text-sm font-medium text-slate-900 transition-colors group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">{topic.title}</p>{isNewlyPublishedTopic(topic) && <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[9px] font-bold text-white">NEW</span>}</div><p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">{topic.supervisorName || "Unknown supervisor"} · {topic.requiredSkills?.join(" · ") || topic.category}</p></div></div><div className="ml-4 shrink-0 text-right"><p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">{topic.matchScore}%</p><p className="mt-0.5 text-[10px] text-slate-400">match</p></div></Link>; }
+function DeadlineRow({ topic }: { topic: ResearchTopic }) { return <div className="group rounded-xl border border-slate-100 bg-slate-50/50 p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-100 hover:bg-blue-50/30 hover:shadow-sm dark:border-[#2A2A2A] dark:bg-[#121212]/50 dark:hover:border-blue-900/30 dark:hover:bg-blue-900/10"><div className="flex items-center justify-between gap-4"><p className="truncate text-sm font-medium text-slate-900 transition-colors group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">{topic.title}</p><CalendarDays className="h-4 w-4 shrink-0 text-blue-600 transition-transform group-hover:scale-110 dark:text-[#3B82F6]" /></div><p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Apply by {formatDeadline(topic.applicationDeadline)}</p></div>; }
+function RecentTopic({ topic }: { topic: ResearchTopic }) { return <Link to={`/student/research-topics/${topic.id}`} className="group flex items-center gap-4 px-6 py-5 transition-all duration-300 hover:bg-slate-50 hover:pl-8 dark:hover:bg-[#222222]"><div className="h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500 transition-transform group-hover:scale-150 dark:bg-[#3B82F6]" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-slate-900 transition-colors group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">{topic.title}</p><p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">{topic.category} · {topic.supervisorName || "Unknown supervisor"}</p></div><span className="text-xs text-slate-400 transition-colors group-hover:text-slate-900 dark:group-hover:text-white">{formatDeadline(topic.applicationDeadline)}</span></Link>; }
 function ProfileField({ label, value }: { label: string; value: string }) { return <div><p className="text-xs text-slate-500 dark:text-slate-400">{label}</p><p className="mt-1 font-medium text-slate-900 dark:text-white">{value}</p></div>; }
 function EmptyState({ message }: { message: string }) { return <p className="px-2 py-8 text-center text-sm text-slate-500 dark:text-slate-400">{message}</p>; }
-function StatCard({ icon: Icon, value, label, trend }: { icon: typeof FolderKanban; value: string; label: string; trend: string }) { return <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#2A2A2A] dark:bg-[#181818]"><div className="flex items-center justify-between"><Icon className="h-5 w-5 text-slate-400" /><span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">{trend}</span></div><p className="mt-4 text-3xl font-semibold tracking-tighter text-slate-900 dark:text-white">{value}</p><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{label}</p></div>; }
+function StatCard({ icon: Icon, value, label, trend }: { icon: typeof FolderKanban; value: string; label: string; trend: string }) { return <div className="group rounded-2xl border border-slate-200 bg-white p-6 transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-900/5 dark:border-[#2A2A2A] dark:bg-[#181818] dark:hover:border-[#3B82F6]/50"><div className="flex items-center justify-between"><Icon className="h-5 w-5 text-slate-400 transition-transform group-hover:scale-110 group-hover:text-blue-500 dark:group-hover:text-[#3B82F6]" /><span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">{trend}</span></div><p className="mt-4 text-3xl font-semibold tracking-tighter text-slate-900 dark:text-white">{value}</p><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{label}</p></div>; }

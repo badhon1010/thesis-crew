@@ -151,6 +151,10 @@ interface Publication {
   doi?: string;
   paperUrl?: string;
   createdAt?: unknown;
+  generatedCitations?: {
+    apa: string;
+    ieee: string;
+  };
 }
 
 type TabType = "overview" | "milestones" | "tasks" | "chat" | "documents" | "meetings" | "publications";
@@ -203,6 +207,7 @@ export default function StudentGroupDetails() {
   const [isPublicationModalOpen, setIsPublicationModalOpen] = useState(false);
   const [editingPublication, setEditingPublication] = useState<Publication | null>(null);
   const [deletePublicationId, setDeletePublicationId] = useState<string | null>(null);
+  const [copiedPubId, setCopiedPubId] = useState<string | null>(null);
 
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({
     show: false,
@@ -536,6 +541,23 @@ export default function StudentGroupDetails() {
       showToast("error", "Failed to remove publication");
     } finally {
       setDeletePublicationId(null);
+    }
+  };
+
+  const handleCopyCitation = async (pub: Publication, format: "apa" | "ieee", e: React.MouseEvent) => {
+    e.stopPropagation();
+    const text = pub.generatedCitations?.[format];
+    if (!text) {
+      showToast("error", "Citation not available for this publication.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedPubId(pub.id + format);
+      showToast("success", `${format.toUpperCase()} citation copied to clipboard.`);
+      setTimeout(() => setCopiedPubId(null), 2000);
+    } catch {
+      showToast("error", "Failed to copy citation");
     }
   };
 
@@ -1898,6 +1920,22 @@ export default function StudentGroupDetails() {
                           </button>
                         </div>
                         <div className="flex shrink-0 items-center justify-center opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0">
+                          {pub.generatedCitations?.apa && (
+                            <button
+                              onClick={(e) => handleCopyCitation(pub, "apa", e)}
+                              className={`mr-2 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors ${copiedPubId === pub.id + "apa" ? "border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400" : "border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"}`}
+                            >
+                              {copiedPubId === pub.id + "apa" ? "Copied APA" : "Copy APA"}
+                            </button>
+                          )}
+                          {pub.generatedCitations?.ieee && (
+                            <button
+                              onClick={(e) => handleCopyCitation(pub, "ieee", e)}
+                              className={`mr-2 rounded-full border px-3 py-1.5 text-xs font-bold transition-colors ${copiedPubId === pub.id + "ieee" ? "border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400" : "border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"}`}
+                            >
+                              {copiedPubId === pub.id + "ieee" ? "Copied IEEE" : "Copy IEEE"}
+                            </button>
+                          )}
                           <div className="rounded-full bg-slate-100 p-2 text-indigo-600 dark:bg-slate-800 dark:text-indigo-400">
                             <ChevronRight className="h-4 w-4" />
                           </div>

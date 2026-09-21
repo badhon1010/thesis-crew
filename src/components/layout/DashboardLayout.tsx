@@ -4,6 +4,7 @@ import { ThemeToggle } from "../common/ThemeToggle";
 import { Menu } from "lucide-react";
 import { Link } from "react-router-dom";
 import { StudentNotifications } from "../common/StudentNotifications";
+import { AIChatWidget } from "../common/AIChatWidget";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -61,6 +62,9 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
           </div>
         </main>
       </div>
+      
+      {/* Global AI Chat Widget */}
+      <AIChatWidget />
     </div>
   );
 }

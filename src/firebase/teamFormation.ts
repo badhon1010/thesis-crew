@@ -5,6 +5,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firestore";
 import type { ResearchTopic } from "./researchTopics";
+import type { AIMatchAnalysis } from "@/lib/ai";
 
 export type JoinRequestStatus = "pending" | "accepted" | "rejected";
 export type RequestType = "individual" | "group";
@@ -45,6 +46,7 @@ export interface JoinRequest {
   requestType: RequestType;
   teamMembers?: TeamMemberInfo[];
   teamLeaderId?: string;
+  aiMatchAnalysis?: AIMatchAnalysis;
   createdAt?: unknown;
   reviewedAt?: unknown;
   reviewedBy?: string;
@@ -60,6 +62,7 @@ export async function submitJoinRequest(
   studentId: string,
   profile: StudentRequestProfile,
   message = "",
+  aiMatchAnalysis?: AIMatchAnalysis,
 ) {
   const joinRequestRef = doc(db, "joinRequests", requestId(topic.id, studentId));
 
@@ -84,6 +87,7 @@ export async function submitJoinRequest(
       maxTeamSize: topic.maxTeamSize,
       status: "pending" satisfies JoinRequestStatus,
       requestType: "individual" satisfies RequestType,
+      aiMatchAnalysis: aiMatchAnalysis || null,
       createdAt: serverTimestamp(),
     });
   });
@@ -96,6 +100,7 @@ export async function submitGroupJoinRequest(
   leaderProfile: StudentRequestProfile,
   teamMembers: TeamMemberInfo[],
   message = "",
+  aiMatchAnalysis?: AIMatchAnalysis,
 ) {
   const joinRequestRef = doc(db, "joinRequests", requestId(topic.id, leaderId));
 
@@ -135,6 +140,7 @@ export async function submitGroupJoinRequest(
       requestType: "group" satisfies RequestType,
       teamMembers,
       teamLeaderId: leaderId,
+      aiMatchAnalysis: aiMatchAnalysis || null,
       createdAt: serverTimestamp(),
     });
   });

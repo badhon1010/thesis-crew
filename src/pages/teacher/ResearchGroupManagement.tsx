@@ -192,6 +192,10 @@ interface Publication {
   createdBy?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
+  generatedCitations?: {
+    apa: string;
+    ieee: string;
+  };
 }
 
 type TabType = "overview" | "milestones" | "tasks" | "chat" | "documents" | "meetings" | "publications";
@@ -950,6 +954,22 @@ export default function ResearchGroupManagement() {
       setTimeout(() => setCopiedPubId(null), 2000);
     } catch {
       showToast("error", "Failed to copy link");
+    }
+  };
+
+  const handleCopyCitation = async (pub: Publication, format: "apa" | "ieee") => {
+    const text = pub.generatedCitations?.[format];
+    if (!text) {
+      showToast("error", "Citation not available for this publication.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedPubId(pub.id + format);
+      showToast("success", `${format.toUpperCase()} citation copied to clipboard.`);
+      setTimeout(() => setCopiedPubId(null), 2000);
+    } catch {
+      showToast("error", "Failed to copy citation");
     }
   };
 
@@ -3166,6 +3186,22 @@ export default function ResearchGroupManagement() {
                               </a>
                             )}
                             <div className="ml-auto flex items-center gap-1.5">
+                              {pub.generatedCitations?.apa && (
+                                <button
+                                  onClick={() => handleCopyCitation(pub, "apa")}
+                                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition-all hover:scale-105 active:scale-95 ${copiedPubId === pub.id + "apa" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300" : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"}`}
+                                >
+                                  <Copy className="h-3 w-3" /> {copiedPubId === pub.id + "apa" ? "Copied APA" : "APA"}
+                                </button>
+                              )}
+                              {pub.generatedCitations?.ieee && (
+                                <button
+                                  onClick={() => handleCopyCitation(pub, "ieee")}
+                                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition-all hover:scale-105 active:scale-95 ${copiedPubId === pub.id + "ieee" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300" : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"}`}
+                                >
+                                  <Copy className="h-3 w-3" /> {copiedPubId === pub.id + "ieee" ? "Copied IEEE" : "IEEE"}
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleCopyPublicationLink(pub)}
                                 className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition-all hover:scale-105 active:scale-95 ${copiedPubId === pub.id ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300" : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"}`}
