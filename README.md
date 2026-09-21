@@ -82,10 +82,10 @@ The platform uses a modern, serverless architecture combining React, Firebase, a
 
 ```mermaid
 graph TD
-    UI[Frontend (React)] -->|Auth State| Auth[Firebase Authentication]
-    UI -->|Read/Write Data| FS[(Firestore Database)]
-    UI -->|Real-time Alerts| Notif[Firestore Notifications]
-    UI -->|Prompts & Data| AI[Gemini AI API]
+    UI["Frontend (React)"] -->|Auth State| Auth["Firebase Authentication"]
+    UI -->|Read/Write Data| FS[("Firestore Database")]
+    UI -->|Real-time Alerts| Notif["Firestore Notifications"]
+    UI -->|Prompts & Data| AI["Gemini AI API"]
     
     AI -->|Returns JSON| UI
 ```
