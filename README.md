@@ -76,6 +76,31 @@ Open `http://localhost:5173` in your browser to view the application.
 
 ---
 
+## 🏗️ System Workflow & Architecture
+
+The platform uses a modern, serverless architecture combining React, Firebase, and Google Gemini AI.
+
+```mermaid
+graph TD
+    UI[Frontend (React)] -->|Auth State| Auth[Firebase Authentication]
+    UI -->|Read/Write Data| FS[(Firestore Database)]
+    UI -->|Real-time Alerts| Notif[Firestore Notifications]
+    UI -->|Prompts & Data| AI[Gemini AI API]
+    
+    AI -->|Returns JSON| UI
+```
+
+### 🔄 User Journey & Workflows
+
+1. **Authentication**: Users register as either a `student` or `teacher`. Data is saved to the `users` collection.
+2. **Topic Creation**: Teachers create research topics. This saves to `researchTopics` and triggers notifications to all students.
+3. **Matchmaking (AI)**: Students browse topics. Gemini AI calculates a `Match %` between the student's skills and the topic's required skills.
+4. **Team Formation**: Students send a Join Request. Teachers accept it, which moves the project into the `researchGroups` collection.
+5. **Collaboration**: Inside a group, students upload weekly tasks and research PDFs. Gemini extracts PDF metadata, and the system auto-generates APA/IEEE citations.
+6. **Notifications**: Real-time alerts keep both students and teachers updated on tasks and join requests.
+
+---
+
 ## 📂 Project Structure
 
 ```text
@@ -95,6 +120,6 @@ src/
 
 ## 👨‍💻 Author
 
-**Team Zero**  
-Department of Computer Science and Engineering (CSE)
+**Team Zero**
+Department of Computer Science and Engineering (CSE)<br>
 United International University, Dhaka, Bangladesh
