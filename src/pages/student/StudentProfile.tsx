@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { Loader2, Save, UserCircle, X, Plus } from "lucide-react";
+import { Loader2, Save, UserCircle, X, Plus, Lock, Mail, Key, Eye, EyeOff } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { auth } from "@/firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+import { validateUiuEmail } from "@/utils/emailValidation";
+import { onAuthStateChanged, updateEmail, updatePassword, sendPasswordResetEmail, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 
 interface UserProfile {
   name: string;
@@ -20,6 +21,21 @@ export default function StudentProfile() {
   const [saving, setSaving] = useState(false);
   const [skillInput, setSkillInput] = useState("");
   const [userUid, setUserUid] = useState<string | null>(null);
+  
+  // Account Security state
+  const [accountEmail, setAccountEmail] = useState("");
+  const [emailValidationError, setEmailValidationError] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [accountSaving, setAccountSaving] = useState(false);
+  const [accountError, setAccountError] = useState("");
+  const [accountSuccess, setAccountSuccess] = useState("");
+  
+  // Visibility toggles
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [formData, setFormData] = useState<UserProfile>({
     name: "",
@@ -55,6 +71,7 @@ export default function StudentProfile() {
         } finally {
           setLoading(false);
         }
+        setAccountEmail(user.email || "");
       } else {
         setLoading(false);
       }
@@ -112,6 +129,100 @@ export default function StudentProfile() {
       alert("Failed to update profile.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setAccountEmail(val);
+    
+    if (!val || val === auth.currentUser?.email) {
+      setEmailValidationError("");
+      return;
+    }
+    
+    const check = validateUiuEmail(val, "student");
+    if (!check.isValid) {
+      setEmailValidationError(check.message || "Enter a valid student email address.");
+    } else {
+      setEmailValidationError("");
+    }
+  };
+
+  const handleUpdateEmail = async () => {
+    if (!auth.currentUser) return;
+    if (!accountEmail || emailValidationError) return;
+
+    const emailCheck = validateUiuEmail(accountEmail, "student");
+    if (!emailCheck.isValid) {
+      setAccountError(emailCheck.message || "Invalid university email format.");
+      return;
+    }
+
+    setAccountSaving(true);
+    setAccountError("");
+    setAccountSuccess("");
+    try {
+      await updateEmail(auth.currentUser, accountEmail);
+      setAccountSuccess("Email updated successfully.");
+    } catch (error: any) {
+      if (error.code === "auth/requires-recent-login") {
+        setAccountError("Please log out and log back in to change your email.");
+      } else {
+        setAccountError(error.message || "Failed to update email.");
+      }
+    } finally {
+      setAccountSaving(false);
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    if (!auth.currentUser || !auth.currentUser.email) return;
+    if (!currentPassword) {
+      setAccountError("Please enter your current password to verify.");
+      return;
+    }
+    if (!newPassword || newPassword !== confirmPassword) {
+      setAccountError("New passwords do not match or are empty.");
+      return;
+    }
+    setAccountSaving(true);
+    setAccountError("");
+    setAccountSuccess("");
+    try {
+      // Re-authenticate first
+      const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+      await reauthenticateWithCredential(auth.currentUser, credential);
+
+      // Then update password
+      await updatePassword(auth.currentUser, newPassword);
+      setAccountSuccess("Password updated successfully.");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error: any) {
+      setAccountError(error.message || "Failed to update password. Check your current password.");
+    } finally {
+      setAccountSaving(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    const emailToReset = auth.currentUser?.email;
+    if (!emailToReset) {
+      setAccountError("No email associated with this account.");
+      return;
+    }
+    setAccountSaving(true);
+    setAccountError("");
+    setAccountSuccess("");
+    try {
+      await sendPasswordResetEmail(auth, emailToReset);
+      setAccountSuccess(`Password reset email sent to ${emailToReset}.`);
+    } catch (error: any) {
+      setAccountError(error.message || "Failed to send reset email.");
+    } finally {
+      setAccountSaving(false);
     }
   };
 
@@ -254,6 +365,136 @@ export default function StudentProfile() {
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+          </section>
+
+          {/* Account Security Card */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 dark:border-[#2A2A2A] dark:bg-[#181818]">
+            <div className="mb-6 flex items-center gap-3 border-b border-slate-100 pb-4 dark:border-[#2A2A2A]">
+              <Lock className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                Account Security
+              </h2>
+            </div>
+            
+            {accountError && (
+              <div className="mb-6 rounded-xl bg-rose-50 p-4 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+                {accountError}
+              </div>
+            )}
+            
+            {accountSuccess && (
+              <div className="mb-6 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                {accountSuccess}
+              </div>
+            )}
+
+            <div className="grid gap-8 sm:grid-cols-2">
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Mail className="h-4 w-4" /> Change Email
+                </h3>
+                <div>
+                  <input
+                    type="email"
+                    value={accountEmail}
+                    onChange={handleEmailChange}
+                    placeholder="New Email Address"
+                    className={`w-full rounded-xl border bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:ring-1 dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500 ${
+                      emailValidationError 
+                        ? "border-rose-300 focus:border-rose-500 focus:ring-rose-500 dark:border-rose-500/50" 
+                        : "border-slate-200 focus:border-indigo-500 focus:ring-indigo-500 dark:border-[#2A2A2A]"
+                    }`}
+                  />
+                  {emailValidationError && (
+                    <p className="mt-2 text-xs text-rose-500 dark:text-rose-400">
+                      {emailValidationError}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleUpdateEmail}
+                  disabled={accountSaving || !accountEmail || accountEmail === auth.currentUser?.email || !!emailValidationError}
+                  className="inline-flex items-center justify-center rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 disabled:opacity-50 dark:bg-[#2A2A2A] dark:text-slate-300 dark:hover:bg-[#2a3143]"
+                >
+                  Update Email
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Key className="h-4 w-4" /> Change Password
+                </h3>
+                <div className="space-y-3">
+                  <div className="relative">
+                    <input
+                      type={showCurrentPassword ? "text" : "password"}
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="Current Password"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-4 pr-10 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    >
+                      {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="New Password"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-4 pr-10 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    >
+                      {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? "text" : "password"}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Confirm New Password"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-4 pr-10 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleUpdatePassword}
+                    disabled={accountSaving || !newPassword || !currentPassword || newPassword !== confirmPassword}
+                    className="inline-flex items-center justify-center rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-200 disabled:opacity-50 dark:bg-[#2A2A2A] dark:text-slate-300 dark:hover:bg-[#2a3143]"
+                  >
+                    Update Password
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    disabled={accountSaving}
+                    className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
               </div>
             </div>
           </section>

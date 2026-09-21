@@ -8,6 +8,7 @@ import {
   SquarePen,
   SquareLibrary,
   Users,
+  UserCircle,
 } from "lucide-react";
 import { auth } from "../../firebase/auth";
 import { signOut } from "firebase/auth";
@@ -107,7 +108,15 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
           })}
         </nav>
 
-        <div className="border-t border-slate-100 p-4 dark:border-slate-800/80">
+        <div className="border-t border-slate-100 p-4 dark:border-slate-800/80 space-y-2">
+          <Link
+            to={role === "student" ? "/student/profile" : "/teacher/profile"}
+            onClick={onClose}
+            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-slate-600 transition-all hover:bg-indigo-50 hover:text-indigo-600 dark:text-slate-400 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400"
+          >
+            <UserCircle className="h-5 w-5 text-slate-400 transition-colors" />
+            Edit profile
+          </Link>
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-slate-600 transition-all hover:bg-red-50 hover:text-red-600 dark:text-slate-400 dark:hover:bg-red-500/10 dark:hover:text-red-400"

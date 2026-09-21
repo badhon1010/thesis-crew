@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { MessageSquare, X, Send, Loader2, Bot, User } from "lucide-react";
+import { MessageSquare, X, Send, Bot, User } from "lucide-react";
 import { startResearchChat } from "@/lib/ai";
 
 interface ChatMessage {

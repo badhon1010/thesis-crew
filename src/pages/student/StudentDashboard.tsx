@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, BookOpen, CalendarDays, Clock3, FileText, FolderKanban, Loader2, Sparkles, X } from "lucide-react";
+import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, Clock3, FileText, FolderKanban, Loader2, Sparkles, X } from "lucide-react";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, onSnapshot, query, updateDoc, where, type Unsubscribe } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -13,6 +13,12 @@ import { generateTopRecommendations, type AIRecommendationResult } from "@/lib/a
 
 interface StudentProfile { name?: string; department?: string; cgpa?: string; researchInterests?: string; skills?: string[]; }
 interface RecommendedTopic extends ResearchTopic { matchScore: number; }
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  date: Date;
+  type: 'deadline' | 'task' | 'meeting' | 'milestone';
+}
 
 function getMatchScore(topic: ResearchTopic, profile: StudentProfile) {
   return calculateSkillMatch(profile.skills, topic.requiredSkills).score;
@@ -100,9 +106,28 @@ export default function StudentDashboard() {
     .filter((topic) => topic.applicationDeadline && new Date(topic.applicationDeadline).getTime() >= currentTime.getTime())
     .sort((a, b) => new Date(a.applicationDeadline).getTime() - new Date(b.applicationDeadline).getTime())
     .slice(0, 3), [currentTime, topics]);
+
+  const calendarEvents = useMemo<CalendarEvent[]>(() => {
+    const events: CalendarEvent[] = [];
+    topics.forEach((topic) => {
+      if (topic.applicationDeadline) {
+        const d = new Date(topic.applicationDeadline);
+        if (!isNaN(d.getTime())) {
+          events.push({
+            id: topic.id,
+            title: topic.title,
+            date: d,
+            type: 'deadline',
+          });
+        }
+      }
+    });
+    return events;
+  }, [topics]);
+
   const recentTopics = useMemo(() => [...topics]
     .sort((a, b) => (dateFromValue(b.createdAt)?.getTime() ?? 0) - (dateFromValue(a.createdAt)?.getTime() ?? 0))
-    .slice(0, 3), [topics]);
+    .slice(0, 4), [topics]);
 
   const userName = profile.name?.split(" ")[0] || auth.currentUser?.displayName?.split(" ")[0] || auth.currentUser?.email?.split("@")[0] || "Student";
   const greeting = currentTime.getHours() < 12 ? "Good morning" : currentTime.getHours() < 18 ? "Good afternoon" : "Good evening";
@@ -231,23 +256,171 @@ export default function StudentDashboard() {
                 })}
               </div>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-3">
                 {recommendedTopics.slice(0, 3).map((topic) => <TopicRow key={topic.id} topic={topic} />)}
                 {!recommendedTopics.length && <EmptyState message="No published research topics are available yet." />}
               </div>
             )}
           </div>
         </section>
-      <section className="rounded-2xl border border-slate-200 bg-white dark:border-[#2A2A2A] dark:bg-[#181818]"><SectionHeader title="Upcoming deadlines" description="Published topics closing soon." /><div className="space-y-5 p-6">{upcomingDeadlines.map((topic) => <DeadlineRow key={topic.id} topic={topic} />)}{!upcomingDeadlines.length && <EmptyState message="There are no upcoming application deadlines." />}</div></section></div>
+        <section className="rounded-2xl border border-slate-200 bg-white dark:border-[#2A2A2A] dark:bg-[#181818]">
+          <div className="p-4 sm:p-6">
+            <MiniCalendar events={calendarEvents} />
+          </div>
+        </section>
+      </div>
       <div className="grid gap-6 items-start lg:grid-cols-2"><section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-[#2A2A2A] dark:bg-[#181818]"><SectionHeader title="Latest opportunities" description="Most recently added published topics." /><div className="divide-y divide-slate-100 dark:divide-[#2A2A2A]">{recentTopics.map((topic) => <RecentTopic key={topic.id} topic={topic} />)}{!recentTopics.length && <EmptyState message="New published topics will appear here." />}</div></section>
       <section className="rounded-2xl border border-slate-200 bg-white dark:border-[#2A2A2A] dark:bg-[#181818]"><SectionHeader title="Your research profile" description="This information powers topic matching." action={<Link to="/student/profile" className="text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-[#3B82F6]">Edit profile</Link>} /><div className="space-y-5 p-6 text-sm"><ProfileField label="Department" value={profile.department || "Not added"} /><ProfileField label="CGPA" value={profile.cgpa || "Not added"} /><ProfileField label="Research interests" value={profile.researchInterests || "Add interests in your profile"} /><div><p className="text-xs text-slate-500 dark:text-slate-400">Skills</p><div className="mt-2 flex flex-wrap gap-2">{profile.skills?.length ? profile.skills.map((skill) => <span key={skill} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">{skill}<button type="button" onClick={() => handleRemoveSkill(skill)} className="rounded-full p-0.5 hover:bg-blue-200 dark:hover:bg-blue-500/40"><X className="h-3 w-3" /></button></span>) : <span className="text-sm text-slate-500 dark:text-slate-400">Add skills to receive better matches.</span>}</div><form onSubmit={handleAddSkill} className="mt-4 flex gap-2"><input value={skillInput} onChange={(event) => setSkillInput(event.target.value)} placeholder="Add a skill, e.g. Python" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-[#121212] dark:text-white" /><button type="submit" disabled={savingSkill || !skillInput.trim()} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">{savingSkill ? "Adding..." : "Add skill"}</button></form>{skillError && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{skillError}</p>}</div></div></section></div>
     </>}</div></DashboardLayout>;
 }
 
 function SectionHeader({ title, description, action }: { title: string; description: string; action?: React.ReactNode }) { return <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5 dark:border-[#2A2A2A]"><div><h2 className="font-semibold text-slate-900 dark:text-white">{title}</h2><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{description}</p></div>{action}</div>; }
-function TopicRow({ topic }: { topic: RecommendedTopic }) { return <Link to={`/student/research-topics/${topic.id}`} className="group flex items-center justify-between rounded-xl p-4 transition-all duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-md hover:ring-1 hover:ring-slate-200 dark:hover:bg-[#222222] dark:hover:ring-[#333]"><div className="flex min-w-0 items-center gap-4"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-colors group-hover:bg-blue-100 dark:bg-[#3B82F6]/10 dark:text-[#3B82F6] dark:group-hover:bg-[#3B82F6]/20"><BookOpen className="h-4 w-4 transition-transform group-hover:scale-110" /></div><div className="min-w-0"><div className="flex items-center gap-2"><p className="truncate text-sm font-medium text-slate-900 transition-colors group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">{topic.title}</p>{isNewlyPublishedTopic(topic) && <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[9px] font-bold text-white">NEW</span>}</div><p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">{topic.supervisorName || "Unknown supervisor"} · {topic.requiredSkills?.join(" · ") || topic.category}</p></div></div><div className="ml-4 shrink-0 text-right"><p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">{topic.matchScore}%</p><p className="mt-0.5 text-[10px] text-slate-400">match</p></div></Link>; }
-function DeadlineRow({ topic }: { topic: ResearchTopic }) { return <div className="group rounded-xl border border-slate-100 bg-slate-50/50 p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-100 hover:bg-blue-50/30 hover:shadow-sm dark:border-[#2A2A2A] dark:bg-[#121212]/50 dark:hover:border-blue-900/30 dark:hover:bg-blue-900/10"><div className="flex items-center justify-between gap-4"><p className="truncate text-sm font-medium text-slate-900 transition-colors group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">{topic.title}</p><CalendarDays className="h-4 w-4 shrink-0 text-blue-600 transition-transform group-hover:scale-110 dark:text-[#3B82F6]" /></div><p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Apply by {formatDeadline(topic.applicationDeadline)}</p></div>; }
+function TopicRow({ topic }: { topic: RecommendedTopic }) { 
+  const now = new Date();
+  const topicDate = topic.applicationDeadline ? new Date(topic.applicationDeadline) : new Date(8640000000000000);
+  const isClosed = topicDate < now;
+  const isClosingSoon = !isClosed && (topicDate.getTime() - now.getTime() < 7 * 24 * 60 * 60 * 1000);
+
+  return (
+    <Link to={`/student/research-topics/${topic.id}`} className="group flex items-center justify-between rounded-xl p-4 transition-all duration-300 hover:-translate-y-0.5 hover:bg-white hover:shadow-md hover:ring-1 hover:ring-slate-200 dark:hover:bg-[#222222] dark:hover:ring-[#333]">
+      <div className="flex min-w-0 items-center gap-4">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 transition-colors group-hover:bg-blue-100 dark:bg-[#3B82F6]/10 dark:text-[#3B82F6] dark:group-hover:bg-[#3B82F6]/20">
+          <BookOpen className="h-5 w-5 transition-transform group-hover:scale-110" />
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-[15px] font-semibold text-slate-900 transition-colors group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">{topic.title}</p>
+            {isNewlyPublishedTopic(topic) && !isClosed && <span className="shrink-0 rounded-full bg-rose-500 px-1.5 py-0.5 text-[9px] font-bold text-white">NEW</span>}
+            {topic.applicationDeadline && isClosed && <span className="shrink-0 rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-bold tracking-wide text-rose-700 border border-rose-200 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/30">Closed</span>}
+            {topic.applicationDeadline && isClosingSoon && <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold tracking-wide text-amber-700 border border-amber-200 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30">Closing soon</span>}
+          </div>
+          <p className="mt-1 truncate text-sm text-slate-500 dark:text-slate-400">{topic.supervisorName || "Unknown supervisor"} · {topic.requiredSkills?.join(" · ") || topic.category}</p>
+          {topic.applicationDeadline && (
+            <p className="mt-1 text-xs font-medium text-slate-400 dark:text-slate-500">
+              Deadline: {formatDeadline(topic.applicationDeadline)}
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="ml-4 shrink-0 text-right">
+        <p className="text-base font-bold text-emerald-600 dark:text-emerald-400">{topic.matchScore}%</p>
+        <p className="mt-0.5 text-xs text-slate-400">match</p>
+      </div>
+    </Link>
+  ); 
+}
 function RecentTopic({ topic }: { topic: ResearchTopic }) { return <Link to={`/student/research-topics/${topic.id}`} className="group flex items-center gap-4 px-6 py-5 transition-all duration-300 hover:bg-slate-50 hover:pl-8 dark:hover:bg-[#222222]"><div className="h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500 transition-transform group-hover:scale-150 dark:bg-[#3B82F6]" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-slate-900 transition-colors group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">{topic.title}</p><p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">{topic.category} · {topic.supervisorName || "Unknown supervisor"}</p></div><span className="text-xs text-slate-400 transition-colors group-hover:text-slate-900 dark:group-hover:text-white">{formatDeadline(topic.applicationDeadline)}</span></Link>; }
 function ProfileField({ label, value }: { label: string; value: string }) { return <div><p className="text-xs text-slate-500 dark:text-slate-400">{label}</p><p className="mt-1 font-medium text-slate-900 dark:text-white">{value}</p></div>; }
 function EmptyState({ message }: { message: string }) { return <p className="px-2 py-8 text-center text-sm text-slate-500 dark:text-slate-400">{message}</p>; }
 function StatCard({ icon: Icon, value, label, trend }: { icon: typeof FolderKanban; value: string; label: string; trend: string }) { return <div className="group rounded-2xl border border-slate-200 bg-white p-6 transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-lg hover:shadow-blue-900/5 dark:border-[#2A2A2A] dark:bg-[#181818] dark:hover:border-[#3B82F6]/50"><div className="flex items-center justify-between"><Icon className="h-5 w-5 text-slate-400 transition-transform group-hover:scale-110 group-hover:text-blue-500 dark:group-hover:text-[#3B82F6]" /><span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">{trend}</span></div><p className="mt-4 text-3xl font-semibold tracking-tighter text-slate-900 dark:text-white">{value}</p><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{label}</p></div>; }
+
+function MiniCalendar({ events }: { events: CalendarEvent[] }) {
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+  const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+
+  const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  const goToToday = () => setCurrentDate(new Date());
+
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+  const eventMap = useMemo(() => {
+    const dates = new Map<string, CalendarEvent[]>();
+    events.forEach(event => {
+      const d = event.date;
+      if (!isNaN(d.getTime())) {
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (!dates.has(key)) dates.set(key, []);
+        dates.get(key)!.push(event);
+      }
+    });
+    return dates;
+  }, [events]);
+
+  const todayDate = new Date();
+  todayDate.setHours(0,0,0,0);
+
+  const days = [];
+  for (let i = 0; i < firstDayOfMonth; i++) {
+    days.push(<div key={`empty-${i}`} className="min-h-[60px]" />);
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const cellDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const dayEvents = eventMap.get(dateStr) || [];
+    
+    const isToday = todayDate.getTime() === cellDate.getTime();
+    const isPast = cellDate.getTime() < todayDate.getTime();
+
+    days.push(
+      <div 
+        key={day} 
+        className={`min-h-[60px] p-1 flex flex-col rounded-xl transition-colors hover:bg-slate-100 dark:hover:bg-[#222222] overflow-hidden ${isToday ? 'bg-blue-50/50 dark:bg-blue-500/5' : ''}`}
+      >
+        <span className={`mx-auto text-xs font-medium flex items-center justify-center ${isToday ? 'h-5 w-5 rounded-full bg-blue-600 text-white shadow-sm' : isPast ? 'text-slate-400' : 'text-slate-700 dark:text-slate-300'}`}>
+          {day}
+        </span>
+        <div className="mt-0.5 flex flex-col gap-0.5 overflow-y-auto">
+          {dayEvents.map((event, idx) => {
+            const isEventPast = event.date.getTime() < todayDate.getTime();
+            return (
+              <Link
+                key={`${event.id}-${idx}`}
+                to={`/student/research-topics/${event.id}`}
+                title={event.title}
+                className={`truncate rounded px-1 py-0.5 text-[9px] font-medium leading-tight transition-colors ${
+                  isEventPast 
+                    ? 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700' 
+                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-500/20 dark:text-blue-300 dark:hover:bg-blue-500/30'
+                }`}
+              >
+                {event.title}
+              </Link>
+            )
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+          {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+        </h3>
+        <div className="flex items-center gap-3">
+          { (currentDate.getMonth() !== todayDate.getMonth() || currentDate.getFullYear() !== todayDate.getFullYear()) && (
+            <button onClick={goToToday} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-[#181818] dark:text-slate-300 dark:hover:bg-[#222222] transition-colors">
+              Today
+            </button>
+          )}
+          <div className="flex rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-[#181818]">
+            <button onClick={prevMonth} className="rounded-l-lg p-1.5 text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-[#222222] transition-colors">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <div className="w-px bg-slate-200 dark:bg-slate-700" />
+            <button onClick={nextMonth} className="rounded-r-lg p-1.5 text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-[#222222] transition-colors">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div className="grid grid-cols-7 mb-2">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+            <div key={day} className="text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              {day}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-y-2 gap-x-1">
+          {days}
+        </div>
+      </div>
+    </div>
+  );
+}
