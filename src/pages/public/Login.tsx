@@ -30,9 +30,25 @@ export default function Login() {
       const userDocSnap = await getDoc(userDocRef);
 
       if (userDocSnap.exists()) {
-        const actualRole = userDocSnap.data().role;
+        const userData = userDocSnap.data();
+        const actualRole = userData.role;
         
-        //Role Match Check
+        // Account Suspension Check
+        if (userData.accountStatus === "suspended") {
+          setError("Your account has been suspended. Please contact the administrator.");
+          await signOut(auth);
+          setLoading(false);
+          return;
+        }
+
+        // Admin Role Direct Navigation
+        if (actualRole === "admin") {
+          navigate("/admin/dashboard");
+          setLoading(false);
+          return;
+        }
+
+        // Role Match Check
         if (actualRole !== role) {
           setError(`Access Denied! This account is registered as a ${actualRole}.`);
           await signOut(auth); // Log out the user

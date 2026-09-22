@@ -8,7 +8,7 @@ import { AIChatWidget } from "../common/AIChatWidget";
 
 interface DashboardLayoutProps {
   children: ReactNode;
-  role: "student" | "teacher";
+  role: "student" | "teacher" | "admin";
 }
 
 export function DashboardLayout({ children, role }: DashboardLayoutProps) {
@@ -39,16 +39,16 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
 
           <div className="flex items-center gap-4">
             <ThemeToggle />
-            <StudentNotifications role={role} />
+            {role !== "admin" && <StudentNotifications role={role} />}
             
             {/* Profile Icon */}
             <Link 
-              to={role === "student" ? "/student/profile" : "/teacher/dashboard"}
+              to={role === "student" ? "/student/profile" : role === "admin" ? "/admin/dashboard" : "/teacher/dashboard"}
               title="My Profile"
               className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-blue-500/30 bg-blue-50 transition-colors hover:bg-blue-100 dark:border-[#3B82F6]/30 dark:bg-[#3B82F6]/10 dark:hover:bg-[#3B82F6]/20"
             >
               <span className="text-sm font-semibold text-blue-600 dark:text-[#3B82F6]">
-                U
+                {role === "admin" ? "A" : "U"}
               </span>
             </Link>
 

@@ -9,12 +9,14 @@ import {
   SquareLibrary,
   Users,
   UserCircle,
+  FolderKanban,
+  ShieldCheck,
 } from "lucide-react";
 import { auth } from "../../firebase/auth";
 import { signOut } from "firebase/auth";
 
 interface SidebarProps {
-  role: "student" | "teacher";
+  role: "student" | "teacher" | "admin";
   isOpen: boolean;
   onClose: () => void;
 }
@@ -39,12 +41,19 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
           { name: "Research Topics", path: "/student/research-topics", icon: BookOpen },
           { name: "My Research Groups", path: "/student/my-groups", icon: Users },
         ]
-      : [
+      : role === "teacher"
+      ? [
           { name: "Dashboard", path: "/teacher/dashboard", icon: LayoutDashboard },
           { name: "Create Research Topic", path: "/teacher/topics/create", icon: SquarePen },
           { name: "My Research Topics", path: "/teacher/topics", icon: SquareLibrary },
           { name: "Research Group", path: "/teacher/research-groups", icon: Users },
           { name: "Team Requests", path: "/teacher/requests", icon: Users }
+        ]
+      : [
+          { name: "Dashboard", path: "/admin/dashboard", icon: LayoutDashboard },
+          { name: "User Management", path: "/admin/users", icon: Users },
+          { name: "Research Topics", path: "/admin/topics", icon: BookOpen },
+          { name: "Research Groups", path: "/admin/groups", icon: FolderKanban },
         ];
 
   return (
@@ -109,14 +118,21 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
         </nav>
 
         <div className="border-t border-slate-100 p-4 dark:border-slate-800/80 space-y-2">
-          <Link
-            to={role === "student" ? "/student/profile" : "/teacher/profile"}
-            onClick={onClose}
-            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-slate-600 transition-all hover:bg-indigo-50 hover:text-indigo-600 dark:text-slate-400 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400"
-          >
-            <UserCircle className="h-5 w-5 text-slate-400 transition-colors" />
-            Edit profile
-          </Link>
+          {role !== "admin" ? (
+            <Link
+              to={role === "student" ? "/student/profile" : "/teacher/profile"}
+              onClick={onClose}
+              className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-slate-600 transition-all hover:bg-indigo-50 hover:text-indigo-600 dark:text-slate-400 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400"
+            >
+              <UserCircle className="h-5 w-5 text-slate-400 transition-colors" />
+              Edit profile
+            </Link>
+          ) : (
+            <div className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+              <ShieldCheck className="h-4 w-4" />
+              <span>Admin Mode</span>
+            </div>
+          )}
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-slate-600 transition-all hover:bg-red-50 hover:text-red-600 dark:text-slate-400 dark:hover:bg-red-500/10 dark:hover:text-red-400"
