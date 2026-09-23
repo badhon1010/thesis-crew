@@ -13,6 +13,20 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children, role }: DashboardLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("sidebarCollapsed") === "true";
+    }
+    return false;
+  });
+
+  const toggleCollapse = () => {
+    setIsCollapsed(prev => {
+      const newState = !prev;
+      localStorage.setItem("sidebarCollapsed", String(newState));
+      return newState;
+    });
+  };
 
   return (
     <div className="min-h-screen bg-[#fcfcfd] text-slate-900 selection:bg-blue-500 selection:text-white dark:bg-[#000000] dark:text-slate-100">
@@ -21,10 +35,12 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
         role={role}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        isCollapsed={isCollapsed}
+        onToggleCollapse={toggleCollapse}
       />
 
       {/* Main content area */}
-      <div className="lg:pl-72 transition-all duration-300">
+      <div className="dashboard-main" data-sidebar-collapsed={isCollapsed}>
         
         {/* Glass effect header */}
         <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-slate-200/80 bg-white/80 px-6 backdrop-blur-xl dark:border-[#2A2A2A]/60 dark:bg-[#121212]/80 lg:justify-end">
@@ -57,7 +73,10 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
 
         {/* Actual page content */}
         <main className="p-6 lg:p-10">
-          <div className="mx-auto max-w-6xl">
+          <div
+            className="dashboard-page-content mx-auto w-full max-w-[1600px]"
+            data-sidebar-collapsed={isCollapsed}
+          >
             {children}
           </div>
         </main>
