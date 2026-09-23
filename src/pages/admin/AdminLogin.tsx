@@ -63,30 +63,37 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fcfcfd] text-slate-900 selection:bg-indigo-500 selection:text-white dark:bg-[#000000] dark:text-slate-100 animate-slideIn">
+    <div className="min-h-screen bg-[#fcfcfd] text-slate-900 selection:bg-blue-500 selection:text-white dark:bg-[#000000] dark:text-slate-100 animate-slideIn">
       <div className="grid min-h-screen lg:grid-cols-[1fr_0.9fr]">
         
         {/* Left Branding Side */}
-        <section className="relative hidden border-r border-slate-200/80 bg-slate-900 lg:flex dark:border-[#2A2A2A]/80 dark:bg-[#090d16]">
-          <div className="flex w-full items-center justify-center px-12 xl:px-20">
+        <section className="relative hidden overflow-hidden border-r border-indigo-100/50 bg-gradient-to-br from-indigo-50 via-white to-purple-50 lg:flex dark:border-indigo-900/30 dark:from-[#09090b] dark:via-[#121212] dark:to-indigo-950/20">
+          {/* Premium Ambient Mesh Gradients */}
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute -top-[10%] -left-[10%] w-[60%] h-[60%] rounded-full bg-indigo-400/30 blur-[100px] mix-blend-multiply dark:mix-blend-lighten dark:bg-indigo-600/20" />
+            <div className="absolute top-[30%] -right-[10%] w-[50%] h-[50%] rounded-full bg-violet-400/30 blur-[100px] mix-blend-multiply dark:mix-blend-lighten dark:bg-violet-600/20" />
+            <div className="absolute -bottom-[10%] left-[10%] w-[60%] h-[60%] rounded-full bg-blue-400/30 blur-[100px] mix-blend-multiply dark:mix-blend-lighten dark:bg-blue-600/20" />
+          </div>
+          
+          <div className="relative flex w-full items-center justify-center px-12 xl:px-20 z-10">
             <div className="w-full max-w-xl">
-              <Link to="/" className="inline-flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/25">
+              <Link to="/" className="inline-flex items-center gap-3 transition-transform hover:scale-105">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 text-white shadow-lg shadow-indigo-500/25">
                   <FlaskConical className="h-5 w-5" />
                 </div>
-                <span className="text-xl font-bold tracking-tight text-white">
+                <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
                   ThesisCrew
                 </span>
               </Link>
               <div className="mt-16 max-w-lg">
-                <div className="inline-flex items-center gap-2 rounded-full bg-indigo-500/10 px-3.5 py-1.5 text-xs font-bold tracking-wider text-indigo-400 uppercase border border-indigo-500/20">
+                <div className="inline-flex items-center gap-2 rounded-full bg-blue-100 px-3.5 py-1.5 text-xs font-bold tracking-wider text-blue-700 uppercase border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20">
                   <ShieldCheck className="h-4 w-4" />
                   Admin Control Center
                 </div>
-                <h1 className="mt-5 text-4xl font-extrabold leading-[1.15] tracking-tight text-white xl:text-5xl">
+                <h1 className="mt-5 text-4xl font-extrabold leading-[1.15] tracking-tight text-slate-900 dark:text-white xl:text-5xl">
                   Centralized System Administration & Governance
                 </h1>
-                <p className="mt-6 max-w-md text-base leading-relaxed text-slate-400">
+                <p className="mt-6 max-w-md text-base leading-relaxed text-slate-600 dark:text-slate-400">
                   Manage user permissions, monitor research groups, and oversee institutional academic topics securely.
                 </p>
               </div>
@@ -108,11 +115,11 @@ export default function AdminLogin() {
               </Link>
             </div>
 
-            <div className="flex items-center gap-3 mb-2">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
+            <div className="flex items-center gap-3 mb-2 animate-slideIn">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300 shadow-inner">
                 <Lock className="h-5 w-5" />
               </div>
-              <span className="rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">
+              <span className="rounded-md bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 dark:bg-blue-500/15 dark:text-blue-300 border border-blue-100 dark:border-blue-500/20">
                 Admin Portal
               </span>
             </div>
@@ -145,7 +152,7 @@ export default function AdminLogin() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@thesiscrew.edu"
-                  className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
+                  className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500 hover:border-slate-300 dark:hover:border-slate-600"
                 />
               </div>
 
@@ -161,7 +168,7 @@ export default function AdminLogin() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter admin password"
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 pr-11 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
+                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 pr-11 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500 hover:border-slate-300 dark:hover:border-slate-600"
                   />
                   <button
                     type="button"
@@ -177,10 +184,10 @@ export default function AdminLogin() {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 text-sm font-semibold text-white shadow-lg shadow-indigo-600/25 transition hover:bg-indigo-500 disabled:opacity-70 disabled:cursor-not-allowed"
+                className="group flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-teal-600 text-sm font-semibold text-white shadow-lg shadow-blue-600/25 transition-all hover:shadow-blue-600/40 hover:from-blue-500 hover:to-teal-500 disabled:opacity-70 disabled:cursor-not-allowed hover:-translate-y-0.5 active:translate-y-0"
               >
                 {loading ? "Authenticating Admin..." : "Log In to Admin Portal"}
-                {!loading && <ArrowRight className="h-4 w-4" />}
+                {!loading && <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />}
               </button>
             </form>
 

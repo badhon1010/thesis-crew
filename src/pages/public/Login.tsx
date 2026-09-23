@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Eye, EyeOff, FlaskConical, ArrowRight, ArrowLeft, ShieldCheck } from "lucide-react";
 import { ThemeToggle } from "../../components/common/ThemeToggle";
 import { auth } from "../../firebase/auth";
@@ -9,11 +9,12 @@ import { doc, getDoc } from "firebase/firestore";
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"student" | "teacher">("student");
+  const [role, setRole] = useState<"student" | "teacher">(location.state?.role || "student");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 

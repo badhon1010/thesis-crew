@@ -61,7 +61,7 @@ export default function Landing() {
       </header>
 
       {/* Hero Section */}
-      <section className="relative overflow-hidden py-24 lg:py-36">
+      <section className="relative overflow-hidden pt-12 pb-24 lg:pt-20 lg:pb-36">
         {/* Animated Background Glow */}
         <div className="pointer-events-none absolute left-1/2 top-1/4 h-[400px] w-[700px] -translate-x-1/2 -translate-y-1/2 animate-pulse rounded-full bg-indigo-600/10 blur-[120px] duration-[4000ms] dark:bg-indigo-600/15" />
 
@@ -87,6 +87,7 @@ export default function Landing() {
             </Link>
             <Link
               to="/login"
+              state={{ role: "teacher" }}
               className="flex h-13 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-8 text-sm font-semibold text-slate-700 transition-all hover:-translate-y-1 hover:bg-slate-50 dark:border-[#2A2A2A] dark:bg-[#121212] dark:text-slate-300 dark:hover:bg-[#181818] dark:hover:text-white sm:w-auto"
             >
               Supervisor Login
@@ -94,7 +95,7 @@ export default function Landing() {
           </div>
 
           {/* Statistics */}
-          <div className="mt-20 grid grid-cols-2 gap-6 border-t border-slate-200/80 pt-12 dark:border-[#2A2A2A] sm:grid-cols-4">
+          <div className="mt-20 flex flex-wrap justify-center gap-12 border-t border-slate-200/80 pt-12 dark:border-[#2A2A2A] sm:gap-24">
             <div className="transition-transform hover:scale-105">
               <p className="text-3xl font-extrabold text-slate-900 dark:text-white">100%</p>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Secure Cloud Sync</p>
@@ -175,8 +176,10 @@ export default function Landing() {
               <div className="mt-8 space-y-4">
                 {[
                   "Supervisors publish structured research topics with skill requirements.",
-                  "Students apply with custom team sizes and academic credentials.",
-                  "Real-time status tracking from pending review to project approval."
+                  "AI-Powered Matchmaking analyzes student skills for perfect topic alignment.",
+                  "Students form teams and send join requests for supervisor approval.",
+                  "Collaborate in a dedicated workspace with milestones, tasks, and document repositories.",
+                  "Leverage AI to extract PDF metadata and auto-generate APA/IEEE citations."
                 ].map((item, idx) => (
                   <div key={idx} className="flex items-start gap-3 transition-transform hover:translate-x-2">
                     <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600 dark:text-indigo-400" />
@@ -218,7 +221,7 @@ export default function Landing() {
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-white py-12 dark:border-[#2A2A2A] dark:bg-[#000000]">
         <div className="mx-auto max-w-7xl px-6 text-center text-xs text-slate-500 lg:px-8">
-          <p>© {new Date().getFullYear()} ThesisCrew Academic System. Designed for Advanced Software Engineering Lab Presentation.</p>
+          <p>© {new Date().getFullYear()} ThesisCrew Academic System.</p>
         </div>
       </footer>
     </div>
