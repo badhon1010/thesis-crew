@@ -43,7 +43,7 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
             
             {/* Profile Icon */}
             <Link 
-              to={role === "student" ? "/student/profile" : role === "admin" ? "/admin/dashboard" : "/teacher/dashboard"}
+              to={role === "student" ? "/student/profile" : role === "admin" ? "/admin/profile" : "/teacher/dashboard"}
               title="My Profile"
               className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-blue-500/30 bg-blue-50 transition-colors hover:bg-blue-100 dark:border-[#3B82F6]/30 dark:bg-[#3B82F6]/10 dark:hover:bg-[#3B82F6]/20"
             >

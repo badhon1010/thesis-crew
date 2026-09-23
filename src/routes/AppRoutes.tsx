@@ -21,12 +21,15 @@ import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminUsers from "@/pages/admin/AdminUsers";
 import AdminTopics from "@/pages/admin/AdminTopics";
 import AdminGroups from "@/pages/admin/AdminGroups";
+import AdminLogin from "@/pages/admin/AdminLogin";
+import AdminProfile from "@/pages/admin/AdminProfile";
 
 export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/register" element={<Register />} />
 
       {/* Admin Protected Routes */}
@@ -35,6 +38,7 @@ export function AppRoutes() {
         <Route path="/admin/users" element={<AdminUsers />} />
         <Route path="/admin/topics" element={<AdminTopics />} />
         <Route path="/admin/groups" element={<AdminGroups />} />
+        <Route path="/admin/profile" element={<AdminProfile />} />
       </Route>
 
       <Route path="/teacher/dashboard" element={<TeacherDashboard />} />

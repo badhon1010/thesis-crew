@@ -54,6 +54,7 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
           { name: "User Management", path: "/admin/users", icon: Users },
           { name: "Research Topics", path: "/admin/topics", icon: BookOpen },
           { name: "Research Groups", path: "/admin/groups", icon: FolderKanban },
+          { name: "Admin Profile", path: "/admin/profile", icon: UserCircle },
         ];
 
   return (
@@ -118,21 +119,20 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
         </nav>
 
         <div className="border-t border-slate-100 p-4 dark:border-slate-800/80 space-y-2">
-          {role !== "admin" ? (
-            <Link
-              to={role === "student" ? "/student/profile" : "/teacher/profile"}
-              onClick={onClose}
-              className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-slate-600 transition-all hover:bg-indigo-50 hover:text-indigo-600 dark:text-slate-400 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400"
-            >
-              <UserCircle className="h-5 w-5 text-slate-400 transition-colors" />
-              Edit profile
-            </Link>
-          ) : (
-            <div className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+          {role === "admin" && (
+            <div className="flex items-center gap-2 px-4 py-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
               <ShieldCheck className="h-4 w-4" />
               <span>Admin Mode</span>
             </div>
           )}
+          <Link
+            to={role === "student" ? "/student/profile" : role === "admin" ? "/admin/profile" : "/teacher/dashboard"}
+            onClick={onClose}
+            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-slate-600 transition-all hover:bg-indigo-50 hover:text-indigo-600 dark:text-slate-400 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400"
+          >
+            <UserCircle className="h-5 w-5 text-slate-400 transition-colors" />
+            Edit profile
+          </Link>
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-slate-600 transition-all hover:bg-red-50 hover:text-red-600 dark:text-slate-400 dark:hover:bg-red-500/10 dark:hover:text-red-400"
