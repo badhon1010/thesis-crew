@@ -164,16 +164,16 @@ export default function StudentResearchTopics() {
               return (
               <article
                 key={topic.id}
-                className={`group rounded-2xl border ${isClosed ? "border-rose-100 bg-rose-50/30 opacity-75 dark:border-rose-500/10 dark:bg-rose-500/5" : "border-slate-200 bg-white hover:border-indigo-200 dark:border-[#2A2A2A] dark:bg-[#181818] dark:hover:border-slate-700"} p-6 transition-colors`}
+                className={`group rounded-2xl border ${isClosed ? "border-rose-100 bg-rose-50/30 opacity-75 dark:border-rose-500/10 dark:bg-rose-500/5" : "border-slate-200 bg-white hover:-translate-y-1 hover:border-indigo-200 hover:shadow-xl hover:shadow-indigo-900/5 dark:border-[#2A2A2A] dark:bg-[#181818] dark:hover:border-indigo-500/50"} p-6 transition-all duration-300`}
               >
                 <div className="flex items-start justify-between gap-5">
                   <div className="flex gap-4">
                     <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${isClosed ? "bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400" : "bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400"}`}>
-                      <BookOpen className="h-5 w-5" />
+                      <BookOpen className="h-5 w-5 transition-transform group-hover:scale-110" />
                     </div>
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="font-semibold text-slate-900 dark:text-white">{topic.title}</h2>
+                        <h2 className="font-semibold text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">{topic.title}</h2>
                         {isNewlyPublishedTopic(topic) && !isClosed && <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white">NEW</span>}
                         {isClosed && <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-bold tracking-wide text-rose-700 dark:bg-rose-500/20 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30">Closed</span>}
                         {isClosingSoon && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-bold tracking-wide text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30">Closing soon</span>}
@@ -209,7 +209,7 @@ export default function StudentResearchTopics() {
 
                 <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-5 dark:border-[#2A2A2A]">
                   <p className="text-xs font-medium text-slate-400">Deadline · {topic.applicationDeadline || "Not set"}</p>
-                  <Link to={`/student/research-topics/${topic.id}`} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-500">View details</Link>
+                  <Link to={`/student/research-topics/${topic.id}`} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-all hover:-translate-y-0.5 hover:bg-indigo-500 hover:shadow-md">View details</Link>
                 </div>
               </article>
             );

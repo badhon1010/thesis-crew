@@ -16,13 +16,30 @@ import StudentProfile from "@/pages/student/StudentProfile";
 import StudentTopicDetails from "@/pages/student/StudentTopicDetails";
 import StudentMyGroups from "@/pages/student/StudentMyGroups";
 import StudentGroupDetails from "@/pages/student/StudentGroupDetails";
+import { AdminRoute } from "@/components/auth/AdminRoute";
+import AdminDashboard from "@/pages/admin/AdminDashboard";
+import AdminUsers from "@/pages/admin/AdminUsers";
+import AdminTopics from "@/pages/admin/AdminTopics";
+import AdminGroups from "@/pages/admin/AdminGroups";
+import AdminLogin from "@/pages/admin/AdminLogin";
+import AdminProfile from "@/pages/admin/AdminProfile";
 
 export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/register" element={<Register />} />
+
+      {/* Admin Protected Routes */}
+      <Route element={<AdminRoute />}>
+        <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin/users" element={<AdminUsers />} />
+        <Route path="/admin/topics" element={<AdminTopics />} />
+        <Route path="/admin/groups" element={<AdminGroups />} />
+        <Route path="/admin/profile" element={<AdminProfile />} />
+      </Route>
 
       <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
       <Route path="/teacher/topics" element={<TeacherResearchTopics />} />
