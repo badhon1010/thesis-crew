@@ -205,7 +205,7 @@ export function Sidebar({ role, isOpen, onClose, isCollapsed, onToggleCollapse }
           )}
 
           <Link
-            to={role === "student" ? "/student/profile" : role === "admin" ? "/admin/profile" : "/teacher/dashboard"}
+            to={role === "student" ? "/student/profile" : role === "admin" ? "/admin/profile" : "/teacher/profile"}
             onClick={onClose}
             title={isCollapsed ? "Edit profile" : undefined}
             className="dashboard-sidebar-action flex items-center rounded-xl text-sm font-semibold text-slate-600 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:text-slate-400 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400"

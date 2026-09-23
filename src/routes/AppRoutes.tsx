@@ -12,6 +12,7 @@ import EditTopic from "@/pages/teacher/EditTopic";
 import TeacherJoinRequests from "@/pages/teacher/TeacherJoinRequests";
 import ResearchTopicDetails from "@/pages/teacher/ResearchTopicDetails";
 import ResearchGroupManagement from "@/pages/teacher/ResearchGroupManagement";
+import TeacherProfile from "@/pages/teacher/TeacherProfile";
 import StudentProfile from "@/pages/student/StudentProfile";
 import StudentTopicDetails from "@/pages/student/StudentTopicDetails";
 import StudentMyGroups from "@/pages/student/StudentMyGroups";
@@ -49,6 +50,7 @@ export function AppRoutes() {
       <Route path="/teacher/topics/edit/:id" element={<EditTopic />} />
       <Route path="/teacher/topics/details/:id" element={<ResearchTopicDetails />} />
       <Route path="/teacher/requests" element={<TeacherJoinRequests />} />
+      <Route path="/teacher/profile" element={<TeacherProfile />} />
 
       <Route path="/student/dashboard" element={<StudentDashboard />} />
       <Route path="/student/research-topics" element={<ResearchTopics />} />

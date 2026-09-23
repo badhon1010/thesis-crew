@@ -1,4 +1,7 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useState, useEffect } from "react";
+import { auth } from "@/firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getFirestore, onSnapshot } from "firebase/firestore";
 import { Sidebar } from "./Sidebar";
 import { ThemeToggle } from "../common/ThemeToggle";
 import { Menu } from "lucide-react";
@@ -19,6 +22,39 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
     }
     return false;
   });
+  
+  const [photoURL, setPhotoURL] = useState<string | null>(null);
+
+  useEffect(() => {
+    const db = getFirestore();
+    let unsubscribeDoc: (() => void) | undefined;
+    
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (unsubscribeDoc) {
+        unsubscribeDoc();
+        unsubscribeDoc = undefined;
+      }
+      
+      if (user) {
+        // Fallback to auth photoURL initially
+        setPhotoURL(user.photoURL);
+        
+        // Listen to Firestore for updates (handles large Base64 images)
+        unsubscribeDoc = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
+          if (docSnap.exists() && docSnap.data().photoURL) {
+            setPhotoURL(docSnap.data().photoURL);
+          }
+        });
+      } else {
+        setPhotoURL(null);
+      }
+    });
+    
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeDoc) unsubscribeDoc();
+    };
+  }, []);
 
   const toggleCollapse = () => {
     setIsCollapsed(prev => {
@@ -59,13 +95,17 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
             
             {/* Profile Icon */}
             <Link 
-              to={role === "student" ? "/student/profile" : role === "admin" ? "/admin/profile" : "/teacher/dashboard"}
+              to={role === "student" ? "/student/profile" : role === "admin" ? "/admin/profile" : "/teacher/profile"}
               title="My Profile"
-              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-blue-500/30 bg-blue-50 transition-colors hover:bg-blue-100 dark:border-[#3B82F6]/30 dark:bg-[#3B82F6]/10 dark:hover:bg-[#3B82F6]/20"
+              className="flex h-10 w-10 overflow-hidden cursor-pointer items-center justify-center rounded-full border border-blue-500/30 bg-blue-50 transition-colors hover:bg-blue-100 dark:border-[#3B82F6]/30 dark:bg-[#3B82F6]/10 dark:hover:bg-[#3B82F6]/20"
             >
-              <span className="text-sm font-semibold text-blue-600 dark:text-[#3B82F6]">
-                {role === "admin" ? "A" : "U"}
-              </span>
+              {photoURL ? (
+                <img src={photoURL} alt="Profile" className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-sm font-semibold text-blue-600 dark:text-[#3B82F6]">
+                  {role === "admin" ? "A" : "U"}
+                </span>
+              )}
             </Link>
 
           </div>

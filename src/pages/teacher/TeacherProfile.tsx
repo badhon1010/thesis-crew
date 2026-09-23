@@ -9,17 +9,17 @@ import { onAuthStateChanged, updateEmail, updatePassword, sendPasswordResetEmail
 import { ImageCropperModal } from "@/components/common/ImageCropperModal";
 import { ToastAlert } from "@/components/common/ToastAlert";
 
-interface UserProfile {
+interface TeacherProfileData {
   name: string;
-  studentId: string;
+  facultyInitial: string;
   department: string;
-  cgpa: string;
+  designation: string;
   researchInterests: string;
   skills: string[];
   photoURL?: string;
 }
 
-export default function StudentProfile() {
+export default function TeacherProfile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [skillInput, setSkillInput] = useState("");
@@ -52,11 +52,11 @@ export default function StudentProfile() {
     setToast({ show: true, type, message });
   };
 
-  const [formData, setFormData] = useState<UserProfile>({
+  const [formData, setFormData] = useState<TeacherProfileData>({
     name: "",
-    studentId: "",
+    facultyInitial: "",
     department: "",
-    cgpa: "",
+    designation: "",
     researchInterests: "",
     skills: [],
   });
@@ -74,9 +74,9 @@ export default function StudentProfile() {
             const data = docSnap.data();
             setFormData({
               name: data.name || user.displayName || "",
-              studentId: data.studentId || "",
+              facultyInitial: data.facultyInitial || data.facultyId || "",
               department: data.department || "",
-              cgpa: data.cgpa || "",
+              designation: data.designation || "",
               researchInterests: data.researchInterests || "",
               skills: data.skills || [],
               photoURL: data.photoURL || user.photoURL || "",
@@ -103,7 +103,7 @@ export default function StudentProfile() {
 
   //Add skills
   const handleAddSkill = (e?: React.KeyboardEvent | React.MouseEvent) => {
-    if (e && 'key' in e && e.key !== 'Enter') return;
+    if (e && 'key' in e && (e as React.KeyboardEvent).key !== 'Enter') return;
     e?.preventDefault(); // Prevent form submission
     
     const trimmedSkill = skillInput.trim();
@@ -133,9 +133,9 @@ export default function StudentProfile() {
       const docRef = doc(db, "users", userUid);
       await updateDoc(docRef, {
         name: formData.name,
-        studentId: formData.studentId,
+        facultyInitial: formData.facultyInitial,
         department: formData.department,
-        cgpa: formData.cgpa,
+        designation: formData.designation,
         researchInterests: formData.researchInterests,
         skills: formData.skills,
         photoURL: formData.photoURL,
@@ -191,9 +191,9 @@ export default function StudentProfile() {
       return;
     }
     
-    const check = validateUiuEmail(val, "student");
+    const check = validateUiuEmail(val, "teacher");
     if (!check.isValid) {
-      setEmailValidationError(check.message || "Enter a valid student email address.");
+      setEmailValidationError(check.message || "Enter a valid teacher email address.");
     } else {
       setEmailValidationError("");
     }
@@ -203,7 +203,7 @@ export default function StudentProfile() {
     if (!auth.currentUser) return;
     if (!accountEmail || emailValidationError) return;
 
-    const emailCheck = validateUiuEmail(accountEmail, "student");
+    const emailCheck = validateUiuEmail(accountEmail, "teacher");
     if (!emailCheck.isValid) {
       setAccountError(emailCheck.message || "Invalid university email format.");
       return;
@@ -278,7 +278,7 @@ export default function StudentProfile() {
 
   if (loading) {
     return (
-      <DashboardLayout role="student">
+      <DashboardLayout role="teacher">
         <div className="flex h-[50vh] items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
         </div>
@@ -287,7 +287,7 @@ export default function StudentProfile() {
   }
 
   return (
-    <DashboardLayout role="student">
+    <DashboardLayout role="teacher">
       <ToastAlert
         show={toast.show}
         type={toast.type}
@@ -328,10 +328,10 @@ export default function StudentProfile() {
           </div>
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
-              My Profile
+              Teacher Profile
             </h1>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-              Manage your personal information and update your skills to find the best research matches.
+              Manage your professional information, research interests, and account security.
             </p>
           </div>
         </div>
@@ -354,11 +354,11 @@ export default function StudentProfile() {
                 />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-900 dark:text-slate-300">Student ID</label>
+                <label className="mb-2 block text-sm font-semibold text-slate-900 dark:text-slate-300">Faculty Initial / ID</label>
                 <input
                   type="text"
-                  name="studentId"
-                  value={formData.studentId}
+                  name="facultyInitial"
+                  value={formData.facultyInitial}
                   onChange={handleChange}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
                 />
@@ -374,12 +374,13 @@ export default function StudentProfile() {
                 />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-900 dark:text-slate-300">CGPA</label>
+                <label className="mb-2 block text-sm font-semibold text-slate-900 dark:text-slate-300">Designation</label>
                 <input
                   type="text"
-                  name="cgpa"
-                  value={formData.cgpa}
+                  name="designation"
+                  value={formData.designation}
                   onChange={handleChange}
+                  placeholder="e.g., Professor, Assistant Professor, Lecturer"
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
                 />
               </div>
@@ -389,7 +390,7 @@ export default function StudentProfile() {
           {/* Research & Skills Card */}
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 dark:border-[#2A2A2A] dark:bg-[#181818]">
             <h2 className="mb-6 text-lg font-bold text-slate-900 dark:text-white border-b border-slate-100 pb-4 dark:border-[#2A2A2A]">
-              Research & Skills
+              Research & Expertise
             </h2>
             <div className="grid gap-6">
               <div>
@@ -405,7 +406,7 @@ export default function StudentProfile() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-900 dark:text-slate-300">Technical Skills</label>
+                <label className="mb-2 block text-sm font-semibold text-slate-900 dark:text-slate-300">Technical Skills / Specializations</label>
                 
                 {/* Add Skill Field */}
                 <div className="flex gap-2">
@@ -583,13 +584,13 @@ export default function StudentProfile() {
           {/* Save Button */}
           <div className="flex justify-end pt-4">
             <button
-              type="button"
-              onClick={handleSaveProfile}
-              disabled={saving}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-8 py-3.5 text-sm font-semibold text-white transition-all hover:bg-indigo-500 disabled:opacity-50 dark:border dark:border-indigo-500/50 dark:shadow-[0_0_20px_rgba(79,70,229,0.3)]"
+               type="button"
+               onClick={handleSaveProfile}
+               disabled={saving}
+               className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-8 py-3.5 text-sm font-semibold text-white transition-all hover:bg-indigo-500 disabled:opacity-50 dark:border dark:border-indigo-500/50 dark:shadow-[0_0_20px_rgba(79,70,229,0.3)]"
             >
-              {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
-              Save Profile Changes
+               {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+               Save Profile Changes
             </button>
           </div>
 

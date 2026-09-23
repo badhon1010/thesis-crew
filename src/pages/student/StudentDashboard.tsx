@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, Clock3, FileText, FolderKanban, Loader2, Sparkles, X } from "lucide-react";
+import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, Clock3, FileText, FolderKanban, Loader2, Sparkles, X, Check, ArrowRight } from "lucide-react";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, onSnapshot, query, updateDoc, where, type Unsubscribe } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -11,7 +11,7 @@ import { calculateSkillMatch } from "@/utils/skillMatching";
 import { isNewlyPublishedTopic } from "@/utils/topicStatus";
 import { generateTopRecommendations, type AIRecommendationResult } from "@/lib/ai";
 
-interface StudentProfile { name?: string; department?: string; cgpa?: string; researchInterests?: string; skills?: string[]; }
+interface StudentProfile { name?: string; department?: string; cgpa?: string; researchInterests?: string; skills?: string[]; studentId?: string; photoURL?: string; }
 interface RecommendedTopic extends ResearchTopic { matchScore: number; }
 export interface CalendarEvent {
   id: string;
@@ -192,10 +192,16 @@ export default function StudentDashboard() {
   };
 
   return <DashboardLayout role="student"><div className="mx-auto max-w-6xl px-2 sm:px-4">
-    <div className="mb-12 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div>
-      <div className="mb-3 flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-[#3B82F6]"><Clock3 className="h-4 w-4" /><span>{formattedDate}</span><span className="text-slate-300 dark:text-slate-600">•</span><div className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-600 dark:bg-[#3B82F6]" /><span className="tabular-nums">{formattedTime}</span></div></div>
-      <h1 className="text-4xl font-semibold tracking-tighter text-slate-900 dark:text-white">{greeting}, {userName}.</h1><p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Live research opportunities and profile insights from your workspace.</p>
-    </div></div>
+    <div className="mb-12 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+      <div>
+        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-[#3B82F6]"><Clock3 className="h-4 w-4" /><span>{formattedDate}</span><span className="text-slate-300 dark:text-slate-600">•</span><div className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-600 dark:bg-[#3B82F6]" /><span className="tabular-nums">{formattedTime}</span></div></div>
+        <h1 className="text-4xl font-semibold tracking-tighter text-slate-900 dark:text-white">{greeting}, {userName}.</h1>
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Live research opportunities and profile insights from your workspace.</p>
+      </div>
+      <div className="shrink-0">
+        <SmallProfileCompletionWidget profile={profile} />
+      </div>
+    </div>
     <div className="mb-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <StatCard icon={FolderKanban} value={String(topics.length).padStart(2, "0")} label="Published topics" trend="Live updates" />
       <StatCard icon={Sparkles} value={String(matchedTopicCount).padStart(2, "0")} label="Matching topics" trend="Based on your profile" />
@@ -270,7 +276,8 @@ export default function StudentDashboard() {
         </section>
       </div>
       <div className="grid gap-6 items-start lg:grid-cols-2"><section className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-[#2A2A2A] dark:bg-[#181818]"><SectionHeader title="Latest opportunities" description="Most recently added published topics." /><div className="divide-y divide-slate-100 dark:divide-[#2A2A2A]">{recentTopics.map((topic) => <RecentTopic key={topic.id} topic={topic} />)}{!recentTopics.length && <EmptyState message="New published topics will appear here." />}</div></section>
-      <section className="rounded-2xl border border-slate-200 bg-white dark:border-[#2A2A2A] dark:bg-[#181818]"><SectionHeader title="Your research profile" description="This information powers topic matching." action={<Link to="/student/profile" className="text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-[#3B82F6]">Edit profile</Link>} /><div className="space-y-5 p-6 text-sm"><ProfileField label="Department" value={profile.department || "Not added"} /><ProfileField label="CGPA" value={profile.cgpa || "Not added"} /><ProfileField label="Research interests" value={profile.researchInterests || "Add interests in your profile"} /><div><p className="text-xs text-slate-500 dark:text-slate-400">Skills</p><div className="mt-2 flex flex-wrap gap-2">{profile.skills?.length ? profile.skills.map((skill) => <span key={skill} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">{skill}<button type="button" onClick={() => handleRemoveSkill(skill)} className="rounded-full p-0.5 hover:bg-blue-200 dark:hover:bg-blue-500/40"><X className="h-3 w-3" /></button></span>) : <span className="text-sm text-slate-500 dark:text-slate-400">Add skills to receive better matches.</span>}</div><form onSubmit={handleAddSkill} className="mt-4 flex gap-2"><input value={skillInput} onChange={(event) => setSkillInput(event.target.value)} placeholder="Add a skill, e.g. Python" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-[#121212] dark:text-white" /><button type="submit" disabled={savingSkill || !skillInput.trim()} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">{savingSkill ? "Adding..." : "Add skill"}</button></form>{skillError && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{skillError}</p>}</div></div></section></div>
+      <section className="rounded-2xl border border-slate-200 bg-white dark:border-[#2A2A2A] dark:bg-[#181818]"><SectionHeader title="Your research profile" description="This information powers topic matching." action={<Link to="/student/profile" className="text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-[#3B82F6]">Edit profile</Link>} /><div className="space-y-5 p-6 text-sm"><ProfileField label="Department" value={profile.department || "Not added"} /><ProfileField label="CGPA" value={profile.cgpa || "Not added"} /><ProfileField label="Research interests" value={profile.researchInterests || "Add interests in your profile"} /><div><p className="text-xs text-slate-500 dark:text-slate-400">Skills</p><div className="mt-2 flex flex-wrap gap-2">{profile.skills?.length ? profile.skills.map((skill) => <span key={skill} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">{skill}<button type="button" onClick={() => handleRemoveSkill(skill)} className="rounded-full p-0.5 hover:bg-blue-200 dark:hover:bg-blue-500/40"><X className="h-3 w-3" /></button></span>) : <span className="text-sm text-slate-500 dark:text-slate-400">Add skills to receive better matches.</span>}</div><form onSubmit={handleAddSkill} className="mt-4 flex gap-2"><input value={skillInput} onChange={(event) => setSkillInput(event.target.value)} placeholder="Add a skill, e.g. Python" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 dark:border-slate-700 dark:bg-[#121212] dark:text-white" /><button type="submit" disabled={savingSkill || !skillInput.trim()} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">{savingSkill ? "Adding..." : "Add skill"}</button></form>{skillError && <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{skillError}</p>}</div></div></section>
+      </div>
     </>}</div></DashboardLayout>;
 }
 
@@ -422,5 +429,56 @@ function MiniCalendar({ events }: { events: CalendarEvent[] }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function SmallProfileCompletionWidget({ profile }: { profile: StudentProfile }) {
+  const steps = [
+    { label: "Basic info", isComplete: !!(profile.name && profile.department && profile.studentId) },
+    { label: "Keywords", isComplete: !!(profile.researchInterests || (profile.skills && profile.skills.length > 0)) },
+    { label: "Photo", isComplete: !!profile.photoURL },
+    { label: "Academics", isComplete: !!profile.cgpa },
+  ];
+  
+  const completedSteps = steps.filter(s => s.isComplete).length;
+  const totalSteps = steps.length;
+  const percentage = Math.round((completedSteps / totalSteps) * 100);
+
+  if (completedSteps === totalSteps) {
+    return (
+      <Link 
+        to="/student/profile"
+        className="group flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 transition-colors hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20"
+        title="Your profile is fully optimized for matching!"
+      >
+        <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white dark:bg-emerald-600">
+          <Check className="h-3 w-3" />
+        </div>
+        <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+          Profile 100% Complete
+        </span>
+      </Link>
+    );
+  }
+
+  return (
+    <Link 
+      to="/student/profile"
+      className="group flex items-center gap-3 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 transition-colors hover:bg-blue-100 dark:border-blue-500/20 dark:bg-blue-500/10 dark:hover:bg-blue-500/20"
+      title={`${totalSteps - completedSteps} steps left to complete profile`}
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">
+          Profile {percentage}%
+        </span>
+        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-blue-200 dark:bg-blue-900/50">
+          <div 
+            className="h-full rounded-full bg-blue-600 transition-all duration-500 dark:bg-blue-400"
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
+      </div>
+      <ArrowRight className="h-3.5 w-3.5 text-blue-500 transition-transform group-hover:translate-x-0.5 dark:text-blue-400" />
+    </Link>
   );
 }
