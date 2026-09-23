@@ -260,7 +260,7 @@ export default function ResearchTopicDetails() {
         onClose={() => setSelectedStudentId(null)}
       />
 
-      <div className="mx-auto max-w-5xl px-2 sm:px-0">
+      <div className="mx-auto max-w-6xl px-2 sm:px-4">
         {/* Navigation & Actions */}
         <div className="mb-6 flex items-center justify-between">
           <button

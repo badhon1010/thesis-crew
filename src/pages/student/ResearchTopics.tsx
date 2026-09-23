@@ -107,7 +107,7 @@ export default function StudentResearchTopics() {
 
   return (
     <DashboardLayout role="student">
-      <div className="mx-auto max-w-5xl px-2 sm:px-0">
+      <div className="mx-auto max-w-6xl px-2 sm:px-4">
         
         {/* Header Section */}
         <div className="mb-10">

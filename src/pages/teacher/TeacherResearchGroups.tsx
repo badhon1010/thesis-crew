@@ -62,7 +62,7 @@ export default function TeacherResearchGroups() {
 
   return (
     <DashboardLayout role="teacher">
-      <div className="mx-auto max-w-5xl px-2 sm:px-0">
+      <div className="mx-auto max-w-6xl px-2 sm:px-4">
         <ToastAlert
           show={toast.show}
           type={toast.type}

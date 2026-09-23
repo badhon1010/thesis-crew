@@ -194,16 +194,14 @@ export function Sidebar({ role, isOpen, onClose, isCollapsed, onToggleCollapse }
         </nav>
 
         <div className="dashboard-sidebar-footer space-y-2 border-t border-slate-100 dark:border-slate-800/80">
-          {role === "admin" && !isCollapsed && (
-            <div className="flex items-center gap-2 px-4 py-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
-              <ShieldCheck className="h-4 w-4 shrink-0" />
-              <span>Admin Mode</span>
+          {role === "admin" && (
+            <div
+              title={isCollapsed ? "Admin Mode" : undefined}
+              className="dashboard-sidebar-admin-mode flex items-center text-xs font-semibold text-indigo-600 dark:text-indigo-400"
+            >
+              <ShieldCheck className="dashboard-sidebar-icon h-5 w-5 shrink-0 transition-colors" />
+              <SidebarLabel text="Admin Mode" isCollapsed={isCollapsed} />
             </div>
-          )}
-          {role === "admin" && isCollapsed && (
-             <div className="flex justify-center py-1" title="Admin Mode">
-               <ShieldCheck className="h-5 w-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-             </div>
           )}
 
           <Link

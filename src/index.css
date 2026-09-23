@@ -140,6 +140,25 @@
 .dashboard-sidebar[data-sidebar-collapsed="true"] .dashboard-sidebar-footer {
   padding-inline: 1rem;
 }
+.dashboard-sidebar-admin-mode {
+  position: relative;
+  align-self: flex-start;
+  width: 100%;
+  padding: 0.25rem 1rem 0.25rem 3rem;
+  transition: width var(--sidebar-motion-duration) var(--sidebar-motion-easing);
+}
+
+.dashboard-sidebar-admin-mode .dashboard-sidebar-icon {
+  position: absolute;
+  top: 50%;
+  left: 0.875rem;
+  transform: translateY(-50%);
+}
+
+.dashboard-sidebar[data-sidebar-label-phase="closed"] .dashboard-sidebar-admin-mode {
+  width: 3rem;
+  padding: 0.25rem 0;
+}
 
 .dashboard-sidebar-action {
   position: relative;

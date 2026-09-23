@@ -573,7 +573,7 @@ export default function StudentGroupDetails() {
   if (loading) {
     return (
       <DashboardLayout role="student">
-        <div className="mx-auto max-w-7xl px-2 sm:px-4">
+        <div className="mx-auto max-w-6xl px-2 sm:px-4">
           <div className="mb-6 h-10 w-48 animate-pulse rounded-full bg-slate-200 dark:bg-[#181818]"></div>
           
           <div className="mb-8 h-48 w-full animate-pulse rounded-3xl bg-slate-200 dark:bg-[#181818]"></div>
@@ -694,7 +694,7 @@ export default function StudentGroupDetails() {
         onClose={() => setViewingTask(null)}
       />
 
-      <div className="mx-auto max-w-7xl px-2 sm:px-4">
+      <div className="mx-auto max-w-6xl px-2 sm:px-4">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <button

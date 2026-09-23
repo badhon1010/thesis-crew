@@ -82,7 +82,7 @@ export default function TeacherJoinRequests() {
 
   return (
     <DashboardLayout role="teacher">
-      <div className="mx-auto max-w-5xl px-2 sm:px-0">
+      <div className="mx-auto max-w-6xl px-2 sm:px-4">
         {toast && <ToastAlert type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
 
         <StudentProfileModal

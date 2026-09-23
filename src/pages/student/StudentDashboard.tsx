@@ -191,7 +191,7 @@ export default function StudentDashboard() {
     }
   };
 
-  return <DashboardLayout role="student"><div className="mx-auto max-w-5xl px-2 sm:px-0">
+  return <DashboardLayout role="student"><div className="mx-auto max-w-6xl px-2 sm:px-4">
     <div className="mb-12 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div>
       <div className="mb-3 flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-[#3B82F6]"><Clock3 className="h-4 w-4" /><span>{formattedDate}</span><span className="text-slate-300 dark:text-slate-600">•</span><div className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-600 dark:bg-[#3B82F6]" /><span className="tabular-nums">{formattedTime}</span></div></div>
       <h1 className="text-4xl font-semibold tracking-tighter text-slate-900 dark:text-white">{greeting}, {userName}.</h1><p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Live research opportunities and profile insights from your workspace.</p>

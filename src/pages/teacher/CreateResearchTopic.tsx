@@ -102,7 +102,7 @@ export default function CreateTopic() {
         />
       )}
 
-      <div className="mx-auto max-w-4xl px-2 sm:px-0">
+      <div className="mx-auto max-w-6xl px-2 sm:px-4">
         {/* Header */}
         <div className="mb-10">
           <button 

@@ -281,7 +281,7 @@ export default function TeacherDashboard() {
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
+        <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
 
           {/* Research Topics List */}
           <section className="overflow-hidden rounded-2xl border-2 border-slate-200 bg-white shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">

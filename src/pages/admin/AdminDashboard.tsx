@@ -143,25 +143,25 @@ export default function AdminDashboard() {
       <div className="mx-auto max-w-6xl px-2 sm:px-4">
         
         {/* Header Banner */}
-        <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+        <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <div className="mb-3 flex flex-wrap items-center gap-3">
-              <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-50 px-3.5 py-1.5 dark:border-indigo-500/30 dark:bg-indigo-500/10">
-                <ShieldCheck className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
-                <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">UNIVERSITY COORDINATOR</span>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/20 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300">
+                <ShieldCheck className="h-3.5 w-3.5 text-indigo-500" />
+                University Coordinator
               </div>
-              <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3.5 py-1.5 dark:border-[#2A2A2A] dark:bg-[#0F0F0F]">
-                <Clock className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{formattedDate}</span>
+              <div className="inline-flex items-center gap-2 rounded-full border border-slate-500/20 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 dark:border-slate-500/30 dark:bg-slate-500/10 dark:text-slate-300">
+                <Clock className="h-3.5 w-3.5 text-slate-500" />
+                <span>{formattedDate}</span>
                 <span className="text-slate-400">•</span>
-                <span className="text-xs font-bold tabular-nums text-slate-900 dark:text-white">{formattedTime}</span>
+                <span className="tabular-nums">{formattedTime}</span>
               </div>
             </div>
 
             <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
               Admin Overview
             </h1>
-            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               System-wide metrics, research topic oversight, and account governance.
             </p>
           </div>
