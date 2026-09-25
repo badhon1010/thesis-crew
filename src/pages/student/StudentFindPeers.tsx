@@ -250,7 +250,7 @@ export default function StudentFindPeers() {
 
   return (
     <DashboardLayout role="student">
-      <div className="mx-auto max-w-4xl px-2 sm:px-4 pb-12">
+      <div className="mx-auto max-w-6xl px-2 sm:px-4 pb-12">
         {toast && <ToastAlert type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
         
         {/* Header */}
