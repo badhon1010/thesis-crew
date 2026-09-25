@@ -58,6 +58,7 @@ export default function StudentFindPeers() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [searchTerm, setSearchTerm] = useState("");
+  const [postFilter, setPostFilter] = useState<"all" | "my">("all");
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   
   const [viewingPost, setViewingPost] = useState<PeerPost | null>(null);
@@ -109,8 +110,11 @@ export default function StudentFindPeers() {
     if (e.key === 'Enter') {
       e.preventDefault();
       const newSkill = skillInput.trim();
-      if (newSkill && !postSkills.includes(newSkill)) {
-        setPostSkills([...postSkills, newSkill]);
+      if (newSkill) {
+        const skillsToAdd = newSkill.split(',').map(s => s.trim()).filter(s => s && !postSkills.includes(s));
+        if (skillsToAdd.length > 0) {
+          setPostSkills([...postSkills, ...skillsToAdd]);
+        }
         setSkillInput("");
       }
     }
@@ -134,8 +138,9 @@ export default function StudentFindPeers() {
 
     const finalSkills = [...postSkills];
     const pendingSkill = skillInput.trim();
-    if (pendingSkill && !finalSkills.includes(pendingSkill)) {
-      finalSkills.push(pendingSkill);
+    if (pendingSkill) {
+      const pendingToAdd = pendingSkill.split(',').map(s => s.trim()).filter(s => s && !finalSkills.includes(s));
+      finalSkills.push(...pendingToAdd);
     }
 
     setIsSubmitting(true);
@@ -209,8 +214,9 @@ export default function StudentFindPeers() {
     const editSkillInputElem = document.getElementById('editSkillInput') as HTMLInputElement;
     if (editSkillInputElem) {
       const pendingSkill = editSkillInputElem.value.trim();
-      if (pendingSkill && !finalSkills.includes(pendingSkill)) {
-        finalSkills.push(pendingSkill);
+      if (pendingSkill) {
+        const pendingToAdd = pendingSkill.split(',').map(s => s.trim()).filter(s => s && !finalSkills.includes(s));
+        finalSkills.push(...pendingToAdd);
       }
     }
 
@@ -231,11 +237,16 @@ export default function StudentFindPeers() {
     }
   };
 
-  const filteredPosts = posts.filter(post => 
-    post.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    post.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    post.skills.some(s => s.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredPosts = posts.filter(post => {
+    const matchesSearch = post.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      post.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (post.skills && post.skills.some(s => s.toLowerCase().includes(searchTerm.toLowerCase())));
+    
+    if (postFilter === "my") {
+      return matchesSearch && post.authorId === auth.currentUser?.uid;
+    }
+    return matchesSearch;
+  });
 
   return (
     <DashboardLayout role="student">
@@ -343,16 +354,38 @@ export default function StudentFindPeers() {
           </div>
 
           {/* Search and Feed */}
-          <div className="flex items-center justify-between mt-2">
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Recent Posts</h2>
-            <div className="relative w-full max-w-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-2 gap-4">
+            <div className="flex h-10 items-center space-x-1 rounded-xl border border-slate-200 bg-slate-50/50 p-1 dark:border-[#2A2A2A] dark:bg-[#181818]">
+              <button
+                onClick={() => setPostFilter("all")}
+                className={`flex h-full items-center justify-center rounded-lg px-4 whitespace-nowrap text-[13px] font-semibold transition-all ${
+                  postFilter === "all" 
+                    ? "bg-white text-indigo-700 shadow-sm dark:bg-[#282828] dark:text-indigo-400" 
+                    : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                }`}
+              >
+                Explore
+              </button>
+              <button
+                onClick={() => setPostFilter("my")}
+                className={`flex h-full items-center justify-center rounded-lg px-4 whitespace-nowrap text-[13px] font-semibold transition-all ${
+                  postFilter === "my" 
+                    ? "bg-white text-indigo-700 shadow-sm dark:bg-[#282828] dark:text-indigo-400" 
+                    : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                }`}
+              >
+                My Requests
+              </button>
+            </div>
+            
+            <div className="relative w-full sm:max-w-xs">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search posts or skills..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-4 text-sm outline-none transition focus:border-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:focus:border-indigo-500"
+                className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-4 text-sm outline-none transition focus:border-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:focus:border-indigo-500"
               />
             </div>
           </div>
@@ -537,8 +570,11 @@ export default function StudentFindPeers() {
                     if (e.key === 'Enter') {
                       e.preventDefault();
                       const val = (e.target as HTMLInputElement).value.trim();
-                      if (val && !editingPost.skills.includes(val)) {
-                        setEditingPost({...editingPost, skills: [...editingPost.skills, val]});
+                      if (val) {
+                        const skillsToAdd = val.split(',').map(s => s.trim()).filter(s => s && !editingPost.skills.includes(s));
+                        if (skillsToAdd.length > 0) {
+                          setEditingPost({...editingPost, skills: [...editingPost.skills, ...skillsToAdd]});
+                        }
                         (e.target as HTMLInputElement).value = '';
                       }
                     }
