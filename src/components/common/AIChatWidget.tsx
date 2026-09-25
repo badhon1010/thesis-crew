@@ -110,7 +110,6 @@ export function AIChatWidget() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">Research Advisor</h3>
-                <p className="text-[10px] text-slate-500">Powered by Gemini AI</p>
               </div>
             </div>
             <button

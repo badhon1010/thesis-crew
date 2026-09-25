@@ -7,8 +7,8 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { auth } from "@/firebase/auth";
 import { db } from "@/firebase/firestore";
 import { type ResearchTopic } from "@/firebase/researchTopics";
-import { calculateSkillMatch } from "@/utils/skillMatching";
 import { isNewlyPublishedTopic } from "@/utils/topicStatus";
+import { getQuickScoresAll } from "@/lib/ai";
 
 interface StudentProfile {
   name?: string;
@@ -20,10 +20,22 @@ interface StudentProfile {
 
 export default function StudentResearchTopics() {
   const [topics, setTopics] = useState<ResearchTopic[]>([]);
-  const [studentSkills, setStudentSkills] = useState<string[]>([]);
+  const [studentProfile, setStudentProfile] = useState<StudentProfile>({});
+  const [apiScores, setApiScores] = useState<Record<string, number>>({});
   const [teamMemberCounts, setTeamMemberCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+
+  useEffect(() => {
+    if (topics.length > 0 && Object.keys(studentProfile).length > 0) {
+      getQuickScoresAll(studentProfile, topics).then(scores => setApiScores(scores));
+    }
+  }, [topics, studentProfile]);
+
+  function getMatchScore(topic: ResearchTopic): number | string {
+    if (apiScores[topic.id] !== undefined) return apiScores[topic.id];
+    return "...";
+  }
 
   useEffect(() => {
     let unsubscribeProfile: Unsubscribe | undefined;
@@ -46,12 +58,12 @@ export default function StudentResearchTopics() {
       unsubscribeProfile?.();
       unsubscribeTeams?.();
       if (!user) {
-        setStudentSkills([]);
+        setStudentProfile({});
         return;
       }
       unsubscribeProfile = onSnapshot(doc(db, "users", user.uid), (snapshot) => {
         const profile = snapshot.data() as StudentProfile | undefined;
-        setStudentSkills(profile?.skills ?? []);
+        setStudentProfile(profile || {});
       }, (error) => console.error("Failed to subscribe to student profile:", error));
       unsubscribeTeams = onSnapshot(collection(db, "teams"), (snapshot) => {
         setTeamMemberCounts(Object.fromEntries(snapshot.docs.map((team) => [
@@ -94,8 +106,10 @@ export default function StudentResearchTopics() {
     }
     
     // 3. Both open: Sort by skill match score first
-    const aMatch = calculateSkillMatch(studentSkills, a.requiredSkills).score;
-    const bMatch = calculateSkillMatch(studentSkills, b.requiredSkills).score;
+    const aMatchVal = getMatchScore(a);
+    const bMatchVal = getMatchScore(b);
+    const aMatch = typeof aMatchVal === 'number' ? aMatchVal : 0;
+    const bMatch = typeof bMatchVal === 'number' ? bMatchVal : 0;
     
     if (aMatch !== bMatch) {
       return bMatch - aMatch;
@@ -186,7 +200,7 @@ export default function StudentResearchTopics() {
 
                   <div className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-right dark:bg-emerald-950/30">
                     <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                      {calculateSkillMatch(studentSkills, topic.requiredSkills).score}%
+                      {getMatchScore(topic)}{getMatchScore(topic) !== "..." ? "%" : ""}
                     </p>
                     <p className="text-[9px] font-medium text-emerald-600/70 dark:text-emerald-400/70">match</p>
                   </div>

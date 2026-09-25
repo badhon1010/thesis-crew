@@ -7,12 +7,11 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { auth } from "@/firebase/auth";
 import { db } from "@/firebase/firestore";
 import type { ResearchTopic } from "@/firebase/researchTopics";
-import { calculateSkillMatch } from "@/utils/skillMatching";
 import { isNewlyPublishedTopic } from "@/utils/topicStatus";
-import { generateTopRecommendations, type AIRecommendationResult } from "@/lib/ai";
+import { generateTopRecommendations, getQuickScoresAll, type AIRecommendationResult } from "@/lib/ai";
 
 interface StudentProfile { name?: string; department?: string; cgpa?: string; researchInterests?: string; skills?: string[]; studentId?: string; photoURL?: string; }
-interface RecommendedTopic extends ResearchTopic { matchScore: number; }
+interface RecommendedTopic extends Omit<ResearchTopic, 'matchScore'> { matchScore: number | string; }
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -20,8 +19,10 @@ export interface CalendarEvent {
   type: 'deadline' | 'task' | 'meeting' | 'milestone';
 }
 
-function getMatchScore(topic: ResearchTopic, profile: StudentProfile) {
-  return calculateSkillMatch(profile.skills, topic.requiredSkills).score;
+// We now fetch the real score from API. Show "..." while it loads.
+function getMatchScore(apiScore?: number): number | string {
+  if (apiScore !== undefined) return apiScore;
+  return "...";
 }
 
 function dateFromValue(value: unknown) {
@@ -50,11 +51,18 @@ export default function StudentDashboard() {
   const [aiRecommendations, setAiRecommendations] = useState<AIRecommendationResult[] | null>(null);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [aiError, setAiError] = useState("");
+  const [apiScores, setApiScores] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (topics.length > 0 && Object.keys(profile).length > 0) {
+      getQuickScoresAll(profile, topics).then(scores => setApiScores(scores));
+    }
+  }, [topics, profile]);
 
   useEffect(() => {
     let unsubscribeProfile: Unsubscribe | undefined;
@@ -76,7 +84,7 @@ export default function StudentDashboard() {
   }, []);
 
   const recommendedTopics = useMemo<RecommendedTopic[]>(() => topics
-    .map((topic) => ({ ...topic, matchScore: getMatchScore(topic, profile) }))
+    .map((topic) => ({ ...topic, matchScore: getMatchScore(apiScores[topic.id]) as number | string }))
     .sort((a, b) => {
       const now = new Date();
       const aDate = a.applicationDeadline ? new Date(a.applicationDeadline) : new Date(8640000000000000);
@@ -95,13 +103,15 @@ export default function StudentDashboard() {
       }
       
       // 3. Both open: sort by match score
-      if (a.matchScore !== b.matchScore) {
-        return b.matchScore - a.matchScore;
+      const aScore = typeof a.matchScore === 'number' ? a.matchScore : 0;
+      const bScore = typeof b.matchScore === 'number' ? b.matchScore : 0;
+      if (aScore !== bScore) {
+        return bScore - aScore;
       }
       
       // 4. Match score same: sort by closest deadline
       return aDate.getTime() - bDate.getTime();
-    }), [profile, topics]);
+    }), [profile, topics, apiScores]);
   const upcomingDeadlines = useMemo(() => [...topics]
     .filter((topic) => topic.applicationDeadline && new Date(topic.applicationDeadline).getTime() >= currentTime.getTime())
     .sort((a, b) => new Date(a.applicationDeadline).getTime() - new Date(b.applicationDeadline).getTime())
@@ -133,7 +143,7 @@ export default function StudentDashboard() {
   const greeting = currentTime.getHours() < 12 ? "Good morning" : currentTime.getHours() < 18 ? "Good afternoon" : "Good evening";
   const formattedDate = currentTime.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
   const formattedTime = currentTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  const matchedTopicCount = recommendedTopics.filter((topic) => topic.matchScore > 0).length;
+  const matchedTopicCount = recommendedTopics.filter((topic) => typeof topic.matchScore === 'number' && topic.matchScore > 0).length;
 
   const handleRemoveSkill = async (skillToRemove: string) => {
     const user = auth.currentUser;
@@ -310,7 +320,7 @@ function TopicRow({ topic }: { topic: RecommendedTopic }) {
         </div>
       </div>
       <div className="ml-4 shrink-0 text-right">
-        <p className="text-base font-bold text-emerald-600 dark:text-emerald-400">{topic.matchScore}%</p>
+        <p className="text-base font-bold text-emerald-600 dark:text-emerald-400">{topic.matchScore}{topic.matchScore !== "..." ? "%" : ""}</p>
         <p className="mt-0.5 text-xs text-slate-400">match</p>
       </div>
     </Link>
