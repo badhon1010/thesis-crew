@@ -43,6 +43,8 @@ export default function StudentMessages() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [peerProfiles, setPeerProfiles] = useState<Record<string, any>>({});
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -52,7 +54,19 @@ export default function StudentMessages() {
   }, []);
 
   const currentUserId = currentUser?.uid;
-  const currentUserName = currentUser?.displayName || "Student";
+
+  // 0. Fetch Current User Profile
+  useEffect(() => {
+    if (!currentUserId) return;
+    const unsubscribe = onSnapshot(doc(db, "users", currentUserId), (snap) => {
+      if (snap.exists()) {
+        setUserProfile(snap.data());
+      }
+    });
+    return () => unsubscribe();
+  }, [currentUserId]);
+
+  const currentUserName = userProfile?.name || currentUser?.displayName || "Student";
 
   // 1. Fetch Chat Rooms
   useEffect(() => {
@@ -98,7 +112,27 @@ export default function StudentMessages() {
     return () => unsubscribe();
   }, [currentUserId, targetUserId, activeChatId]);
 
-  // 2. Fetch Messages for Active Chat
+  // 2. Fetch Peer Profiles dynamically to ensure we always have their real names
+  useEffect(() => {
+    if (chatRooms.length === 0 || !currentUserId) return;
+    
+    const peerIds = [...new Set(chatRooms.flatMap(r => r.participants.filter(id => id !== currentUserId)))];
+    if (targetUserId && !peerIds.includes(targetUserId)) {
+      peerIds.push(targetUserId);
+    }
+    
+    const unsubscribes = peerIds.map(id => 
+      onSnapshot(doc(db, "users", id), (snap) => {
+        if (snap.exists()) {
+          setPeerProfiles(prev => ({ ...prev, [id]: snap.data() }));
+        }
+      })
+    );
+    
+    return () => unsubscribes.forEach(unsub => unsub());
+  }, [chatRooms, currentUserId, targetUserId]);
+
+  // 3. Fetch Messages for Active Chat
   useEffect(() => {
     if (!activeChatId || activeChatId.startsWith("new_")) {
       setMessages([]);
@@ -121,7 +155,7 @@ export default function StudentMessages() {
     return () => unsubscribe();
   }, [activeChatId]);
 
-  // 3. Scroll to bottom
+  // 4. Scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -180,11 +214,11 @@ export default function StudentMessages() {
   // Determine peer name for the active chat
   let activePeerName = "Chat";
   if (activeChatId?.startsWith("new_")) {
-    activePeerName = targetUserName;
+    activePeerName = peerProfiles[targetUserId || ""]?.name || targetUserName;
   } else if (activeRoom) {
     const peerId = activeRoom.participants.find(id => id !== currentUserId);
-    if (peerId && activeRoom.participantNames[peerId]) {
-      activePeerName = activeRoom.participantNames[peerId];
+    if (peerId) {
+      activePeerName = peerProfiles[peerId]?.name || activeRoom.participantNames[peerId] || "Peer";
     }
   }
 
@@ -221,7 +255,7 @@ export default function StudentMessages() {
                 <div className="divide-y divide-slate-100 dark:divide-[#2A2A2A]">
                   {chatRooms.map(room => {
                     const peerId = room.participants.find(id => id !== currentUserId);
-                    const peerName = peerId ? (room.participantNames[peerId] || "Peer") : "Unknown";
+                    const peerName = peerId ? (peerProfiles[peerId]?.name || room.participantNames[peerId] || "Peer") : "Unknown";
                     const isActive = room.id === activeChatId;
                     
                     return (
@@ -252,11 +286,11 @@ export default function StudentMessages() {
                     <div className="w-full text-left p-4 bg-indigo-50 dark:bg-indigo-500/10">
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-200 text-indigo-700 dark:bg-indigo-800 dark:text-indigo-200">
-                          {targetUserName.charAt(0).toUpperCase()}
+                          {(peerProfiles[targetUserId || ""]?.name || targetUserName).charAt(0).toUpperCase()}
                         </div>
                         <div className="overflow-hidden">
                           <h3 className="truncate text-sm font-semibold text-indigo-700 dark:text-indigo-300">
-                            {targetUserName}
+                            {peerProfiles[targetUserId || ""]?.name || targetUserName}
                           </h3>
                         </div>
                       </div>
