@@ -309,10 +309,7 @@ function TopicRow({ topic }: { topic: RecommendedTopic }) {
           )}
         </div>
       </div>
-      <div className="ml-4 shrink-0 text-right">
-        <p className="text-base font-bold text-emerald-600 dark:text-emerald-400">{topic.matchScore}%</p>
-        <p className="mt-0.5 text-xs text-slate-400">match</p>
-      </div>
+      <MatchIndicator score={topic.matchScore} />
     </Link>
   ); 
 }
@@ -428,6 +425,31 @@ function MiniCalendar({ events }: { events: CalendarEvent[] }) {
           {days}
         </div>
       </div>
+    </div>
+  );
+}
+
+function MatchIndicator({ score }: { score: number }) {
+  const level = score >= 75 ? 4 : score >= 50 ? 3 : score >= 25 ? 2 : 1;
+  const matchText = level === 4 ? "Excellent" : level === 3 ? "Good" : level === 2 ? "Fair" : "Low";
+  const activeColor = level >= 3 ? "bg-emerald-500 dark:bg-emerald-400" : level === 2 ? "bg-blue-500 dark:bg-blue-400" : "bg-slate-400 dark:bg-slate-500";
+  const inactiveColor = "bg-slate-200 dark:bg-slate-700/50";
+  const textColor = level >= 3 ? "text-emerald-700 dark:text-emerald-400" : level === 2 ? "text-blue-700 dark:text-blue-400" : "text-slate-600 dark:text-slate-400";
+  const bgColor = level >= 3 ? "bg-emerald-50/50 border-emerald-200/50 dark:bg-emerald-500/10 dark:border-emerald-500/20" : level === 2 ? "bg-blue-50/50 border-blue-200/50 dark:bg-blue-500/10 dark:border-blue-500/20" : "bg-slate-50/50 border-slate-200/50 dark:bg-slate-800/50 dark:border-slate-700/50";
+
+  return (
+    <div className={`flex shrink-0 items-center gap-2.5 rounded-full border px-3 py-1.5 backdrop-blur-sm transition-colors ${bgColor}`}>
+      <div className="flex items-center gap-[3px]" title={`${matchText} Match`}>
+        {[1, 2, 3, 4].map((i) => (
+          <div 
+            key={i} 
+            className={`h-2.5 w-2.5 rounded-[3px] transition-colors duration-500 ${i <= level ? activeColor : inactiveColor}`} 
+          />
+        ))}
+      </div>
+      <span className={`text-[10px] font-bold uppercase tracking-wider ${textColor}`}>
+        {matchText}
+      </span>
     </div>
   );
 }
