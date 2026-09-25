@@ -473,13 +473,16 @@ export default function StudentFindPeers() {
                     
                     {!isMyPost && (
                       <div className="mt-5 border-t border-slate-100 pt-4 flex justify-end dark:border-[#2A2A2A]" onClick={(e) => e.stopPropagation()}>
-                        <a 
-                          href={`mailto:${post.authorEmail}?subject=Interest in: ${encodeURIComponent(post.title)}`}
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.location.href = `/student/messages?userId=${post.authorId}&name=${encodeURIComponent(post.authorName || "Peer")}`;
+                          }}
                           className="inline-flex items-center gap-2 rounded-xl bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
                         >
                           <MessageSquare className="h-4 w-4" />
                           Message Author
-                        </a>
+                        </button>
                       </div>
                     )}
                   </article>

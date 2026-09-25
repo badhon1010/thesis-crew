@@ -15,6 +15,7 @@ import {
   UserCircle,
   FolderKanban,
   ShieldCheck,
+  MessageSquare,
 } from "lucide-react";
 import { auth } from "../../firebase/auth";
 import { signOut } from "firebase/auth";
@@ -98,6 +99,7 @@ export function Sidebar({ role, isOpen, onClose, isCollapsed, onToggleCollapse }
           { name: "Research Topics", path: "/student/research-topics", icon: BookOpen },
           { name: "My Research Groups", path: "/student/my-groups", icon: Users },
           { name: "Find Peers", path: "/student/find-peers", icon: UserRoundPlus },
+          { name: "Messages", path: "/student/messages", icon: MessageSquare },
         ]
       : role === "teacher"
       ? [
