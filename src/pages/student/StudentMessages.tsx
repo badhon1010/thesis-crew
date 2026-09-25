@@ -2,13 +2,13 @@ import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { 
   collection, query, where, onSnapshot, orderBy, 
-  addDoc, serverTimestamp, doc, getDocs, updateDoc, setDoc
+  addDoc, serverTimestamp, doc, getDocs, updateDoc, setDoc, deleteDoc
 } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
 import { auth } from "@/firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { Send, User as UserIcon, Loader2, ArrowLeft, MessageSquare } from "lucide-react";
+import { Send, User as UserIcon, Loader2, ArrowLeft, MessageSquare, Edit2, Trash2, X } from "lucide-react";
 
 interface DirectMessage {
   id: string;
@@ -16,6 +16,7 @@ interface DirectMessage {
   senderId: string;
   senderName: string;
   createdAt: any;
+  isEdited?: boolean;
 }
 
 interface ChatRoom {
@@ -39,6 +40,8 @@ export default function StudentMessages() {
   
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
@@ -209,6 +212,36 @@ export default function StudentMessages() {
     }
   };
 
+  const handleDeleteMessage = async (msgId: string) => {
+    if (!window.confirm("Are you sure you want to delete this message?")) return;
+    try {
+      await deleteDoc(doc(db, "directMessages", activeChatId as string, "messages", msgId));
+    } catch (err) {
+      console.error("Error deleting message:", err);
+    }
+  };
+
+  const handleUpdateMessage = async (e: React.FormEvent, msgId: string) => {
+    e.preventDefault();
+    if (!editContent.trim()) return;
+    try {
+      await updateDoc(doc(db, "directMessages", activeChatId as string, "messages", msgId), {
+        text: editContent.trim(),
+        isEdited: true
+      });
+      setEditingMessageId(null);
+      setEditContent("");
+    } catch (err) {
+      console.error("Error updating message:", err);
+    }
+  };
+
+  const formatTime = (timestamp: any) => {
+    if (!timestamp) return "";
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
   const activeRoom = chatRooms.find(r => r.id === activeChatId);
   
   // Determine peer name for the active chat
@@ -325,13 +358,51 @@ export default function StudentMessages() {
                     messages.map((msg) => {
                       const isMe = msg.senderId === currentUserId;
                       return (
-                        <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                          <div className={`max-w-[70%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
-                            isMe 
-                              ? "bg-indigo-600 text-white rounded-tr-sm" 
-                              : "bg-slate-100 text-slate-900 dark:bg-[#2A2A2A] dark:text-white rounded-tl-sm"
-                          }`}>
-                            <p className="whitespace-pre-wrap">{msg.text}</p>
+                        <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"} group`}>
+                          <div className="flex flex-col gap-1 max-w-[70%]">
+                            <div className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : "flex-row"}`}>
+                              {/* Message bubble */}
+                              <div className={`relative rounded-2xl px-4 py-2 text-sm shadow-sm transition-shadow group-hover:shadow ${
+                                isMe 
+                                  ? "bg-indigo-600 text-white rounded-tr-sm" 
+                                  : "bg-slate-100 text-slate-900 dark:bg-[#2A2A2A] dark:text-white rounded-tl-sm"
+                              }`}>
+                                {editingMessageId === msg.id ? (
+                                  <form onSubmit={(e) => handleUpdateMessage(e, msg.id)} className="flex items-center gap-2">
+                                    <input 
+                                      type="text" 
+                                      autoFocus
+                                      value={editContent}
+                                      onChange={(e) => setEditContent(e.target.value)}
+                                      className="rounded bg-indigo-700/50 px-2 py-1 text-white outline-none focus:ring-2 focus:ring-white/20"
+                                    />
+                                    <button type="button" onClick={() => setEditingMessageId(null)} className="text-white/70 hover:text-white">
+                                      <X className="h-4 w-4" />
+                                    </button>
+                                  </form>
+                                ) : (
+                                  <p className="whitespace-pre-wrap">{msg.text}</p>
+                                )}
+                              </div>
+                              
+                              {/* Action Buttons (visible on hover) */}
+                              {isMe && editingMessageId !== msg.id && (
+                                <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
+                                  <button onClick={() => { setEditingMessageId(msg.id); setEditContent(msg.text); }} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-[#222222] dark:hover:text-indigo-400" title="Edit">
+                                    <Edit2 className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button onClick={() => handleDeleteMessage(msg.id)} className="rounded-full p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400" title="Delete">
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Timestamp & Edited status */}
+                            <div className={`flex items-center gap-1.5 text-[10px] text-slate-400 ${isMe ? "justify-end" : "justify-start"}`}>
+                              {msg.createdAt && <span>{formatTime(msg.createdAt)}</span>}
+                              {msg.isEdited && <span>• Edited</span>}
+                            </div>
                           </div>
                         </div>
                       );
