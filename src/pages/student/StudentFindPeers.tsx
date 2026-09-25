@@ -6,7 +6,10 @@ import {
   Clock, 
   Send, 
   Loader2, 
-  X
+  X,
+  Eye,
+  Edit,
+  Trash2
 } from "lucide-react";
 import { 
   collection, 
@@ -17,7 +20,7 @@ import {
   serverTimestamp 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 import { auth } from "@/firebase/auth";
@@ -56,6 +59,9 @@ export default function StudentFindPeers() {
   
   const [searchTerm, setSearchTerm] = useState("");
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  
+  const [viewingPost, setViewingPost] = useState<PeerPost | null>(null);
+  const [editingPost, setEditingPost] = useState<PeerPost | null>(null);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -126,6 +132,12 @@ export default function StudentFindPeers() {
       return;
     }
 
+    const finalSkills = [...postSkills];
+    const pendingSkill = skillInput.trim();
+    if (pendingSkill && !finalSkills.includes(pendingSkill)) {
+      finalSkills.push(pendingSkill);
+    }
+
     setIsSubmitting(true);
     try {
       await addDoc(collection(db, "peerRequests"), {
@@ -135,13 +147,15 @@ export default function StudentFindPeers() {
         authorDepartment: studentProfile.department || "Unknown Department",
         title: postTitle.trim(),
         content: postContent.trim(),
-        skills: postSkills,
+        skills: finalSkills,
         createdAt: serverTimestamp(),
       });
       
       setToast({ type: "success", message: "Post created successfully!" });
       setPostTitle("");
       setPostContent("");
+      setPostSkills([]);
+      setSkillInput("");
       setPostSkills([]);
       setIsCreatingPost(false);
     } catch (error) {
@@ -169,6 +183,52 @@ export default function StudentFindPeers() {
     interval = seconds / 60;
     if (interval > 1) return Math.floor(interval) + " minutes ago";
     return Math.floor(seconds) + " seconds ago";
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    if (!window.confirm("Are you sure you want to delete this post?")) return;
+    try {
+      await deleteDoc(doc(db, "peerRequests", postId));
+      setToast({ type: "success", message: "Post deleted successfully!" });
+    } catch (err) {
+      console.error("Failed to delete post:", err);
+      setToast({ type: "error", message: "Failed to delete post." });
+    }
+  };
+
+  const handleUpdatePost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPost) return;
+    
+    if (!editingPost.title.trim() || !editingPost.content.trim()) {
+      setToast({ type: "error", message: "Title and description are required." });
+      return;
+    }
+
+    let finalSkills = [...(editingPost.skills || [])];
+    const editSkillInputElem = document.getElementById('editSkillInput') as HTMLInputElement;
+    if (editSkillInputElem) {
+      const pendingSkill = editSkillInputElem.value.trim();
+      if (pendingSkill && !finalSkills.includes(pendingSkill)) {
+        finalSkills.push(pendingSkill);
+      }
+    }
+
+    setIsSubmitting(true);
+    try {
+      await updateDoc(doc(db, "peerRequests", editingPost.id), {
+        title: editingPost.title.trim(),
+        content: editingPost.content.trim(),
+        skills: finalSkills,
+      });
+      setToast({ type: "success", message: "Post updated successfully!" });
+      setEditingPost(null);
+    } catch (err) {
+      console.error("Error updating post:", err);
+      setToast({ type: "error", message: "Failed to update post." });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const filteredPosts = posts.filter(post => 
@@ -315,7 +375,11 @@ export default function StudentFindPeers() {
                 const isMyPost = post.authorId === auth.currentUser?.uid;
                 
                 return (
-                  <article key={post.id} className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition-all hover:shadow-md dark:border-[#2A2A2A] dark:bg-[#181818]">
+                  <article 
+                    key={post.id} 
+                    className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm transition-all hover:shadow-md cursor-pointer dark:border-[#2A2A2A] dark:bg-[#181818]"
+                    onClick={() => setViewingPost(post)}
+                  >
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 shrink-0 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 font-bold dark:bg-slate-800 dark:text-slate-300">
@@ -336,6 +400,25 @@ export default function StudentFindPeers() {
                           </div>
                         </div>
                       </div>
+                      
+                      {isMyPost && (
+                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                          <button 
+                            onClick={() => setEditingPost({ ...post, skills: post.skills || [] })}
+                            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-indigo-600 transition dark:hover:bg-slate-800 dark:hover:text-indigo-400"
+                            title="Edit Post"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button 
+                            onClick={() => handleDeletePost(post.id)}
+                            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-red-600 transition dark:hover:bg-slate-800 dark:hover:text-red-400"
+                            title="Delete Post"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                     
                     <div className="mt-4">
@@ -355,8 +438,8 @@ export default function StudentFindPeers() {
                       </div>
                     )}
                     
-                    <div className="mt-5 border-t border-slate-100 pt-4 flex justify-end dark:border-[#2A2A2A]">
-                      {!isMyPost && (
+                    {!isMyPost && (
+                      <div className="mt-5 border-t border-slate-100 pt-4 flex justify-end dark:border-[#2A2A2A]" onClick={(e) => e.stopPropagation()}>
                         <a 
                           href={`mailto:${post.authorEmail}?subject=Interest in: ${encodeURIComponent(post.title)}`}
                           className="inline-flex items-center gap-2 rounded-xl bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
@@ -364,8 +447,8 @@ export default function StudentFindPeers() {
                           <MessageSquare className="h-4 w-4" />
                           Message Author
                         </a>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </article>
                 );
               })}
@@ -373,6 +456,106 @@ export default function StudentFindPeers() {
           )}
         </div>
       </div>
+
+      {/* View Post Modal */}
+      {viewingPost && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={() => setViewingPost(null)}>
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl dark:bg-[#181818] dark:border dark:border-[#2A2A2A]" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-start mb-4">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">{viewingPost.title}</h2>
+              <button onClick={() => setViewingPost(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex items-center gap-3 mb-6">
+               <div className="h-10 w-10 shrink-0 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 font-bold dark:bg-slate-800 dark:text-slate-300">
+                 {viewingPost.authorName?.charAt(0) || "U"}
+               </div>
+               <div>
+                 <p className="font-semibold text-slate-900 dark:text-white">{viewingPost.authorName}</p>
+                 <p className="text-xs text-slate-500">{viewingPost.authorDepartment} • {formatTimeAgo(viewingPost.createdAt)}</p>
+               </div>
+            </div>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600 dark:text-slate-300 mb-6">{viewingPost.content}</p>
+            {viewingPost.skills && viewingPost.skills.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {viewingPost.skills.map(s => <span key={s} className="rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">{s}</span>)}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Post Modal */}
+      {editingPost && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl dark:bg-[#181818] dark:border dark:border-[#2A2A2A] my-8">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-white">Edit Post</h2>
+              <button onClick={() => setEditingPost(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={handleUpdatePost} className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Title</label>
+                <input 
+                  type="text" 
+                  value={editingPost.title}
+                  onChange={(e) => setEditingPost({...editingPost, title: e.target.value})}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium outline-none transition focus:border-indigo-500 dark:border-[#2A2A2A] dark:bg-[#121212] dark:text-white"
+                  required
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
+                <textarea 
+                  value={editingPost.content}
+                  onChange={(e) => setEditingPost({...editingPost, content: e.target.value})}
+                  rows={5}
+                  className="w-full resize-y rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-indigo-500 dark:border-[#2A2A2A] dark:bg-[#121212] dark:text-white"
+                  required
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">Skills (Press Enter to add)</label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {editingPost.skills.map(skill => (
+                    <span key={skill} className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300">
+                      {skill}
+                      <button type="button" onClick={() => setEditingPost({...editingPost, skills: editingPost.skills.filter(s => s !== skill)})} className="text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-200">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <input 
+                  id="editSkillInput"
+                  type="text" 
+                  placeholder="e.g. React, Python, Data Analysis..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const val = (e.target as HTMLInputElement).value.trim();
+                      if (val && !editingPost.skills.includes(val)) {
+                        setEditingPost({...editingPost, skills: [...editingPost.skills, val]});
+                        (e.target as HTMLInputElement).value = '';
+                      }
+                    }
+                  }}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 dark:border-[#2A2A2A] dark:bg-[#121212] dark:text-white"
+                />
+              </div>
+              <div className="flex justify-end pt-4 gap-2 border-t border-slate-100 dark:border-[#2A2A2A] mt-6">
+                <button type="button" onClick={() => setEditingPost(null)} className="rounded-xl px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[#222222] transition">Cancel</button>
+                <button type="submit" disabled={isSubmitting} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-50">
+                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }
