@@ -257,15 +257,15 @@ export default function StudentMessages() {
 
   return (
     <DashboardLayout role="student">
-      <div className="mx-auto max-w-6xl px-4 py-8">
-        <div className="mb-6 flex items-center justify-between">
+      <div className="mx-auto max-w-6xl px-4 pt-2 pb-8 flex flex-col h-[calc(100vh-80px)]">
+        <div className="mb-4 flex items-center justify-between shrink-0">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Messages</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400">Direct messages with your peers</p>
           </div>
         </div>
 
-        <div className="flex h-[calc(100vh-200px)] min-h-[500px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+        <div className="flex flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
           
           {/* Sidebar / Inbox List */}
           <div className="w-1/3 border-r border-slate-200 dark:border-[#2A2A2A] bg-slate-50/50 dark:bg-[#121212] flex flex-col">
