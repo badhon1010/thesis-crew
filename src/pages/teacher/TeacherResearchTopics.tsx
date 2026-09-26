@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Plus, Edit, Trash2, Clock3, ArrowLeft, Search, Filter } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
+import { ConfirmModal } from "@/components/common/ConfirmModal";
 
 import { auth } from "@/firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
@@ -15,6 +16,8 @@ export default function TeacherResearchTopics() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "closed">("all");
+  const [deleteTopicId, setDeleteTopicId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [toast, setToast] = useState<{
     show: boolean;
@@ -57,17 +60,24 @@ export default function TeacherResearchTopics() {
     return () => unsubscribe();
   }, []);
 
-  const handleDelete = async (e: React.MouseEvent, id: string) => {
+  const triggerDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (window.confirm("Are you sure you want to delete this topic?")) {
-      try {
-        await deleteResearchTopic(id);
-        setTopics((prev) => prev.filter((topic) => topic.id !== id));
-        showToast("success", "Research topic deleted successfully!");
-      } catch (error) {
-        console.error("Failed to delete topic:", error);
-        showToast("error", "Failed to delete research topic.");
-      }
+    setDeleteTopicId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTopicId) return;
+    setIsDeleting(true);
+    try {
+      await deleteResearchTopic(deleteTopicId);
+      setTopics((prev) => prev.filter((topic) => topic.id !== deleteTopicId));
+      showToast("success", "Research topic deleted successfully!");
+    } catch (error) {
+      console.error("Failed to delete topic:", error);
+      showToast("error", "Failed to delete research topic.");
+    } finally {
+      setIsDeleting(false);
+      setDeleteTopicId(null);
     }
   };
 
@@ -255,7 +265,7 @@ export default function TeacherResearchTopics() {
                           <Edit className="h-4 w-4" />
                         </Link>
                         <button
-                          onClick={(e) => handleDelete(e, topic.id)}
+                          onClick={(e) => triggerDelete(e, topic.id)}
                           className="rounded-lg bg-red-50 p-2 text-red-600 transition-colors hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
                           title="Delete Topic"
                         >
@@ -273,6 +283,16 @@ export default function TeacherResearchTopics() {
           </div>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={!!deleteTopicId}
+        onClose={() => setDeleteTopicId(null)}
+        onConfirm={confirmDelete}
+        title="Delete Topic"
+        description="Are you sure you want to delete this research topic? This action cannot be undone."
+        confirmText="Yes, delete it"
+        isLoading={isDeleting}
+      />
     </DashboardLayout>
   );
 }

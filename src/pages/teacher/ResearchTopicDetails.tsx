@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
+import { ConfirmModal } from "@/components/common/ConfirmModal";
 import { StudentProfileModal } from "@/components/common/StudentProfileModal";
 import { doc, getDoc, updateDoc, arrayRemove, collection, query, where, getDocs, onSnapshot, type Unsubscribe } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
@@ -50,6 +51,7 @@ export default function ResearchTopicDetails() {
   const [loading, setLoading] = useState(true);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [removingStudentId, setRemovingStudentId] = useState<string | null>(null);
+  const [studentToRemove, setStudentToRemove] = useState<{ id: string; name: string } | null>(null);
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({
     show: false,
     type: "success",
@@ -190,22 +192,25 @@ export default function ResearchTopicDetails() {
     };
   }, [id]);
 
-  const handleRemoveStudent = async (studentId: string, studentName: string) => {
-    if (!id) return;
-    const confirmed = window.confirm(`Remove ${studentName} from this research team? This cannot be undone.`);
-    if (!confirmed) return;
+  const triggerRemoveStudent = (studentId: string, studentName: string) => {
+    setStudentToRemove({ id: studentId, name: studentName });
+  };
 
-    setRemovingStudentId(studentId);
+  const confirmRemoveStudent = async () => {
+    if (!id || !studentToRemove) return;
+
+    setRemovingStudentId(studentToRemove.id);
     try {
       await updateDoc(doc(db, "teams", id), {
-        memberIds: arrayRemove(studentId),
+        memberIds: arrayRemove(studentToRemove.id),
       });
-      setToast({ show: true, type: "success", message: `${studentName} was removed from the team.` });
+      setToast({ show: true, type: "success", message: `${studentToRemove.name} was removed from the team.` });
     } catch (error) {
       console.error("Failed to remove student from team:", error);
       setToast({ show: true, type: "error", message: "Could not remove the student. Please try again." });
     } finally {
       setRemovingStudentId(null);
+      setStudentToRemove(null);
     }
   };
 
@@ -471,6 +476,15 @@ export default function ResearchTopicDetails() {
           </div>
         </div>
       </div>
+      <ConfirmModal
+        isOpen={!!studentToRemove}
+        onClose={() => setStudentToRemove(null)}
+        onConfirm={confirmRemoveStudent}
+        title="Remove Student"
+        description={`Remove ${studentToRemove?.name} from this research team? This cannot be undone.`}
+        confirmText="Yes, remove"
+        isLoading={!!removingStudentId}
+      />
     </DashboardLayout>
   );
 }

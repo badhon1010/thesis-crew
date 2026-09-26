@@ -19,6 +19,7 @@ import StudentMyGroups from "@/pages/student/StudentMyGroups";
 import StudentGroupDetails from "@/pages/student/StudentGroupDetails";
 import StudentFindPeers from "@/pages/student/StudentFindPeers";
 import StudentMessages from "@/pages/student/StudentMessages";
+import StudentRequests from "@/pages/student/StudentRequests";
 import { AdminRoute } from "@/components/auth/AdminRoute";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminUsers from "@/pages/admin/AdminUsers";
@@ -62,6 +63,7 @@ export function AppRoutes() {
       <Route path="/student/my-groups/:id" element={<StudentGroupDetails />} />
       <Route path="/student/find-peers" element={<StudentFindPeers />} />
       <Route path="/student/messages" element={<StudentMessages />} />
+      <Route path="/student/requests" element={<StudentRequests />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

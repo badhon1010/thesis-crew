@@ -6,6 +6,7 @@ import {
 import { db } from "./firestore";
 import type { ResearchTopic } from "./researchTopics";
 import type { AIMatchAnalysis } from "@/lib/ai";
+import { notifyStudentOfRequestReview } from "./notifications";
 
 export type JoinRequestStatus = "pending" | "accepted" | "rejected";
 export type RequestType = "individual" | "group";
@@ -50,6 +51,7 @@ export interface JoinRequest {
   createdAt?: unknown;
   reviewedAt?: unknown;
   reviewedBy?: string;
+  feedback?: string;
 }
 
 function requestId(projectId: string, studentId: string) {
@@ -171,6 +173,7 @@ export async function reviewJoinRequest(
   requestIdValue: string,
   supervisorId: string,
   decision: Extract<JoinRequestStatus, "accepted" | "rejected">,
+  feedback?: string,
 ) {
   const joinRequestRef = doc(db, "joinRequests", requestIdValue);
 
@@ -187,6 +190,7 @@ export async function reviewJoinRequest(
         status: decision,
         reviewedBy: supervisorId,
         reviewedAt: serverTimestamp(),
+        feedback: feedback || null,
       });
       return;
     }
@@ -246,6 +250,24 @@ export async function reviewJoinRequest(
       });
     }
   });
+
+  // Outside transaction: send notification
+  try {
+    const joinRequestRef = doc(db, "joinRequests", requestIdValue);
+    const requestSnapshot = await runTransaction(db, async (t) => await t.get(joinRequestRef));
+    if (requestSnapshot.exists()) {
+      const request = requestSnapshot.data() as JoinRequest;
+      const studentIds = [request.studentId];
+      if (request.teamMembers) {
+        studentIds.push(...request.teamMembers.map(m => m.uid));
+      }
+      // Unique IDs
+      const uniqueIds = Array.from(new Set(studentIds));
+      await notifyStudentOfRequestReview(uniqueIds, request.topicTitle, decision);
+    }
+  } catch (error) {
+    console.error("Failed to send review notification:", error);
+  }
 }
 
 export interface Team {

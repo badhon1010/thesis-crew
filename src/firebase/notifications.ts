@@ -4,7 +4,7 @@ import { db } from "./firestore";
 export interface AppNotification {
   id: string;
   recipientId: string;
-  type: "new_topic" | "task_update" | "milestone_completed";
+  type: "new_topic" | "task_update" | "milestone_completed" | "request_reviewed";
   title: string;
   message: string;
   groupId?: string;
@@ -61,5 +61,30 @@ export async function notifyTeacherOfMilestoneCompletion(teacherId: string, grou
     read: false,
     createdAt: serverTimestamp(),
   });
+  await batch.commit();
+}
+
+export async function notifyStudentOfRequestReview(
+  studentIds: string[], 
+  topicTitle: string, 
+  decision: "accepted" | "rejected"
+) {
+  const batch = writeBatch(db);
+  const title = decision === "accepted" ? "Application Accepted" : "Application Rejected";
+  const message = decision === "accepted" 
+    ? `Your application for "${topicTitle}" has been accepted.` 
+    : `Your application for "${topicTitle}" was rejected.`;
+
+  studentIds.forEach(studentId => {
+    batch.set(doc(db, "notifications", `request-review_${studentId}_${Date.now()}`), {
+      recipientId: studentId,
+      type: "request_reviewed" satisfies AppNotification["type"],
+      title,
+      message,
+      read: false,
+      createdAt: serverTimestamp(),
+    });
+  });
+
   await batch.commit();
 }

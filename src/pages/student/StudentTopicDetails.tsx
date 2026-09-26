@@ -10,8 +10,10 @@ import {
   Send,
   Sparkles,
   Loader2,
+  XCircle,
 } from "lucide-react";
 import { onAuthStateChanged } from "firebase/auth";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { calculateSkillMatch } from "@/utils/skillMatching";
 import { analyzeSkillMatch, getQuickMatchScore, type AIMatchAnalysis } from "@/lib/ai";
 import { doc, onSnapshot, query, collection, where, type Unsubscribe } from "firebase/firestore";
@@ -153,6 +155,7 @@ export default function StudentTopicDetails() {
       setSubmitting(false);
     }
   };
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   const handleCancelRequest = async () => {
     const user = auth.currentUser;
@@ -161,6 +164,7 @@ export default function StudentTopicDetails() {
     try {
       await cancelJoinRequest(topic.id, user.uid);
       setToast({ type: "success", message: "Your join request has been cancelled." });
+      setShowCancelModal(false);
     } catch (error) {
       console.error("Failed to cancel join request:", error);
       setToast({ type: "error", message: error instanceof Error ? error.message : "Could not cancel your join request." });
@@ -261,10 +265,26 @@ export default function StudentTopicDetails() {
       </section>
       </main>
       <aside className="space-y-6"><section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]"><div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"><GraduationCap className="h-6 w-6" /></div><h2 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">Supervisor</h2><p className="mt-3 font-semibold text-slate-900 dark:text-white">{supervisor.name || topic.supervisorName || "Supervisor details unavailable"}</p><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{supervisor.designation || "Faculty supervisor"}</p><div className="mt-5 space-y-3 border-t border-slate-100 pt-5 text-sm dark:border-[#2A2A2A]"><p className="text-slate-600 dark:text-slate-300"><span className="font-medium text-slate-900 dark:text-white">Department: </span>{supervisor.department || "Not specified"}</p><p className="text-slate-600 dark:text-slate-300"><span className="font-medium text-slate-900 dark:text-white">Research areas: </span>{supervisor.researchAreas || "Not specified"}</p>{supervisor.email && <a href={`mailto:${supervisor.email}`} className="inline-flex items-center gap-2 font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"><Mail className="h-4 w-4" />{supervisor.email}</a>}</div></section>
-      <section className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-6 dark:border-indigo-500/20 dark:bg-indigo-500/5">
-        <h2 className="font-bold text-slate-900 dark:text-white">Interested in this topic?</h2>
+      <section className={`rounded-2xl border p-6 ${
+          requestStatus === "accepted" 
+            ? "border-emerald-100 bg-emerald-50/60 dark:border-emerald-500/20 dark:bg-emerald-500/5"
+            : requestStatus === "rejected"
+            ? "border-rose-100 bg-rose-50/60 dark:border-rose-500/20 dark:bg-rose-500/5"
+            : "border-indigo-100 bg-indigo-50/60 dark:border-indigo-500/20 dark:bg-indigo-500/5"
+        }`}>
+        <h2 className="font-bold text-slate-900 dark:text-white">
+          {requestStatus === "pending" ? "Request Submitted" :
+           requestStatus === "accepted" ? "Request Accepted" :
+           requestStatus === "rejected" ? "Request Rejected" :
+           "Interested in this topic?"}
+        </h2>
         <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-          {teamFull ? "This team has reached its maximum size." : isDeadlinePassed ? "The application deadline for this topic has passed." : "Send your profile and skills to the supervisor for review."}
+          {requestStatus === "pending" ? "Your application is currently pending review by the supervisor." :
+           requestStatus === "accepted" ? "Congratulations! The supervisor has accepted your application." :
+           requestStatus === "rejected" ? "Unfortunately, your application for this topic was rejected." :
+           teamFull ? "This team has reached its maximum size." : 
+           isDeadlinePassed ? "The application deadline for this topic has passed." : 
+           "Send your profile and skills to the supervisor for review."}
         </p>
         
         {!requestStatus && !teamFull && !isDeadlinePassed && (
@@ -288,16 +308,24 @@ export default function StudentTopicDetails() {
         )}
 
         {requestStatus === "pending" ? (
-          <button
-            type="button"
-            disabled={cancelling || !isLeader}
-            onClick={handleCancelRequest}
-            title={!isLeader ? "Only the team leader can cancel this request" : undefined}
-            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-500/30 dark:bg-transparent dark:hover:bg-rose-500/10"
-          >
-            {cancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {cancelling ? "Cancelling..." : isLeader ? "Cancel request" : "Pending Leader's Request"}
-          </button>
+          <div className="mt-5 space-y-3">
+            <button
+              type="button"
+              disabled={cancelling || !isLeader}
+              onClick={() => setShowCancelModal(true)}
+              title={!isLeader ? "Only the team leader can cancel this request" : undefined}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-500/30 dark:bg-transparent dark:hover:bg-rose-500/10"
+            >
+              {cancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {cancelling ? "Cancelling..." : isLeader ? "Cancel request" : "Pending Leader's Request"}
+            </button>
+            <Link
+              to="/student/requests"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-white px-4 py-3 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-50 dark:border-indigo-500/30 dark:bg-[#121212] dark:text-indigo-400 dark:hover:bg-indigo-500/10"
+            >
+              See Application Status
+            </Link>
+          </div>
         ) : (
           <div className="mt-5 space-y-3">
             <button
@@ -306,11 +334,18 @@ export default function StudentTopicDetails() {
               onClick={handleJoinRequest}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : requestStatus ? <CheckCircle2 className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-              {requestStatus ? "Request already submitted" : teamFull ? "Team is full" : isDeadlinePassed ? "Deadline passed" : submitting ? "Sending request..." : "Apply Individually"}
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : requestStatus === "accepted" ? <CheckCircle2 className="h-4 w-4" /> : requestStatus === "rejected" ? <XCircle className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+              {requestStatus === "accepted" ? "Application Accepted" : requestStatus === "rejected" ? "Application Rejected" : teamFull ? "Team is full" : isDeadlinePassed ? "Deadline passed" : submitting ? "Sending request..." : "Apply Individually"}
             </button>
             
-            {!requestStatus && !teamFull && !isDeadlinePassed && topic.maxTeamSize > 1 && (
+            {requestStatus ? (
+              <Link
+                to="/student/requests"
+                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-white px-4 py-3 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-50 dark:border-indigo-500/30 dark:bg-[#121212] dark:text-indigo-400 dark:hover:bg-indigo-500/10"
+              >
+                See Application Status
+              </Link>
+            ) : !teamFull && !isDeadlinePassed && topic.maxTeamSize > 1 && (
               <>
                 <div className="relative flex items-center py-2">
                   <div className="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
@@ -321,7 +356,7 @@ export default function StudentTopicDetails() {
                 <button
                   type="button"
                   onClick={() => setIsTeamModalOpen(true)}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-white px-4 py-3 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-50 dark:border-indigo-500/30 dark:bg-[#121212] dark:text-indigo-400 dark:hover:bg-indigo-500/10"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-white px-4 py-3 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-indigo-500/30 dark:bg-[#121212] dark:text-indigo-400 dark:hover:bg-indigo-500/10"
                 >
                   <Users className="h-4 w-4" />
                   Form a Team
@@ -344,33 +379,37 @@ export default function StudentTopicDetails() {
         onSuccess={() => setToast({ type: "success", message: "Team request sent successfully!" })}
       />
     )}
+
+    <Dialog open={showCancelModal} onOpenChange={setShowCancelModal}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-xl">Cancel Application</DialogTitle>
+          <DialogDescription className="pt-2 text-slate-600 dark:text-slate-400">
+            Are you sure you want to cancel this application? This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="mt-4 gap-2 sm:gap-0">
+          <button 
+            onClick={() => setShowCancelModal(false)} 
+            className="rounded-xl px-4 py-2 font-semibold text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            No, keep it
+          </button>
+          <button 
+            onClick={handleCancelRequest} 
+            disabled={cancelling} 
+            className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2 font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50"
+          >
+            {cancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Yes, cancel it
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
   </div></DashboardLayout>;
 }
 
 function Detail({ icon: Icon, label, value }: { icon: typeof CalendarDays; label: string; value: string }) { return <div className="flex items-center gap-3"><Icon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" /><div><p className="text-xs text-slate-500 dark:text-slate-400">{label}</p><p className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-white">{value}</p></div></div>; }
 
-function MatchIndicator({ score }: { score: number }) {
-  const level = score >= 75 ? 4 : score >= 50 ? 3 : score >= 25 ? 2 : 1;
-  const matchText = level === 4 ? "Excellent" : level === 3 ? "Good" : level === 2 ? "Fair" : "Low";
-  const activeColor = level >= 3 ? "bg-emerald-500 dark:bg-emerald-400" : level === 2 ? "bg-blue-500 dark:bg-blue-400" : "bg-slate-400 dark:bg-slate-500";
-  const inactiveColor = "bg-slate-200 dark:bg-slate-700/50";
-  const textColor = level >= 3 ? "text-emerald-700 dark:text-emerald-400" : level === 2 ? "text-blue-700 dark:text-blue-400" : "text-slate-600 dark:text-slate-400";
-  const bgColor = level >= 3 ? "bg-emerald-50/50 border-emerald-200/50 dark:bg-emerald-500/10 dark:border-emerald-500/20" : level === 2 ? "bg-blue-50/50 border-blue-200/50 dark:bg-blue-500/10 dark:border-blue-500/20" : "bg-slate-50/50 border-slate-200/50 dark:bg-slate-800/50 dark:border-slate-700/50";
 
-  return (
-    <div className={`flex shrink-0 items-center gap-2.5 rounded-full border px-3 py-1.5 backdrop-blur-sm transition-colors ${bgColor}`}>
-      <div className="flex items-center gap-[3px]" title={`${matchText} Match`}>
-        {[1, 2, 3, 4].map((i) => (
-          <div 
-            key={i} 
-            className={`h-2.5 w-2.5 rounded-[3px] transition-colors duration-500 ${i <= level ? activeColor : inactiveColor}`} 
-          />
-        ))}
-      </div>
-      <span className={`text-[10px] font-bold uppercase tracking-wider ${textColor}`}>
-        {matchText}
-      </span>
-    </div>
-  );
-}

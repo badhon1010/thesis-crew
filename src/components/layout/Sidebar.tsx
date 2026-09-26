@@ -97,6 +97,7 @@ export function Sidebar({ role, isOpen, onClose, isCollapsed, onToggleCollapse }
       ? [
           { name: "Dashboard", path: "/student/dashboard", icon: LayoutDashboard },
           { name: "Research Topics", path: "/student/research-topics", icon: BookOpen },
+          { name: "My Requests", path: "/student/requests", icon: FolderKanban },
           { name: "My Research Groups", path: "/student/my-groups", icon: Users },
           { name: "Find Peers", path: "/student/find-peers", icon: UserRoundPlus },
           { name: "Messages", path: "/student/messages", icon: MessageSquare },

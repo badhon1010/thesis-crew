@@ -7,7 +7,6 @@ import {
   Send, 
   Loader2, 
   X,
-  Eye,
   Edit,
   Trash2
 } from "lucide-react";
@@ -23,6 +22,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
+import { ConfirmModal } from "@/components/common/ConfirmModal";
 import { auth } from "@/firebase/auth";
 import { db } from "@/firebase/firestore";
 
@@ -60,6 +60,8 @@ export default function StudentFindPeers() {
   const [searchTerm, setSearchTerm] = useState("");
   const [postFilter, setPostFilter] = useState<"all" | "my">("all");
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [deletePostId, setDeletePostId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const [viewingPost, setViewingPost] = useState<PeerPost | null>(null);
   const [editingPost, setEditingPost] = useState<PeerPost | null>(null);
@@ -190,14 +192,18 @@ export default function StudentFindPeers() {
     return Math.floor(seconds) + " seconds ago";
   };
 
-  const handleDeletePost = async (postId: string) => {
-    if (!window.confirm("Are you sure you want to delete this post?")) return;
+  const confirmDeletePost = async () => {
+    if (!deletePostId) return;
+    setIsDeleting(true);
     try {
-      await deleteDoc(doc(db, "peerRequests", postId));
+      await deleteDoc(doc(db, "peerRequests", deletePostId));
       setToast({ type: "success", message: "Post deleted successfully!" });
     } catch (err) {
       console.error("Failed to delete post:", err);
       setToast({ type: "error", message: "Failed to delete post." });
+    } finally {
+      setIsDeleting(false);
+      setDeletePostId(null);
     }
   };
 
@@ -444,7 +450,7 @@ export default function StudentFindPeers() {
                             <Edit className="h-4 w-4" />
                           </button>
                           <button 
-                            onClick={() => handleDeletePost(post.id)}
+                            onClick={() => setDeletePostId(post.id)}
                             className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-red-600 transition dark:hover:bg-slate-800 dark:hover:text-red-400"
                             title="Delete Post"
                           >
@@ -595,6 +601,16 @@ export default function StudentFindPeers() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={!!deletePostId}
+        onClose={() => setDeletePostId(null)}
+        onConfirm={confirmDeletePost}
+        title="Delete Post"
+        description="Are you sure you want to delete this post? This action cannot be undone."
+        confirmText="Yes, delete"
+        isLoading={isDeleting}
+      />
     </DashboardLayout>
   );
 }

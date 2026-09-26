@@ -2,13 +2,14 @@ import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { 
   collection, query, where, onSnapshot, orderBy, 
-  addDoc, serverTimestamp, doc, getDocs, updateDoc, setDoc, deleteDoc
+  addDoc, serverTimestamp, doc, updateDoc, deleteDoc
 } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
 import { auth } from "@/firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { Send, User as UserIcon, Loader2, ArrowLeft, MessageSquare, Edit2, Trash2, X } from "lucide-react";
+import { ConfirmModal } from "@/components/common/ConfirmModal";
+import { Send, Loader2, MessageSquare, Edit2, Trash2, X } from "lucide-react";
 
 interface DirectMessage {
   id: string;
@@ -42,6 +43,8 @@ export default function StudentMessages() {
   const [sending, setSending] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [deleteMessageId, setDeleteMessageId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
@@ -212,12 +215,16 @@ export default function StudentMessages() {
     }
   };
 
-  const handleDeleteMessage = async (msgId: string) => {
-    if (!window.confirm("Are you sure you want to delete this message?")) return;
+  const confirmDeleteMessage = async () => {
+    if (!deleteMessageId || !activeChatId) return;
+    setIsDeleting(true);
     try {
-      await deleteDoc(doc(db, "directMessages", activeChatId as string, "messages", msgId));
+      await deleteDoc(doc(db, "directMessages", activeChatId, "messages", deleteMessageId));
     } catch (err) {
       console.error("Error deleting message:", err);
+    } finally {
+      setIsDeleting(false);
+      setDeleteMessageId(null);
     }
   };
 
@@ -391,7 +398,7 @@ export default function StudentMessages() {
                                   <button onClick={() => { setEditingMessageId(msg.id); setEditContent(msg.text); }} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-indigo-600 dark:hover:bg-[#222222] dark:hover:text-indigo-400" title="Edit">
                                     <Edit2 className="h-3.5 w-3.5" />
                                   </button>
-                                  <button onClick={() => handleDeleteMessage(msg.id)} className="rounded-full p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400" title="Delete">
+                                  <button onClick={() => setDeleteMessageId(msg.id)} className="rounded-full p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400" title="Delete">
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </button>
                                 </div>
@@ -443,6 +450,15 @@ export default function StudentMessages() {
 
         </div>
       </div>
+      <ConfirmModal
+        isOpen={!!deleteMessageId}
+        onClose={() => setDeleteMessageId(null)}
+        onConfirm={confirmDeleteMessage}
+        title="Delete Message"
+        description="Are you sure you want to delete this message?"
+        confirmText="Yes, delete it"
+        isLoading={isDeleting}
+      />
     </DashboardLayout>
   );
 }

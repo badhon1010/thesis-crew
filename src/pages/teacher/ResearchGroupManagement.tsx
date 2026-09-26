@@ -52,7 +52,6 @@ import {
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 import { StudentProfileModal } from "@/components/common/StudentProfileModal";
-import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { TaskModal } from "@/components/ui/TaskModal";
 import { TaskViewModal } from "@/components/ui/TaskViewModal";
 import { DocumentModal } from "@/components/ui/DocumentModal";
@@ -60,6 +59,7 @@ import { MilestoneModal } from "@/components/ui/MilestoneModal";
 import { MeetingModal, type MeetingFormData, type MeetingPlatform } from "@/components/ui/MeetingModal";
 import { PublicationModal, type PublicationFormData, type PublicationStatus, type PublicationType } from "@/components/ui/PublicationModal";
 import { GroupChat } from "@/components/chat/GroupChat";
+import { ConfirmModal } from "@/components/common/ConfirmModal";
 import { auth } from "@/firebase/auth";
 import { rtdb } from "@/firebase/database";
 import { ref as dbRef, set as dbSet, get as dbGet, remove as dbRemove } from "firebase/database";
@@ -249,6 +249,8 @@ export default function ResearchGroupManagement() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
+  const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null);
+  const [isDeletingDoc, setIsDeletingDoc] = useState(false);
   const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
@@ -736,17 +738,25 @@ export default function ResearchGroupManagement() {
     }
   };
 
-  const handleDeleteDocument = async (docData: Document) => {
-    if (!id || !window.confirm("Are you sure you want to delete this resource?")) return;
+  const triggerDeleteDocument = (docData: Document) => {
+    setDocumentToDelete(docData);
+  };
+
+  const confirmDeleteDocument = async () => {
+    if (!id || !documentToDelete) return;
+    setIsDeletingDoc(true);
     try {
-      if (!docData.isLink && docData.rtdbPath) {
-        await dbRemove(dbRef(rtdb, docData.rtdbPath)).catch(e => console.error("Error deleting from Realtime Database", e));
+      if (!documentToDelete.isLink && documentToDelete.rtdbPath) {
+        await dbRemove(dbRef(rtdb, documentToDelete.rtdbPath)).catch(e => console.error("Error deleting from Realtime Database", e));
       }
-      await deleteDoc(doc(db, "researchGroups", id, "documents", docData.id));
+      await deleteDoc(doc(db, "researchGroups", id, "documents", documentToDelete.id));
       showToast("success", "Resource deleted successfully");
     } catch (error) {
       console.error("Error deleting document:", error);
       showToast("error", "Failed to delete resource");
+    } finally {
+      setIsDeletingDoc(false);
+      setDocumentToDelete(null);
     }
   };
 
@@ -2438,7 +2448,7 @@ export default function ResearchGroupManagement() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDeleteDocument(doc);
+                          triggerDeleteDocument(doc);
                         }}
                         className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
                       >
@@ -3232,7 +3242,7 @@ export default function ResearchGroupManagement() {
         onClose={() => setDeleteMilestoneId(null)}
         onConfirm={handleDeleteMilestone}
         title="Delete Milestone"
-        message="Are you sure you want to delete this milestone? This action cannot be undone and will also delete any associated tasks."
+        description="Are you sure you want to delete this milestone? This action cannot be undone and will also delete any associated tasks."
         confirmText="Delete"
       />
 
@@ -3241,7 +3251,7 @@ export default function ResearchGroupManagement() {
         onClose={() => setDeleteTaskId(null)}
         onConfirm={handleDeleteTask}
         title="Delete Task"
-        message="Are you sure you want to delete this task? This action cannot be undone."
+        description="Are you sure you want to delete this task? This action cannot be undone."
         confirmText="Delete"
       />
 
@@ -3250,7 +3260,7 @@ export default function ResearchGroupManagement() {
         onClose={() => setDeleteMeetingId(null)}
         onConfirm={handleDeleteMeeting}
         title="Delete Meeting"
-        message="Are you sure you want to delete this meeting? The meeting link and all details will be permanently removed."
+        description="Are you sure you want to delete this meeting? The meeting link and all details will be permanently removed."
         confirmText="Delete"
       />
 
@@ -3259,8 +3269,18 @@ export default function ResearchGroupManagement() {
         onClose={() => setDeletePublicationId(null)}
         onConfirm={handleDeletePublication}
         title="Remove Publication"
-        message="Are you sure you want to remove this publication? If it was the only published paper, the group will return to Ongoing."
+        description="Are you sure you want to remove this publication? If it was the only published paper, the group will return to Ongoing."
         confirmText="Remove"
+      />
+
+      <ConfirmModal
+        isOpen={!!documentToDelete}
+        onClose={() => setDocumentToDelete(null)}
+        onConfirm={confirmDeleteDocument}
+        title="Delete Resource"
+        description="Are you sure you want to delete this resource? This cannot be undone."
+        confirmText="Yes, delete"
+        isLoading={isDeletingDoc}
       />
     </DashboardLayout>
   );

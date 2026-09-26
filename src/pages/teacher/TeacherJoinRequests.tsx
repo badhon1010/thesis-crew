@@ -11,6 +11,7 @@ import { auth } from "@/firebase/auth";
 import { db } from "@/firebase/firestore";
 import { calculateSkillMatch } from "@/utils/skillMatching";
 import { reviewJoinRequest, type JoinRequest } from "@/firebase/teamFormation";
+import { RejectRequestModal } from "@/components/teacher/RejectRequestModal";
 
 export default function TeacherJoinRequests() {
   const [requests, setRequests] = useState<JoinRequest[]>([]);
@@ -19,6 +20,7 @@ export default function TeacherJoinRequests() {
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [selectedGroupMembers, setSelectedGroupMembers] = useState<JoinRequest["teamMembers"] | []>([]);
+  const [rejectModalData, setRejectModalData] = useState<{ request: JoinRequest | null; isOpen: boolean }>({ request: null, isOpen: false });
 
   useEffect(() => {
     let unsubscribeRequests: Unsubscribe | undefined;
@@ -54,22 +56,24 @@ export default function TeacherJoinRequests() {
 
   const handleReview = async (request: JoinRequest, decision: "accepted" | "rejected") => {
     if (!auth.currentUser) return;
+    
+    if (decision === "rejected") {
+      setRejectModalData({ request, isOpen: true });
+      return;
+    }
+
     setReviewingId(request.id);
     try {
-      await reviewJoinRequest(request.id, auth.currentUser.uid, decision);
+      await reviewJoinRequest(request.id, auth.currentUser.uid, decision, "");
       if (request.requestType === "group") {
         setToast({
           type: "success",
-          message: decision === "accepted"
-            ? `Group of ${request.teamMembers?.length || 0} students was added to the team.`
-            : "Group request rejected."
+          message: `Group of ${request.teamMembers?.length || 0} students was added to the team.`
         });
       } else {
         setToast({
           type: "success",
-          message: decision === "accepted"
-            ? `${request.studentName} was added to the team.`
-            : "Join request rejected."
+          message: `${request.studentName} was added to the team.`
         });
       }
     } catch (error) {
@@ -77,6 +81,27 @@ export default function TeacherJoinRequests() {
       setToast({ type: "error", message: error instanceof Error ? error.message : "Could not review the request." });
     } finally {
       setReviewingId(null);
+    }
+  };
+
+  const confirmReject = async (feedback: string) => {
+    const request = rejectModalData.request;
+    if (!auth.currentUser || !request) return;
+
+    setReviewingId(request.id);
+    try {
+      await reviewJoinRequest(request.id, auth.currentUser.uid, "rejected", feedback);
+      if (request.requestType === "group") {
+        setToast({ type: "success", message: "Group request rejected." });
+      } else {
+        setToast({ type: "success", message: "Join request rejected." });
+      }
+    } catch (error) {
+      console.error("Failed to reject join request:", error);
+      setToast({ type: "error", message: error instanceof Error ? error.message : "Could not review the request." });
+    } finally {
+      setReviewingId(null);
+      setRejectModalData({ request: null, isOpen: false });
     }
   };
 
@@ -95,6 +120,13 @@ export default function TeacherJoinRequests() {
           isOpen={(selectedGroupMembers?.length ?? 0) > 0}
           teamMembers={selectedGroupMembers || []}
           onClose={() => setSelectedGroupMembers([])}
+        />
+
+        <RejectRequestModal
+          isOpen={rejectModalData.isOpen}
+          onClose={() => setRejectModalData({ request: null, isOpen: false })}
+          onConfirm={confirmReject}
+          studentName={rejectModalData.request?.studentName || "Student"}
         />
 
         <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
