@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, Clock3, FileText, FolderKanban, Loader2, Sparkles, X, Check, ArrowRight } from "lucide-react";
+import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, Clock3, FileText, FolderKanban, Loader2, Sparkles, X, ArrowRight } from "lucide-react";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, onSnapshot, query, updateDoc, where, type Unsubscribe } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -111,7 +111,7 @@ export default function StudentDashboard() {
       
       // 4. Match score same: sort by closest deadline
       return aDate.getTime() - bDate.getTime();
-    }), [profile, topics, apiScores]);
+    }), [topics, apiScores]);
   const upcomingDeadlines = useMemo(() => [...topics]
     .filter((topic) => topic.applicationDeadline && new Date(topic.applicationDeadline).getTime() >= currentTime.getTime())
     .sort((a, b) => new Date(a.applicationDeadline).getTime() - new Date(b.applicationDeadline).getTime())
@@ -457,20 +457,7 @@ function SmallProfileCompletionWidget({ profile }: { profile: StudentProfile }) 
   const percentage = Math.round((completedSteps / totalSteps) * 100);
 
   if (completedSteps === totalSteps) {
-    return (
-      <Link 
-        to="/student/profile"
-        className="group flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 transition-colors hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20"
-        title="Your profile is fully optimized for matching!"
-      >
-        <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white dark:bg-emerald-600">
-          <Check className="h-3 w-3" />
-        </div>
-        <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-          Profile 100% Complete
-        </span>
-      </Link>
-    );
+    return null;
   }
 
   return (

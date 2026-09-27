@@ -45,7 +45,7 @@ export default function TeacherResearchTopics() {
             getFullCapacityTeams(user.uid),
           ]);
           const fullProjectIds = new Set(fullTeams.map((t) => t.projectId));
-          setTopics(data.filter((t) => !fullProjectIds.has(t.id)));
+          setTopics(data.filter((t) => !fullProjectIds.has(t.id) && t.status !== "draft"));
         } catch (error) {
           console.error("Failed to load research topics:", error);
           showToast("error", "Failed to load research topics.");

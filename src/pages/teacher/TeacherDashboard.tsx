@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { BookOpen, Users, Clock, CheckCircle2, Plus, Eye, ArrowRight, Check, type LucideIcon } from "lucide-react";
+import { BookOpen, Users, Clock, CheckCircle2, Plus, Eye, ArrowRight, type LucideIcon } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 
@@ -77,9 +77,9 @@ export default function TeacherDashboard() {
             getFullCapacityTeams(user.uid),
           ]);
 
-          // Filter out topics that have reached full capacity
+          // Filter out topics that have reached full capacity and drafts
           const fullProjectIds = new Set(fullTeams.map((t) => t.projectId));
-          setTopics(data.filter((t) => !fullProjectIds.has(t.id)));
+          setTopics(data.filter((t) => !fullProjectIds.has(t.id) && t.status !== "draft"));
         } catch (error) {
           console.error("Failed to load research topics:", error);
           showToast("error", "Failed to load research topics.");
@@ -557,20 +557,7 @@ function SmallTeacherProfileCompletionWidget({ profile }: { profile: any }) {
   const percentage = Math.round((completedSteps / totalSteps) * 100);
 
   if (completedSteps === totalSteps) {
-    return (
-      <Link 
-        to="/teacher/profile"
-        className="group flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 transition-colors hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20"
-        title="Your profile is fully optimized for students!"
-      >
-        <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white dark:bg-emerald-600">
-          <Check className="h-3 w-3" />
-        </div>
-        <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-          Profile 100% Complete
-        </span>
-      </Link>
-    );
+    return null;
   }
 
   return (
