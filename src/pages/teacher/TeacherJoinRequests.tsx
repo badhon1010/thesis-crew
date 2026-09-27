@@ -206,7 +206,7 @@ export default function TeacherJoinRequests() {
                             </button>
                           </div>
                           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            {request.studentEmail || "No email added"} · {request.studentDepartment || "Department not added"}
+                            {request.universityId ? `${request.universityId} · ` : ""}{request.studentEmail || "No email added"} · {request.studentDepartment || "Department not added"}
                           </p>
                           <p className="mt-3 text-sm font-medium text-indigo-700 dark:text-indigo-300">
                             {request.topicTitle}
@@ -314,7 +314,7 @@ export default function TeacherJoinRequests() {
                 
                 // Construct a complete list of team members, including the leader
                 const leaderMember = {
-                  studentId: request.studentId,
+                  studentId: request.universityId || request.studentId,
                   uid: request.teamLeaderId || request.studentId, // Ensure uid fallback
                   name: request.studentName,
                   email: request.studentEmail,
@@ -370,7 +370,7 @@ export default function TeacherJoinRequests() {
                               {fullTeamMembers.map((member, index) => (
                                 <div key={member.studentId} className="flex items-center gap-2 rounded-lg bg-slate-50 p-2 dark:bg-[#121212]">
                                   <UserAvatar 
-                                    userId={member.studentId} 
+                                    userId={member.uid || member.studentId} 
                                     name={member.name} 
                                     className="h-7 w-7 text-xs rounded-lg"
                                   />

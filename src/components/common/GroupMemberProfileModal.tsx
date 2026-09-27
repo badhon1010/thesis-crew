@@ -40,13 +40,14 @@ export function GroupMemberProfileModal({
         try {
           for (const member of teamMembers) {
             try {
-              const docRef = doc(db, "users", member.studentId);
+              const uid = member.uid || member.studentId;
+              const docRef = doc(db, "users", uid);
               const docSnap = await getDoc(docRef);
               if (docSnap.exists()) {
-                profileMap.set(member.studentId, docSnap.data() as StudentProfile);
+                profileMap.set(uid, docSnap.data() as StudentProfile);
               } else {
                 // Use the data from teamMembers if profile doesn't exist
-                profileMap.set(member.studentId, {
+                profileMap.set(uid, {
                   name: member.name,
                   studentId: member.studentId,
                   email: member.email,
@@ -56,9 +57,9 @@ export function GroupMemberProfileModal({
                 });
               }
             } catch (error) {
-              console.error(`Failed to load profile for ${member.studentId}:`, error);
+              console.error(`Failed to load profile for ${member.uid}:`, error);
               // Use fallback data
-              profileMap.set(member.studentId, {
+              profileMap.set(member.uid || member.studentId, {
                 name: member.name,
                 studentId: member.studentId,
                 email: member.email,
@@ -78,7 +79,7 @@ export function GroupMemberProfileModal({
       fetchProfiles();
       // Set first member as selected by default
       if (teamMembers.length > 0) {
-        setSelectedMemberId(teamMembers[0].studentId);
+        setSelectedMemberId(teamMembers[0].uid || teamMembers[0].studentId);
       }
     }
   }, [isOpen, teamMembers]);
@@ -132,21 +133,23 @@ export function GroupMemberProfileModal({
                     Team Members
                   </p>
                   <div className="space-y-2">
-                    {teamMembers.map((member, index) => (
+                    {teamMembers.map((member, index) => {
+                      const memberUid = member.uid || member.studentId;
+                      return (
                       <button
-                        key={member.studentId}
-                        onClick={() => setSelectedMemberId(member.studentId)}
+                        key={memberUid}
+                        onClick={() => setSelectedMemberId(memberUid)}
                         className={`w-full rounded-lg p-3 text-left transition-colors ${
-                          selectedMemberId === member.studentId
+                          selectedMemberId === memberUid
                             ? "bg-indigo-50 text-indigo-900 dark:bg-indigo-500/20 dark:text-indigo-200"
                             : "hover:bg-slate-100 dark:hover:bg-[#1A1A1A]"
                         }`}
                       >
                         <div className="flex items-center gap-2">
                           <UserAvatar 
-                            userId={member.studentId} 
+                            userId={memberUid} 
                             name={member.name} 
-                            photoURL={profiles.get(member.studentId)?.photoURL}
+                            photoURL={profiles.get(memberUid)?.photoURL}
                             className="h-8 w-8 text-xs rounded-lg" 
                           />
                           <div className="min-w-0 flex-1">
@@ -161,7 +164,7 @@ export function GroupMemberProfileModal({
                           </div>
                         </div>
                       </button>
-                    ))}
+                    )})}
                   </div>
                 </div>
               </div>
@@ -173,7 +176,7 @@ export function GroupMemberProfileModal({
                     {/* Student Info */}
                     <div className="flex items-center gap-4">
                       <UserAvatar 
-                        userId={selectedProfile.studentId} 
+                        userId={selectedMemberId || selectedProfile.studentId} 
                         name={selectedProfile.name} 
                         photoURL={selectedProfile.photoURL}
                         className="h-16 w-16 text-xl" 

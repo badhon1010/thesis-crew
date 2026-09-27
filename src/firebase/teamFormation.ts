@@ -1,12 +1,14 @@
 import {
   doc,
+  deleteDoc,
+  getDoc,
   runTransaction,
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "./firestore";
 import type { ResearchTopic } from "./researchTopics";
 import type { AIMatchAnalysis } from "@/lib/ai";
-import { notifyStudentOfRequestReview } from "./notifications";
+import { notifyStudentOfRequestReview, notifyStudentOfRequestSubmission, notifyStudentOfRequestCancellation } from "./notifications";
 
 export type JoinRequestStatus = "pending" | "accepted" | "rejected";
 export type RequestType = "individual" | "group";
@@ -17,6 +19,7 @@ export interface StudentRequestProfile {
   department?: string;
   cgpa?: string;
   skills?: string[];
+  universityId?: string;
 }
 
 export interface TeamMemberInfo {
@@ -36,6 +39,7 @@ export interface JoinRequest {
   supervisorId: string;
   studentId: string;
   studentName: string;
+  universityId?: string;
   studentEmail: string;
   studentDepartment: string;
   studentCgpa: string;
@@ -47,6 +51,7 @@ export interface JoinRequest {
   requestType: RequestType;
   teamMembers?: TeamMemberInfo[];
   teamLeaderId?: string;
+  memberUids?: string[];
   aiMatchAnalysis?: AIMatchAnalysis;
   createdAt?: unknown;
   reviewedAt?: unknown;
@@ -80,6 +85,7 @@ export async function submitJoinRequest(
       supervisorId: topic.supervisorId,
       studentId,
       studentName: profile.name || "Unnamed student",
+      universityId: profile.universityId || "",
       studentEmail: profile.email || "",
       studentDepartment: profile.department || "",
       studentCgpa: profile.cgpa || "",
@@ -89,6 +95,7 @@ export async function submitJoinRequest(
       maxTeamSize: topic.maxTeamSize,
       status: "pending" satisfies JoinRequestStatus,
       requestType: "individual" satisfies RequestType,
+      memberUids: [studentId],
       aiMatchAnalysis: aiMatchAnalysis || null,
       createdAt: serverTimestamp(),
     });
@@ -131,6 +138,7 @@ export async function submitGroupJoinRequest(
       supervisorId: topic.supervisorId,
       studentId: leaderId,
       studentName: leaderProfile.name || "Unnamed student",
+      universityId: leaderProfile.universityId || "",
       studentEmail: leaderProfile.email || "",
       studentDepartment: leaderProfile.department || "",
       studentCgpa: leaderProfile.cgpa || "",
@@ -142,17 +150,47 @@ export async function submitGroupJoinRequest(
       requestType: "group" satisfies RequestType,
       teamMembers,
       teamLeaderId: leaderId,
+      memberUids: [leaderId, ...teamMembers.map(m => m.uid)],
       aiMatchAnalysis: aiMatchAnalysis || null,
       createdAt: serverTimestamp(),
     });
   });
+
+  // Notify team members (excluding the leader)
+  try {
+    const memberUids = teamMembers.map(m => m.uid);
+    await notifyStudentOfRequestSubmission(memberUids, topic.title, leaderProfile.name || "A student");
+  } catch (error) {
+    console.error("Failed to notify team members:", error);
+  }
 }
 
 /** Students may withdraw a pending request before a supervisor reviews it. */
+export async function deleteJoinRequest(requestId: string) {
+  const joinRequestRef = doc(db, "joinRequests", requestId);
+  const requestSnapshot = await getDoc(joinRequestRef);
+  
+  if (requestSnapshot.exists()) {
+    const request = requestSnapshot.data() as JoinRequest;
+    const memberUids = request.memberUids?.filter(uid => uid !== request.studentId) || [];
+    await deleteDoc(joinRequestRef);
+    
+    try {
+      if (memberUids.length > 0) {
+        await notifyStudentOfRequestCancellation(memberUids, request.topicTitle, "deleted");
+      }
+    } catch (error) {
+      console.error("Failed to notify members of deletion:", error);
+    }
+  } else {
+    await deleteDoc(joinRequestRef);
+  }
+}
+
 export async function cancelJoinRequest(projectId: string, studentId: string) {
   const joinRequestRef = doc(db, "joinRequests", requestId(projectId, studentId));
 
-  await runTransaction(db, async (transaction) => {
+  const requestData = await runTransaction(db, async (transaction) => {
     const requestSnapshot = await transaction.get(joinRequestRef);
     if (!requestSnapshot.exists()) throw new Error("This join request no longer exists.");
 
@@ -161,7 +199,17 @@ export async function cancelJoinRequest(projectId: string, studentId: string) {
     if (request.status !== "pending") throw new Error("Only pending join requests can be cancelled.");
 
     transaction.delete(joinRequestRef);
+    return request;
   });
+
+  try {
+    const memberUids = requestData.memberUids?.filter(uid => uid !== studentId) || [];
+    if (memberUids.length > 0) {
+      await notifyStudentOfRequestCancellation(memberUids, requestData.topicTitle, "cancelled");
+    }
+  } catch (error) {
+    console.error("Failed to notify members of cancellation:", error);
+  }
 }
 
 /**

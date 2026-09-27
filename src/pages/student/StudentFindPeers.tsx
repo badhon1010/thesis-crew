@@ -217,7 +217,7 @@ export default function StudentFindPeers() {
       return;
     }
 
-    let finalSkills = [...(editingPost.skills || [])];
+    const finalSkills = [...(editingPost.skills || [])];
     const editSkillInputElem = document.getElementById('editSkillInput') as HTMLInputElement;
     if (editSkillInputElem) {
       const pendingSkill = editSkillInputElem.value.trim();

@@ -311,7 +311,7 @@ export default function StudentMessages() {
                           <UserAvatar 
                             userId={peerId} 
                             name={peerName} 
-                            photoURL={peerProfiles[peerId]?.photoURL}
+                            photoURL={peerId ? peerProfiles[peerId]?.photoURL : undefined}
                             className="h-10 w-10 text-sm"
                           />
                           <div className="overflow-hidden">
@@ -355,7 +355,7 @@ export default function StudentMessages() {
                 {/* Chat Header */}
                 <div className="flex items-center gap-3 border-b border-slate-200 p-4 dark:border-[#2A2A2A]">
                   <UserAvatar 
-                    userId={activeRoom ? activeRoom.participants.find((id) => id !== currentUserId) : targetUserId} 
+                    userId={activeRoom ? activeRoom.participants.find((id) => id !== currentUserId) : (targetUserId || undefined)}
                     name={activePeerName} 
                     photoURL={peerProfiles[activeRoom ? activeRoom.participants.find((id) => id !== currentUserId) || "" : targetUserId || ""]?.photoURL}
                     className="h-10 w-10 text-sm"

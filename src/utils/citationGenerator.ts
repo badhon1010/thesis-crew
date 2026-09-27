@@ -66,7 +66,7 @@ export function generateIEEECitation(data: PublicationFormData): string {
   }
 
   // Title
-  let title = data.title ? `"${data.title},"` : "";
+  const title = data.title ? `"${data.title},"` : "";
 
   // Venue
   let venueStr = data.venue ? data.venue : "";

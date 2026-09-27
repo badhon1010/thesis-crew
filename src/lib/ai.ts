@@ -195,7 +195,7 @@ Keep your answers concise, structured, and highly relevant to academic research.
 
   if (groqKey) {
     // --- GROQ IMPLEMENTATION ---
-    let chatHistory: any[] = [{ role: "system", content: systemInstruction }];
+    const chatHistory: any[] = [{ role: "system", content: systemInstruction }];
 
     return {
       sendMessage: async (userMessage: string) => {

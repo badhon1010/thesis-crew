@@ -63,15 +63,15 @@ import { GroupChat } from "@/components/chat/GroupChat";
 import { ConfirmModal } from "@/components/common/ConfirmModal";
 import { auth } from "@/firebase/auth";
 import { rtdb } from "@/firebase/database";
-import { ref as dbRef, set as dbSet, get as dbGet, remove as dbRemove } from "firebase/database";
+import { ref as dbRef, get as dbGet, remove as dbRemove } from "firebase/database";
+import { storage } from "@/firebase/storage";
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import {
   doc,
   getDoc,
   addDoc,
   collection,
   query,
-  where,
-  getDocs,
   onSnapshot,
   updateDoc,
   deleteDoc,
@@ -414,37 +414,24 @@ export default function ResearchGroupManagement() {
             const memberIds = (teamData.memberIds as string[]) || [];
 
             if (memberIds.length > 0) {
-              const joinRequestsQuery = query(
-                collection(db, "joinRequests"),
-                where("projectId", "==", id),
-                where("status", "==", "accepted")
-              );
-              const joinRequestsSnap = await getDocs(joinRequestsQuery);
-
               const membersMap = new Map<string, TeamMember>();
-
-              joinRequestsSnap.docs.forEach((doc) => {
-                const data = doc.data();
-                if (data.requestType === "group" && Array.isArray(data.teamMembers) && data.teamMembers.length > 0) {
-                  data.teamMembers.forEach((tm: { studentId: string; name: string; email?: string; department?: string }) => {
-                    if (tm.studentId && !membersMap.has(tm.studentId)) {
-                      membersMap.set(tm.studentId, {
-                        studentId: tm.studentId,
-                        studentName: tm.name || "Unnamed student",
-                        studentEmail: tm.email,
-                        department: tm.department,
-                      });
-                    }
-                  });
-                } else if (data.studentId && !membersMap.has(data.studentId)) {
-                  membersMap.set(data.studentId, {
-                    studentId: data.studentId,
-                    studentName: data.studentName || "Unnamed student",
-                    studentEmail: data.studentEmail,
-                    department: data.studentDepartment,
-                  });
+              
+              await Promise.all(memberIds.map(async (memberId) => {
+                try {
+                  const userDoc = await getDoc(doc(db, "users", memberId));
+                  if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    membersMap.set(memberId, {
+                      studentId: memberId,
+                      studentName: data.name || "Unnamed student",
+                      studentEmail: data.email,
+                      department: data.department,
+                    });
+                  }
+                } catch (err) {
+                  console.error("Failed to load user profile:", err);
                 }
-              });
+              }));
 
               setTeamMembers(Array.from(membersMap.values()));
             } else {
@@ -679,18 +666,6 @@ export default function ResearchGroupManagement() {
     await moveTask(task, newStatus);
   };
 
-  // Reads a File into a base64 data URL (e.g. "data:application/pdf;base64,....").
-  // Realtime Database can only store strings/JSON, not raw binary, so files are
-  // base64-encoded before being written.
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(reader.error || new Error("Failed to read file"));
-      reader.readAsDataURL(file);
-    });
-  };
-
   const handleSaveDocument = async (data: { title: string; type: string; url: string; file: File | null; isLink: boolean }) => {
     if (!id || !auth.currentUser) return;
     try {
@@ -698,25 +673,16 @@ export default function ResearchGroupManagement() {
       let rtdbPath: string | null = null;
 
       if (!data.isLink && data.file) {
-        console.log("Reading file for Realtime Database upload:", data.file.name, "Size:", data.file.size);
-        const base64Data = await fileToBase64(data.file);
-
-        // Firebase keys can't contain ".", "#", "$", "[", "]", or "/"
-        const safeFileName = data.file.name.replace(/[.#$/\[\]]/g, "_");
+        console.log("Uploading file to Firebase Storage:", data.file.name, "Size:", data.file.size);
+        
+        const safeFileName = data.file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
         const docKey = `${Date.now()}_${safeFileName}`;
-        rtdbPath = `researchGroupDocuments/${id}/${docKey}`;
-
-        console.log("Writing file bytes to Realtime Database at:", rtdbPath);
-        await dbSet(dbRef(rtdb, rtdbPath), {
-          name: data.file.name,
-          type: data.file.type,
-          size: data.file.size,
-          data: base64Data,
-        });
-        console.log("Realtime Database write finished.");
-        // Files stored in Realtime Database don't have a static download URL —
-        // the "url" field stays empty and the viewer fetches by rtdbPath instead.
-        documentUrl = "";
+        rtdbPath = `researchGroups/${id}/documents/${docKey}`; // using rtdbPath to store storagePath for backward compatibility
+        
+        const fileRef = storageRef(storage, rtdbPath);
+        await uploadBytes(fileRef, data.file);
+        documentUrl = await getDownloadURL(fileRef);
+        console.log("Firebase Storage upload finished.");
       }
 
       console.log("Saving document metadata to Firestore...");
@@ -748,7 +714,12 @@ export default function ResearchGroupManagement() {
     setIsDeletingDoc(true);
     try {
       if (!documentToDelete.isLink && documentToDelete.rtdbPath) {
-        await dbRemove(dbRef(rtdb, documentToDelete.rtdbPath)).catch(e => console.error("Error deleting from Realtime Database", e));
+        if (documentToDelete.rtdbPath.startsWith("researchGroupDocuments/")) {
+          await dbRemove(dbRef(rtdb, documentToDelete.rtdbPath)).catch(e => console.error("Error deleting from Realtime Database", e));
+        } else {
+          const fileRef = storageRef(storage, documentToDelete.rtdbPath);
+          await deleteObject(fileRef).catch(e => console.error("Error deleting from Storage", e));
+        }
       }
       await deleteDoc(doc(db, "researchGroups", id, "documents", documentToDelete.id));
       showToast("success", "Resource deleted successfully");
@@ -766,7 +737,7 @@ export default function ResearchGroupManagement() {
   // Base64 data URLs can't be top-level-navigated to in most browsers (they're
   // blocked for security), so we convert to a Blob + object URL, which can.
   const handleViewDocument = async (docData: Document) => {
-    if (docData.isLink) {
+    if (docData.isLink || (!docData.rtdbPath?.startsWith("researchGroupDocuments/") && docData.url)) {
       window.open(docData.url, "_blank", "noopener,noreferrer");
       return;
     }
@@ -776,18 +747,20 @@ export default function ResearchGroupManagement() {
     }
     setViewingDocId(docData.id);
     try {
-      const snapshot = await dbGet(dbRef(rtdb, docData.rtdbPath));
-      if (!snapshot.exists()) {
-        showToast("error", "This file is no longer available.");
-        return;
+      if (docData.rtdbPath.startsWith("researchGroupDocuments/")) {
+        const snapshot = await dbGet(dbRef(rtdb, docData.rtdbPath));
+        if (!snapshot.exists()) {
+          showToast("error", "This file is no longer available.");
+          return;
+        }
+        const stored = snapshot.val() as { data: string; type?: string; name?: string };
+        const res = await fetch(stored.data);
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        window.open(objectUrl, "_blank", "noopener,noreferrer");
+        // Give the new tab time to load the blob before revoking it.
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
       }
-      const stored = snapshot.val() as { data: string; type?: string; name?: string };
-      const res = await fetch(stored.data);
-      const blob = await res.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      window.open(objectUrl, "_blank", "noopener,noreferrer");
-      // Give the new tab time to load the blob before revoking it.
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
     } catch (error) {
       console.error("Error opening document:", error);
       showToast("error", "Failed to open this file.");
@@ -888,7 +861,7 @@ export default function ResearchGroupManagement() {
       try {
         await setDoc(
           doc(db, "researchGroups", id),
-          { groupStatus, publishedCount, progress, updatedAt: serverTimestamp() },
+          { supervisorId: topic?.supervisorId || auth.currentUser?.uid, groupStatus, publishedCount, progress, updatedAt: serverTimestamp() },
           { merge: true }
         );
         const topicRef = doc(db, "researchTopics", id);
@@ -901,7 +874,7 @@ export default function ResearchGroupManagement() {
       }
     };
     sync();
-  }, [id, loading, isGroupPublished, publishedCount, milestones, tasks, publications]);
+  }, [id, loading, isGroupPublished, publishedCount, milestones, tasks, publications, topic?.supervisorId]);
 
   const handleSavePublication = async (data: PublicationFormData) => {
     if (!id || !auth.currentUser) {

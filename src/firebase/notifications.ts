@@ -88,3 +88,43 @@ export async function notifyStudentOfRequestReview(
 
   await batch.commit();
 }
+
+export async function notifyStudentOfRequestSubmission(
+  studentIds: string[],
+  topicTitle: string,
+  leaderName: string
+) {
+  if (!studentIds.length) return;
+  const batch = writeBatch(db);
+  studentIds.forEach(studentId => {
+    batch.set(doc(db, "notifications", `request-submitted_${studentId}_${Date.now()}`), {
+      recipientId: studentId,
+      type: "task_update" as AppNotification["type"],
+      title: "Team Request Submitted",
+      message: `${leaderName} submitted a team request for "${topicTitle}" with you.`,
+      read: false,
+      createdAt: serverTimestamp(),
+    });
+  });
+  await batch.commit();
+}
+
+export async function notifyStudentOfRequestCancellation(
+  studentIds: string[],
+  topicTitle: string,
+  actionText: string = "cancelled"
+) {
+  if (!studentIds.length) return;
+  const batch = writeBatch(db);
+  studentIds.forEach(studentId => {
+    batch.set(doc(db, "notifications", `request-cancelled_${studentId}_${Date.now()}`), {
+      recipientId: studentId,
+      type: "task_update" as AppNotification["type"],
+      title: "Team Request Cancelled",
+      message: `The team request for "${topicTitle}" was ${actionText}.`,
+      read: false,
+      createdAt: serverTimestamp(),
+    });
+  });
+  await batch.commit();
+}

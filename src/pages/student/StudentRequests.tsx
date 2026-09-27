@@ -1,19 +1,37 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Clock3, Loader2, FolderKanban, CheckCircle2, XCircle } from "lucide-react";
+import { Clock3, Loader2, FolderKanban, CheckCircle2, XCircle, Trash2 } from "lucide-react";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, onSnapshot, query, where, type Unsubscribe } from "firebase/firestore";
+import { collection, onSnapshot, query, where, or, type Unsubscribe } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 import { auth } from "@/firebase/auth";
 import { db } from "@/firebase/firestore";
-import type { JoinRequest } from "@/firebase/teamFormation";
+import { deleteJoinRequest, type JoinRequest } from "@/firebase/teamFormation";
 import { UserAvatar } from "@/components/common/UserAvatar";
+import { ConfirmModal } from "@/components/common/ConfirmModal";
 
 export default function StudentRequests() {
   const [requests, setRequests] = useState<JoinRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [requestToDelete, setRequestToDelete] = useState<string | null>(null);
+
+  const confirmDelete = async () => {
+    if (!requestToDelete) return;
+    setDeletingId(requestToDelete);
+    try {
+      await deleteJoinRequest(requestToDelete);
+      setToast({ type: "success", message: "Request deleted successfully." });
+    } catch (error) {
+      console.error(error);
+      setToast({ type: "error", message: "Failed to delete request." });
+    } finally {
+      setDeletingId(null);
+      setRequestToDelete(null);
+    }
+  };
 
   useEffect(() => {
     let unsubscribeRequests: Unsubscribe | undefined;
@@ -31,7 +49,10 @@ export default function StudentRequests() {
       
       const q = query(
         collection(db, "joinRequests"), 
-        where("studentId", "==", user.uid)
+        or(
+          where("studentId", "==", user.uid),
+          where("memberUids", "array-contains", user.uid)
+        )
       );
 
       unsubscribeRequests = onSnapshot(
@@ -212,13 +233,23 @@ export default function StudentRequests() {
                       )}
                     </div>
                     
-                    <div className="flex shrink-0 items-center">
+                    <div className="flex shrink-0 items-center gap-4">
                       <Link 
                         to={`/student/research-topics/${request.projectId}`}
                         className="text-sm font-semibold text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
                       >
                         View Topic →
                       </Link>
+                      {request.studentId === auth.currentUser?.uid && (
+                        <button
+                          onClick={() => setRequestToDelete(request.id)}
+                          disabled={deletingId === request.id}
+                          className="rounded-lg p-2 text-rose-500 transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50 dark:hover:bg-rose-500/10"
+                          title="Delete Request"
+                        >
+                          {deletingId === request.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -227,6 +258,15 @@ export default function StudentRequests() {
           )}
         </div>
       </div>
+      <ConfirmModal
+        isOpen={!!requestToDelete}
+        onClose={() => setRequestToDelete(null)}
+        onConfirm={confirmDelete}
+        title="Delete Request"
+        description="Are you sure you want to delete this request record? This action cannot be undone."
+        confirmText="Delete"
+        isLoading={deletingId !== null}
+      />
     </DashboardLayout>
   );
 }

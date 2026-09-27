@@ -44,8 +44,6 @@ import {
   getDoc,
   collection,
   query,
-  where,
-  getDocs,
   onSnapshot,
   updateDoc,
   addDoc,
@@ -261,37 +259,32 @@ export default function StudentGroupDetails() {
             const memberIds = (teamData.memberIds as string[]) || [];
 
             if (memberIds.length > 0) {
-              const joinRequestsQuery = query(
-                collection(db, "joinRequests"),
-                where("projectId", "==", id),
-                where("status", "==", "accepted")
-              );
-              const joinRequestsSnap = await getDocs(joinRequestsQuery);
-
               const membersMap = new Map<string, TeamMember>();
-
-              joinRequestsSnap.docs.forEach((doc) => {
-                const data = doc.data();
-                if (data.requestType === "group" && Array.isArray(data.teamMembers) && data.teamMembers.length > 0) {
-                  data.teamMembers.forEach((tm: { studentId: string; name: string; email?: string; department?: string }) => {
-                    if (tm.studentId && !membersMap.has(tm.studentId)) {
-                      membersMap.set(tm.studentId, {
-                        studentId: tm.studentId,
-                        studentName: tm.name || "Unnamed student",
-                        studentEmail: tm.email,
-                        department: tm.department,
-                      });
-                    }
-                  });
-                } else if (data.studentId && !membersMap.has(data.studentId)) {
-                  membersMap.set(data.studentId, {
-                    studentId: data.studentId,
-                    studentName: data.studentName || "Unnamed student",
-                    studentEmail: data.studentEmail,
-                    department: data.studentDepartment,
+              await Promise.all(memberIds.map(async (memberId) => {
+                try {
+                  const userDoc = await getDoc(doc(db, "users", memberId));
+                  if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    membersMap.set(memberId, {
+                      studentId: memberId,
+                      studentName: data.name || "Unnamed student",
+                      studentEmail: data.email,
+                      department: data.department,
+                    });
+                  } else {
+                    membersMap.set(memberId, {
+                      studentId: memberId,
+                      studentName: "Unnamed student",
+                    });
+                  }
+                } catch (error) {
+                  console.error("Failed to load team member profile:", error);
+                  membersMap.set(memberId, {
+                    studentId: memberId,
+                    studentName: "Unnamed student",
                   });
                 }
-              });
+              }));
 
               setTeamMembers(Array.from(membersMap.values()));
             } else {

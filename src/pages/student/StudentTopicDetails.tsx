@@ -374,7 +374,7 @@ export default function StudentTopicDetails() {
         onClose={() => setIsTeamModalOpen(false)}
         topic={topic}
         leaderId={auth.currentUser.uid}
-        leaderProfile={{ ...studentProfile, email: studentProfile.email || auth.currentUser.email || "" }}
+        leaderProfile={{ ...studentProfile, universityId: studentProfile.studentId, email: studentProfile.email || auth.currentUser.email || "" }}
         aiMatchAnalysis={aiMatchAnalysis || undefined}
         onSuccess={() => setToast({ type: "success", message: "Team request sent successfully!" })}
       />
