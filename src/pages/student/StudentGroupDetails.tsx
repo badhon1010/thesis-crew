@@ -55,6 +55,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
 import { notifyTeacherOfTaskUpdate, notifyTeacherOfMilestoneCompletion } from "@/firebase/notifications";
+import { UserAvatar } from "@/components/common/UserAvatar";
 
 interface ResearchTopic {
   id: string;
@@ -728,9 +729,11 @@ export default function StudentGroupDetails() {
               <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">{topic.title}</h1>
               
               <div className="mt-4 flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-                  {topic.supervisorName ? topic.supervisorName.charAt(0).toUpperCase() : "S"}
-                </div>
+                <UserAvatar 
+                  userId={topic.supervisorId} 
+                  name={topic.supervisorName || "Supervisor"} 
+                  className="h-9 w-9 text-sm"
+                />
                 <div>
                   <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Supervisor</p>
                   <p className="text-sm font-semibold text-slate-900 dark:text-slate-200">{topic.supervisorName || "N/A"}</p>
@@ -890,9 +893,11 @@ export default function StudentGroupDetails() {
                         onClick={() => setSelectedStudentId(member.studentId)}
                         className="group relative flex cursor-pointer items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md active:scale-[0.98] dark:border-[#2A2A2A] dark:bg-[#0F0F0F] dark:hover:bg-[#181818]"
                       >
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 text-sm font-bold text-indigo-700 dark:from-indigo-500/20 dark:to-violet-500/20 dark:text-indigo-300">
-                          {member.studentName.charAt(0).toUpperCase()}
-                        </div>
+                        <UserAvatar 
+                          userId={member.studentId} 
+                          name={member.studentName} 
+                          className="h-10 w-10 text-sm"
+                        />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{member.studentName}</p>
                           {member.department && (

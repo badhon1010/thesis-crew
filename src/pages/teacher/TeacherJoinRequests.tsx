@@ -7,6 +7,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 import { StudentProfileModal } from "@/components/common/StudentProfileModal";
 import { GroupMemberProfileModal } from "@/components/common/GroupMemberProfileModal";
+import { UserAvatar } from "@/components/common/UserAvatar";
 import { auth } from "@/firebase/auth";
 import { db } from "@/firebase/firestore";
 import { calculateSkillMatch } from "@/utils/skillMatching";
@@ -186,9 +187,11 @@ export default function TeacherJoinRequests() {
                   <article key={request.id} className="p-6">
                     <div className="flex flex-col justify-between gap-5 sm:flex-row">
                       <div className="flex min-w-0 gap-4">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 font-bold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
-                          {request.studentName.split(" ").map((part) => part[0]).join("").slice(0, 2)}
-                        </div>
+                        <UserAvatar 
+                          userId={request.studentId} 
+                          name={request.studentName} 
+                          className="h-11 w-11 text-sm rounded-xl"
+                        />
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="font-semibold text-slate-900 dark:text-white">
@@ -366,9 +369,11 @@ export default function TeacherJoinRequests() {
                             <div className="space-y-2">
                               {fullTeamMembers.map((member, index) => (
                                 <div key={member.studentId} className="flex items-center gap-2 rounded-lg bg-slate-50 p-2 dark:bg-[#121212]">
-                                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-xs font-bold text-violet-600 dark:bg-violet-500/20 dark:text-violet-400">
-                                    {member.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
-                                  </div>
+                                  <UserAvatar 
+                                    userId={member.studentId} 
+                                    name={member.name} 
+                                    className="h-7 w-7 text-xs rounded-lg"
+                                  />
                                   <div className="min-w-0 flex-1">
                                     <p className="text-xs font-semibold text-slate-900 dark:text-white">
                                       {member.name} {index === 0 && <span className="text-[10px] text-violet-600 dark:text-violet-400">(Leader)</span>}

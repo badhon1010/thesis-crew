@@ -443,7 +443,7 @@ export default function ResearchTopicDetails() {
                             <Eye className="h-4 w-4" />
                           </button>
                           <button
-                            onClick={() => handleRemoveStudent(member.studentId, member.studentName)}
+                            onClick={() => triggerRemoveStudent(member.studentId, member.studentName)}
                             disabled={removingStudentId === member.studentId}
                             className="rounded-lg p-1.5 text-rose-600 transition-colors hover:bg-rose-50 disabled:opacity-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
                             title="Remove Student"

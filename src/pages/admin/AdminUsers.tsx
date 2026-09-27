@@ -18,11 +18,13 @@ import { ToastAlert } from "@/components/common/ToastAlert";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { auth } from "@/firebase/auth";
 import { db } from "@/firebase/firestore";
+import { UserAvatar } from "@/components/common/UserAvatar";
 
 interface UserAccount {
   id: string;
   name?: string;
   email?: string;
+  photoURL?: string;
   role?: "student" | "teacher" | "admin";
   department?: string;
   studentId?: string;
@@ -269,9 +271,12 @@ export default function AdminUsers() {
                         {/* User Column */}
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold text-xs ${user.role === "teacher" ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400" : user.role === "admin" ? "bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400" : "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"}`}>
-                              {user.name ? user.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() : "U"}
-                            </div>
+                            <UserAvatar 
+                              userId={user.id} 
+                              name={user.name || "Unnamed User"} 
+                              photoURL={user.photoURL}
+                              className="h-10 w-10 text-xs rounded-xl"
+                            />
                             <div>
                               <p className="font-semibold text-slate-900 dark:text-white">{user.name || "Unnamed User"}</p>
                               <p className="text-xs text-slate-500 dark:text-slate-400">{user.email}</p>

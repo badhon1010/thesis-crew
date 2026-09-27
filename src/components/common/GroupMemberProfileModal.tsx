@@ -1,8 +1,9 @@
-import { X, User, GraduationCap, Award, BookOpen, Code, Users } from "lucide-react";
+import { X, GraduationCap, Award, BookOpen, Code, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
 import type { TeamMemberInfo } from "@/firebase/teamFormation";
+import { UserAvatar } from "./UserAvatar";
 
 interface StudentProfile {
   name: string;
@@ -12,6 +13,7 @@ interface StudentProfile {
   researchInterests?: string;
   skills?: string[];
   email?: string;
+  photoURL?: string;
 }
 
 interface GroupMemberProfileModalProps {
@@ -141,9 +143,12 @@ export function GroupMemberProfileModal({
                         }`}
                       >
                         <div className="flex items-center gap-2">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-xs font-bold text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400">
-                            {member.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
-                          </div>
+                          <UserAvatar 
+                            userId={member.studentId} 
+                            name={member.name} 
+                            photoURL={profiles.get(member.studentId)?.photoURL}
+                            className="h-8 w-8 text-xs rounded-lg" 
+                          />
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
                               {member.name}
@@ -167,9 +172,12 @@ export function GroupMemberProfileModal({
                   <div className="space-y-6">
                     {/* Student Info */}
                     <div className="flex items-center gap-4">
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
-                        <User className="h-8 w-8" />
-                      </div>
+                      <UserAvatar 
+                        userId={selectedProfile.studentId} 
+                        name={selectedProfile.name} 
+                        photoURL={selectedProfile.photoURL}
+                        className="h-16 w-16 text-xl" 
+                      />
                       <div>
                         <h4 className="text-xl font-bold text-slate-900 dark:text-white">
                           {selectedProfile.name || "N/A"}

@@ -1,4 +1,5 @@
 import { X, Calendar, Flag, User, GitBranch, History, UserPlus, MoveRight } from "lucide-react";
+import { UserAvatar } from "@/components/common/UserAvatar";
 
 export interface TaskStatusEvent {
   from: string;
@@ -136,8 +137,8 @@ export function TaskViewModal({ isOpen, onClose, task, milestoneName, assigneeNa
                 <div className="flex flex-wrap gap-1.5">
                   {assigneeNames!.map((name) => (
                     <span key={name} className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 py-1 pl-1 pr-2.5 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-bold text-white">
-                        {name.charAt(0).toUpperCase()}
+                      <span className="flex h-5 w-5 items-center justify-center">
+                        <UserAvatar name={name} className="h-full w-full text-[10px]" />
                       </span>
                       {name}
                     </span>

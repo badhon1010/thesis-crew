@@ -8,6 +8,7 @@ import { ToastAlert } from "@/components/common/ToastAlert";
 import { auth } from "@/firebase/auth";
 import { db } from "@/firebase/firestore";
 import type { JoinRequest } from "@/firebase/teamFormation";
+import { UserAvatar } from "@/components/common/UserAvatar";
 
 export default function StudentRequests() {
   const [requests, setRequests] = useState<JoinRequest[]>([]);
@@ -169,9 +170,11 @@ export default function StudentRequests() {
                           <div className="flex flex-wrap gap-2">
                             {/* Leader */}
                             <div className="flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50/50 px-2.5 py-1 dark:border-indigo-500/20 dark:bg-indigo-500/10">
-                              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-200 text-[9px] font-bold text-indigo-700 dark:bg-indigo-500/30 dark:text-indigo-300">
-                                {request.studentName.charAt(0).toUpperCase()}
-                              </div>
+                              <UserAvatar 
+                                userId={request.studentId} 
+                                name={request.studentName} 
+                                className="h-5 w-5 text-[9px]"
+                              />
                               <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300">
                                 {request.studentName} <span className="opacity-70">(Leader)</span>
                               </span>
@@ -180,9 +183,11 @@ export default function StudentRequests() {
                             {/* Other Members */}
                             {request.teamMembers.map(member => (
                               <div key={member.uid} className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 dark:border-[#2A2A2A] dark:bg-[#181818]">
-                                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-[9px] font-bold text-slate-700 dark:bg-slate-700 dark:text-slate-300">
-                                  {member.name.charAt(0).toUpperCase()}
-                                </div>
+                                <UserAvatar 
+                                  userId={member.uid} 
+                                  name={member.name} 
+                                  className="h-5 w-5 text-[9px]"
+                                />
                                 <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
                                   {member.name}
                                 </span>

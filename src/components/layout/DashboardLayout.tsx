@@ -8,6 +8,7 @@ import { Menu } from "lucide-react";
 import { Link } from "react-router-dom";
 import { StudentNotifications } from "../common/StudentNotifications";
 import { AIChatWidget } from "../common/AIChatWidget";
+import { UserAvatar } from "../common/UserAvatar";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -97,15 +98,14 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
             <Link 
               to={role === "student" ? "/student/profile" : role === "admin" ? "/admin/profile" : "/teacher/profile"}
               title="My Profile"
-              className="flex h-10 w-10 overflow-hidden cursor-pointer items-center justify-center rounded-full border border-blue-500/30 bg-blue-50 transition-colors hover:bg-blue-100 dark:border-[#3B82F6]/30 dark:bg-[#3B82F6]/10 dark:hover:bg-[#3B82F6]/20"
+              className="flex items-center justify-center transition-colors cursor-pointer"
             >
-              {photoURL ? (
-                <img src={photoURL} alt="Profile" className="h-full w-full object-cover" />
-              ) : (
-                <span className="text-sm font-semibold text-blue-600 dark:text-[#3B82F6]">
-                  {role === "admin" ? "A" : "U"}
-                </span>
-              )}
+              <UserAvatar 
+                userId={auth.currentUser?.uid || ""} 
+                name={auth.currentUser?.displayName || (role === "admin" ? "Admin" : "User")} 
+                photoURL={photoURL || undefined}
+                className="h-10 w-10 text-sm ring-2 ring-blue-500/30"
+              />
             </Link>
 
           </div>

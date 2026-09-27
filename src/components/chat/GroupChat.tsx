@@ -5,6 +5,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
 import { Send, User as UserIcon, Edit2, Trash2, X, Check, MoreVertical, Trash, History, Plus } from "lucide-react";
+import { UserAvatar } from "@/components/common/UserAvatar";
 
 interface Message {
   id: string;
@@ -430,31 +431,16 @@ export function GroupChat({ groupId, currentUserId, currentUserName, currentUser
                   const isCurrentUserAdmin = activeConversation?.admins?.includes(currentUserId) || currentUserRole === "teacher";
                   
                   return members.map((member) => {
-                    const avatarColors = [
-                      "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-                      "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-                      "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-                      "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
-                      "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
-                      "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900/30 dark:text-fuchsia-400",
-                    ];
-                    let hash = 0;
-                    for (let i = 0; i < member.id.length; i++) {
-                      hash = member.id.charCodeAt(i) + ((hash << 5) - hash);
-                    }
-                    const studentColor = avatarColors[Math.abs(hash) % avatarColors.length];
                     const isMemberAdmin = activeConversation?.admins?.includes(member.id) || member.role === "teacher";
                     
                     return (
                       <div key={member.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 dark:border-[#333] dark:bg-[#222]">
                         <div className="flex items-center gap-3 overflow-hidden">
-                          <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full font-bold ${
-                            member.role === "teacher" 
-                              ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 ring-2 ring-indigo-500/20" 
-                              : studentColor
-                          }`}>
-                            {member.name.charAt(0).toUpperCase()}
-                          </div>
+                          <UserAvatar 
+                            userId={member.id} 
+                            name={member.name} 
+                            className="h-10 w-10 text-sm ring-2 ring-indigo-500/20"
+                          />
                           <div className="flex-1 overflow-hidden">
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{member.name}</p>
@@ -651,12 +637,13 @@ export function GroupChat({ groupId, currentUserId, currentUserName, currentUser
 
                   return (
                     <div key={msg.id} className={`flex gap-3 ${isMine ? "flex-row-reverse" : "flex-row"}`}>
-                      {/* Avatar */}
-                      <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${showAvatar ? (msg.senderRole === "teacher" ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300") : "bg-transparent"}`}>
+                      <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${showAvatar ? "bg-transparent" : "bg-transparent"}`}>
                         {showAvatar && (
-                          <span className="text-xs font-bold">
-                            {displayName.charAt(0).toUpperCase()}
-                          </span>
+                          <UserAvatar 
+                            userId={msg.senderId} 
+                            name={displayName} 
+                            className="h-8 w-8 text-xs"
+                          />
                         )}
                       </div>
 

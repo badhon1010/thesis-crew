@@ -25,6 +25,7 @@ import { ToastAlert } from "@/components/common/ToastAlert";
 import { ConfirmModal } from "@/components/common/ConfirmModal";
 import { auth } from "@/firebase/auth";
 import { db } from "@/firebase/firestore";
+import { UserAvatar } from "@/components/common/UserAvatar";
 
 interface StudentProfile {
   name?: string;
@@ -280,9 +281,12 @@ export default function StudentFindPeers() {
                 className="flex items-center gap-4 p-4 sm:p-6 cursor-text"
                 onClick={() => setIsCreatingPost(true)}
               >
-                <div className="h-10 w-10 shrink-0 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold dark:bg-indigo-500/20 dark:text-indigo-300">
-                  {studentProfile?.name?.charAt(0) || "S"}
-                </div>
+                <UserAvatar 
+                  userId={auth.currentUser?.uid} 
+                  name={studentProfile?.name} 
+                  photoURL={studentProfile?.photoURL}
+                  className="h-10 w-10 text-sm"
+                />
                 <div className="flex-1 rounded-full bg-slate-100 px-4 py-3 text-sm text-slate-500 hover:bg-slate-200 transition-colors dark:bg-[#222222] dark:text-slate-400 dark:hover:bg-slate-800">
                   What kind of teammate are you looking for?
                 </div>
@@ -421,9 +425,11 @@ export default function StudentFindPeers() {
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 shrink-0 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 font-bold dark:bg-slate-800 dark:text-slate-300">
-                          {post.authorName?.charAt(0) || "U"}
-                        </div>
+                        <UserAvatar 
+                          userId={post.authorId} 
+                          name={post.authorName || "Unknown Student"} 
+                          className="h-10 w-10 text-sm"
+                        />
                         <div>
                           <p className="font-semibold text-slate-900 dark:text-white">
                             {post.authorName || "Unknown Student"}
@@ -510,9 +516,11 @@ export default function StudentFindPeers() {
               </button>
             </div>
             <div className="flex items-center gap-3 mb-6">
-               <div className="h-10 w-10 shrink-0 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 font-bold dark:bg-slate-800 dark:text-slate-300">
-                 {viewingPost.authorName?.charAt(0) || "U"}
-               </div>
+               <UserAvatar 
+                 userId={viewingPost.authorId} 
+                 name={viewingPost.authorName || "Unknown Student"} 
+                 className="h-10 w-10 text-sm"
+               />
                <div>
                  <p className="font-semibold text-slate-900 dark:text-white">{viewingPost.authorName}</p>
                  <p className="text-xs text-slate-500">{viewingPost.authorDepartment} • {formatTimeAgo(viewingPost.createdAt)}</p>

@@ -52,6 +52,7 @@ import {
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 import { StudentProfileModal } from "@/components/common/StudentProfileModal";
+import { UserAvatar } from "@/components/common/UserAvatar";
 import { TaskModal } from "@/components/ui/TaskModal";
 import { TaskViewModal } from "@/components/ui/TaskViewModal";
 import { DocumentModal } from "@/components/ui/DocumentModal";
@@ -1281,9 +1282,11 @@ export default function ResearchGroupManagement() {
                         onClick={() => setSelectedStudentId(member.studentId)}
                         className="group relative flex cursor-pointer items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md active:scale-[0.98] dark:border-[#2A2A2A] dark:bg-[#0F0F0F] dark:hover:bg-[#181818]"
                       >
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 text-sm font-bold text-indigo-700 dark:from-indigo-500/20 dark:to-violet-500/20 dark:text-indigo-300">
-                          {member.studentName.charAt(0).toUpperCase()}
-                        </div>
+                        <UserAvatar 
+                          userId={member.studentId} 
+                          name={member.studentName} 
+                          className="h-10 w-10 text-sm"
+                        />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{member.studentName}</p>
                           {member.department && (
@@ -2118,7 +2121,11 @@ export default function ResearchGroupManagement() {
                         className="-ml-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-indigo-600 text-[10px] font-bold text-white first:ml-0 dark:border-[#1C1C1E]"
                         style={{ zIndex: 3 - i }}
                       >
-                        {assigneeNameOf(sid).charAt(0).toUpperCase()}
+                        <UserAvatar 
+                          userId={sid} 
+                          name={assigneeNameOf(sid)} 
+                          className="h-full w-full text-[10px]"
+                        />
                       </span>
                     ))}
                     {task.assignedTo.length > 3 && (
@@ -3128,8 +3135,8 @@ export default function ResearchGroupManagement() {
                               <Users className="h-3.5 w-3.5 text-slate-400" />
                               {pub.authors!.slice(0, 6).map((a) => (
                                 <span key={a} className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 py-1 pl-1 pr-2.5 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-[10px] font-bold text-white">
-                                    {a.charAt(0).toUpperCase()}
+                                  <span className="flex h-5 w-5 items-center justify-center">
+                                    <UserAvatar name={a} className="h-full w-full text-[10px]" />
                                   </span>
                                   {a}
                                 </span>

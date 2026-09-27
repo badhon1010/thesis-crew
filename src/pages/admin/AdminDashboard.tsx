@@ -14,6 +14,7 @@ import {
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
+import { UserAvatar } from "@/components/common/UserAvatar";
 
 interface UserDoc {
   id: string;
@@ -23,6 +24,7 @@ interface UserDoc {
   department?: string;
   studentId?: string;
   designation?: string;
+  photoURL?: string;
   accountStatus?: "active" | "suspended";
   createdAt?: string;
 }
@@ -234,9 +236,12 @@ export default function AdminDashboard() {
                 recentUsers.map((user) => (
                   <div key={user.id} className="flex items-center justify-between p-4 px-6 transition-colors hover:bg-slate-50/80 dark:hover:bg-[#222]">
                     <div className="flex items-center gap-3">
-                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold text-xs ${user.role === "teacher" ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400" : user.role === "admin" ? "bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400" : "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"}`}>
-                        {user.name ? user.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() : "U"}
-                      </div>
+                      <UserAvatar 
+                        userId={user.id} 
+                        name={user.name || "Unnamed User"} 
+                        photoURL={user.photoURL}
+                        className="h-10 w-10 text-xs rounded-xl"
+                      />
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-semibold text-slate-900 dark:text-white">{user.name || "Unnamed User"}</p>

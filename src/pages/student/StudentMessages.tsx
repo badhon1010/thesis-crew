@@ -9,6 +9,7 @@ import { auth } from "@/firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ConfirmModal } from "@/components/common/ConfirmModal";
+import { UserAvatar } from "@/components/common/UserAvatar";
 import { Send, Loader2, MessageSquare, Edit2, Trash2, X } from "lucide-react";
 
 interface DirectMessage {
@@ -307,9 +308,12 @@ export default function StudentMessages() {
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                            {peerName.charAt(0)}
-                          </div>
+                          <UserAvatar 
+                            userId={peerId} 
+                            name={peerName} 
+                            photoURL={peerProfiles[peerId]?.photoURL}
+                            className="h-10 w-10 text-sm"
+                          />
                           <div className="overflow-hidden">
                             <h3 className={`truncate text-sm font-semibold ${isActive ? "text-indigo-700 dark:text-indigo-300" : "text-slate-900 dark:text-white"}`}>
                               {peerName}
@@ -325,9 +329,12 @@ export default function StudentMessages() {
                   {activeChatId?.startsWith("new_") && (
                     <div className="w-full text-left p-4 bg-indigo-50 dark:bg-indigo-500/10">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-200 text-indigo-700 dark:bg-indigo-800 dark:text-indigo-200">
-                          {(peerProfiles[targetUserId || ""]?.name || targetUserName).charAt(0).toUpperCase()}
-                        </div>
+                        <UserAvatar 
+                          userId={targetUserId || ""} 
+                          name={peerProfiles[targetUserId || ""]?.name || targetUserName} 
+                          photoURL={peerProfiles[targetUserId || ""]?.photoURL}
+                          className="h-10 w-10 text-sm"
+                        />
                         <div className="overflow-hidden">
                           <h3 className="truncate text-sm font-semibold text-indigo-700 dark:text-indigo-300">
                             {peerProfiles[targetUserId || ""]?.name || targetUserName}
@@ -347,9 +354,12 @@ export default function StudentMessages() {
               <>
                 {/* Chat Header */}
                 <div className="flex items-center gap-3 border-b border-slate-200 p-4 dark:border-[#2A2A2A]">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-                    {activePeerName.charAt(0)}
-                  </div>
+                  <UserAvatar 
+                    userId={activeRoom ? activeRoom.participants.find((id) => id !== currentUserId) : targetUserId} 
+                    name={activePeerName} 
+                    photoURL={peerProfiles[activeRoom ? activeRoom.participants.find((id) => id !== currentUserId) || "" : targetUserId || ""]?.photoURL}
+                    className="h-10 w-10 text-sm"
+                  />
                   <div>
                     <h2 className="font-semibold text-slate-900 dark:text-white">{activePeerName}</h2>
                   </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, Check, Video, Link as LinkIcon, Calendar, MapPin } from "lucide-react";
+import { UserAvatar } from "@/components/common/UserAvatar";
 
 interface TeamMember {
   studentId: string;
@@ -513,14 +514,12 @@ export function MeetingModal({
                         }`}
                       >
                         <div className="flex items-center gap-2.5">
-                          <div
-                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                              isSelected
-                                ? "bg-indigo-600 text-white"
-                                : "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                            }`}
-                          >
-                            {member.studentName.charAt(0).toUpperCase()}
+                          <div className={`shrink-0 rounded-full ${isSelected ? "ring-2 ring-indigo-600" : ""}`}>
+                            <UserAvatar 
+                              userId={member.studentId} 
+                              name={member.studentName} 
+                              className="h-7 w-7 text-xs"
+                            />
                           </div>
                           <div>
                             <p

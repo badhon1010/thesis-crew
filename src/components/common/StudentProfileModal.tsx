@@ -1,7 +1,8 @@
-import { X, User, GraduationCap, Award, BookOpen, Code } from "lucide-react";
+import { X, GraduationCap, Award, BookOpen, Code } from "lucide-react";
 import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
+import { UserAvatar } from "./UserAvatar";
 
 interface StudentProfile {
   name: string;
@@ -79,9 +80,12 @@ export function StudentProfileModal({
             <div className="space-y-6">
               {/* Student Info */}
               <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
-                  <User className="h-8 w-8" />
-                </div>
+                <UserAvatar 
+                  userId={studentId} 
+                  name={profile.name} 
+                  photoURL={(profile as any).photoURL} 
+                  className="h-16 w-16 text-xl" 
+                />
                 <div>
                   <h4 className="text-xl font-bold text-slate-900 dark:text-white">
                     {profile.name || "N/A"}

@@ -1,14 +1,14 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { BookOpen, Filter, Search, SlidersHorizontal } from "lucide-react";
+import { BookOpen, ChevronDown, Filter, Search, SlidersHorizontal } from "lucide-react";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, doc, onSnapshot, query, where, type Unsubscribe } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { auth } from "@/firebase/auth";
 import { db } from "@/firebase/firestore";
 import { type ResearchTopic } from "@/firebase/researchTopics";
-import { isNewlyPublishedTopic } from "@/utils/topicStatus";
 import { getQuickScoresAll } from "@/lib/ai";
+import { isNewlyPublishedTopic } from "@/utils/topicStatus";
 
 interface StudentProfile {
   name?: string;
@@ -25,6 +25,14 @@ export default function StudentResearchTopics() {
   const [teamMemberCounts, setTeamMemberCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("All Categories");
+  const [sortBy, setSortBy] = useState("bestMatch");
+
+  const normalizeCategory = (category: string) => {
+    return category.trim().split(/\s+/).map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+  };
+
+  const categories = ["All Categories", ...Array.from(new Set(topics.map(t => normalizeCategory(t.category))))];
 
   useEffect(() => {
     if (topics.length > 0 && Object.keys(studentProfile).length > 0) {
@@ -81,12 +89,14 @@ export default function StudentResearchTopics() {
     };
   }, []);
 
-  const filteredTopics = topics.filter(
-    (topic) =>
-      topic.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      topic.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      topic.description.toLowerCase().includes(searchTerm.toLowerCase())
-  ).sort((a, b) => {
+  const filteredTopics = topics.filter((topic) => {
+    const matchesSearch = topic.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          topic.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          topic.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = categoryFilter === "All Categories" || normalizeCategory(topic.category) === categoryFilter;
+    
+    return matchesSearch && matchesCategory;
+  }).sort((a, b) => {
     const now = new Date();
     
     // Parse deadlines (treat no deadline as far future)
@@ -105,18 +115,32 @@ export default function StudentResearchTopics() {
       return bDate.getTime() - aDate.getTime();
     }
     
-    // 3. Both open: Sort by skill match score first
-    const aMatchVal = getMatchScore(a);
-    const bMatchVal = getMatchScore(b);
-    const aMatch = typeof aMatchVal === 'number' ? aMatchVal : 0;
-    const bMatch = typeof bMatchVal === 'number' ? bMatchVal : 0;
-    
-    if (aMatch !== bMatch) {
-      return bMatch - aMatch;
+    // 3. Sorting logic for open topics
+    if (sortBy === "bestMatch") {
+      const aMatchVal = getMatchScore(a);
+      const bMatchVal = getMatchScore(b);
+      const aMatch = typeof aMatchVal === 'number' ? aMatchVal : 0;
+      const bMatch = typeof bMatchVal === 'number' ? bMatchVal : 0;
+      
+      if (aMatch !== bMatch) {
+        return bMatch - aMatch;
+      }
+      return aDate.getTime() - bDate.getTime(); // fallback to deadline
+    } 
+    else if (sortBy === "deadline") {
+      return aDate.getTime() - bDate.getTime();
+    }
+    else if (sortBy === "newest") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const aVal = (a.createdAt as any)?.seconds ? (a.createdAt as any).seconds * 1000 : a.createdAt;
+      const aCreated = aVal ? new Date(aVal as string | number).getTime() : 0;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const bVal = (b.createdAt as any)?.seconds ? (b.createdAt as any).seconds * 1000 : b.createdAt;
+      const bCreated = bVal ? new Date(bVal as string | number).getTime() : 0;
+      return bCreated - aCreated;
     }
     
-    // 4. If scores are the same (including 0), sort by deadline (closest first)
-    return aDate.getTime() - bDate.getTime();
+    return 0;
   });
 
   return (
@@ -148,15 +172,33 @@ export default function StudentResearchTopics() {
             />
           </div>
 
-          <button className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-medium transition hover:bg-slate-50 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:hover:bg-[#1a2133]">
-            <Filter className="h-4 w-4 text-slate-400" />
-            Category
-          </button>
+          <div className="relative group">
+            <Filter className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 group-hover:text-indigo-500 transition-colors pointer-events-none" />
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="h-12 w-full sm:w-[220px] cursor-pointer appearance-none rounded-xl border border-slate-200 bg-white/50 pl-11 pr-10 text-sm font-medium text-slate-700 shadow-sm outline-none backdrop-blur-sm transition-all hover:bg-white focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 dark:border-[#2A2A2A] dark:bg-[#181818]/50 dark:text-slate-200 dark:hover:bg-[#181818] dark:focus:border-indigo-500 dark:focus:bg-[#181818]"
+            >
+              {categories.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          </div>
 
-          <button className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-medium transition hover:bg-slate-50 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:hover:bg-[#1a2133]">
-            <SlidersHorizontal className="h-4 w-4 text-slate-400" />
-            Best match
-          </button>
+          <div className="relative group">
+            <SlidersHorizontal className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 group-hover:text-indigo-500 transition-colors pointer-events-none" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="h-12 w-full sm:w-[180px] cursor-pointer appearance-none rounded-xl border border-slate-200 bg-white/50 pl-11 pr-10 text-sm font-medium text-slate-700 shadow-sm outline-none backdrop-blur-sm transition-all hover:bg-white focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 dark:border-[#2A2A2A] dark:bg-[#181818]/50 dark:text-slate-200 dark:hover:bg-[#181818] dark:focus:border-indigo-500 dark:focus:bg-[#181818]"
+            >
+              <option value="bestMatch">Best match</option>
+              <option value="newest">Newest first</option>
+              <option value="deadline">Closing soon</option>
+            </select>
+            <ChevronDown className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          </div>
         </div>
 
         {/* Research Topics List */}
