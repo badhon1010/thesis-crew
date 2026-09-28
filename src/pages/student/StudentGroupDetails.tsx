@@ -894,6 +894,7 @@ export default function StudentGroupDetails() {
         isOpen={!!selectedStudentId}
         onClose={() => setSelectedStudentId(null)}
         studentId={selectedStudentId || ""}
+        hideCgpa={true}
       />
 
       <MilestoneViewModal

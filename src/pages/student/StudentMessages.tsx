@@ -779,6 +779,7 @@ export default function StudentMessages() {
           isOpen={!!selectedProfileId}
           studentId={selectedProfileId}
           onClose={() => setSelectedProfileId(null)}
+          hideCgpa={true}
         />
       )}
     </DashboardLayout>

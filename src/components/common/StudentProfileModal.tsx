@@ -18,12 +18,14 @@ interface StudentProfileModalProps {
   isOpen: boolean;
   studentId: string;
   onClose: () => void;
+  hideCgpa?: boolean;
 }
 
 export function StudentProfileModal({
   isOpen,
   studentId,
   onClose,
+  hideCgpa = false,
 }: StudentProfileModalProps) {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,7 +101,9 @@ export function StudentProfileModal({
               </div>
 
               {/* Basic Details Grid */}
-              <div className="grid gap-4 rounded-xl border border-slate-100 bg-slate-50 p-4 dark:border-[#2A2A2A] dark:bg-[#181818] sm:grid-cols-2">
+              <div className={`grid gap-4 rounded-xl border border-slate-100 bg-slate-50 p-4 dark:border-[#2A2A2A] dark:bg-[#181818] ${
+                hideCgpa ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-3"
+              }`}>
                 <DetailItem
                   icon={GraduationCap}
                   label="Student ID"
@@ -110,11 +114,13 @@ export function StudentProfileModal({
                   label="Department"
                   value={profile.department || "Not provided"}
                 />
-                <DetailItem
-                  icon={Award}
-                  label="CGPA"
-                  value={profile.cgpa || "Not provided"}
-                />
+                {!hideCgpa && (
+                  <DetailItem
+                    icon={Award}
+                    label="CGPA"
+                    value={profile.cgpa || "Not provided"}
+                  />
+                )}
               </div>
 
               {/* Research Interests */}

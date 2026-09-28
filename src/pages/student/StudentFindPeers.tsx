@@ -15,7 +15,8 @@ import {
   BookOpen,
   Check,
   FileText,
-  Plus
+  Plus,
+  User
 } from "lucide-react";
 import { 
   collection, 
@@ -30,6 +31,7 @@ import { doc, getDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 import { ConfirmModal } from "@/components/common/ConfirmModal";
+import { StudentProfileModal } from "@/components/common/StudentProfileModal";
 import { auth } from "@/firebase/auth";
 import { db } from "@/firebase/firestore";
 import { UserAvatar } from "@/components/common/UserAvatar";
@@ -135,6 +137,7 @@ export default function StudentFindPeers() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [viewingPost, setViewingPost] = useState<PeerPost | null>(null);
   const [editingPost, setEditingPost] = useState<PeerPost | null>(null);
+  const [selectedStudentProfileId, setSelectedStudentProfileId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -808,15 +811,31 @@ export default function StudentFindPeers() {
                     {/* Header */}
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        <UserAvatar 
-                          userId={post.authorId} 
-                          name={post.authorName || "Unknown Student"} 
-                          className="h-10 w-10 text-sm"
-                        />
+                        <div 
+                          className="cursor-pointer hover:opacity-90 transition-opacity shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedStudentProfileId(post.authorId);
+                          }}
+                          title="View Author Profile"
+                        >
+                          <UserAvatar 
+                            userId={post.authorId} 
+                            name={post.authorName || "Unknown Student"} 
+                            className="h-10 w-10 text-sm shadow-2xs"
+                          />
+                        </div>
                         <div>
-                          <p className="font-semibold text-slate-900 dark:text-white">
-                            {post.authorName || "Unknown Student"}
-                            {isMyPost && <span className="ml-2 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">You</span>}
+                          <p 
+                            className="font-semibold text-slate-900 dark:text-white cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors inline-flex items-center gap-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedStudentProfileId(post.authorId);
+                            }}
+                            title="View Author Profile"
+                          >
+                            <span>{post.authorName || "Unknown Student"}</span>
+                            {isMyPost && <span className="ml-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">You</span>}
                           </p>
                           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                             <span>{post.authorDepartment}</span>
@@ -908,7 +927,18 @@ export default function StudentFindPeers() {
                     
                     {/* Actions */}
                     {!isMyPost && (
-                      <div className="mt-5 border-t border-slate-100 pt-3 flex justify-end dark:border-[#2A2A2A]" onClick={(e) => e.stopPropagation()}>
+                      <div className="mt-5 border-t border-slate-100 pt-3 flex items-center justify-end gap-2 dark:border-[#2A2A2A]" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedStudentProfileId(post.authorId);
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs sm:text-sm font-semibold text-slate-700 hover:border-indigo-200 hover:bg-indigo-50/60 hover:text-indigo-600 transition dark:border-[#2E2E2E] dark:bg-[#202020] dark:text-slate-200 dark:hover:bg-[#282828] dark:hover:text-indigo-400 shadow-2xs"
+                        >
+                          <User className="h-4 w-4 text-indigo-500" />
+                          <span>View Profile</span>
+                        </button>
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
@@ -941,16 +971,39 @@ export default function StudentFindPeers() {
             </div>
 
             {/* Author info */}
-            <div className="flex items-center gap-3 mb-5 pb-4 border-b border-slate-100 dark:border-[#2A2A2A]">
-               <UserAvatar 
-                 userId={viewingPost.authorId} 
-                 name={viewingPost.authorName || "Unknown Student"} 
-                 className="h-11 w-11 text-base"
-               />
-               <div>
-                 <p className="font-semibold text-slate-900 dark:text-white">{viewingPost.authorName}</p>
-                 <p className="text-xs text-slate-500">{viewingPost.authorDepartment} • {formatTimeAgo(viewingPost.createdAt)}</p>
+            <div className="flex items-center justify-between gap-3 mb-5 pb-4 border-b border-slate-100 dark:border-[#2A2A2A]">
+               <div className="flex items-center gap-3">
+                 <div
+                   className="cursor-pointer hover:opacity-90 transition-opacity shrink-0"
+                   onClick={() => setSelectedStudentProfileId(viewingPost.authorId)}
+                   title="View Author Profile"
+                 >
+                   <UserAvatar 
+                     userId={viewingPost.authorId} 
+                     name={viewingPost.authorName || "Unknown Student"} 
+                     className="h-11 w-11 text-base shadow-2xs"
+                   />
+                 </div>
+                 <div>
+                   <p 
+                     className="font-semibold text-slate-900 dark:text-white cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                     onClick={() => setSelectedStudentProfileId(viewingPost.authorId)}
+                     title="View Author Profile"
+                   >
+                     {viewingPost.authorName}
+                   </p>
+                   <p className="text-xs text-slate-500">{viewingPost.authorDepartment} • {formatTimeAgo(viewingPost.createdAt)}</p>
+                 </div>
                </div>
+
+               <button
+                 type="button"
+                 onClick={() => setSelectedStudentProfileId(viewingPost.authorId)}
+                 className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-indigo-200 hover:bg-indigo-50/60 hover:text-indigo-600 transition dark:border-[#2E2E2E] dark:bg-[#202020] dark:text-slate-200 dark:hover:bg-[#282828] dark:hover:text-indigo-400 shadow-2xs"
+               >
+                 <User className="h-3.5 w-3.5 text-indigo-500" />
+                 <span>View Profile</span>
+               </button>
             </div>
 
             {/* Template Specs Grid */}
@@ -1001,7 +1054,15 @@ export default function StudentFindPeers() {
 
             {/* Footer action */}
             {viewingPost.authorId !== auth.currentUser?.uid && (
-              <div className="pt-4 border-t border-slate-100 dark:border-[#2A2A2A] flex justify-end">
+              <div className="pt-4 border-t border-slate-100 dark:border-[#2A2A2A] flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedStudentProfileId(viewingPost.authorId)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:border-indigo-200 hover:bg-indigo-50/60 hover:text-indigo-600 transition dark:border-[#2E2E2E] dark:bg-[#202020] dark:text-slate-200 dark:hover:bg-[#282828] dark:hover:text-indigo-400 shadow-2xs"
+                >
+                  <User className="h-4 w-4 text-indigo-500" />
+                  <span>View Profile</span>
+                </button>
                 <button 
                   onClick={() => {
                     window.location.href = `/student/messages?userId=${viewingPost.authorId}&name=${encodeURIComponent(viewingPost.authorName || "Peer")}`;
@@ -1192,6 +1253,16 @@ export default function StudentFindPeers() {
         confirmText="Yes, delete"
         isLoading={isDeleting}
       />
+
+      {/* Author Profile Modal */}
+      {selectedStudentProfileId && (
+        <StudentProfileModal
+          isOpen={!!selectedStudentProfileId}
+          studentId={selectedStudentProfileId}
+          onClose={() => setSelectedStudentProfileId(null)}
+          hideCgpa={true}
+        />
+      )}
     </DashboardLayout>
   );
 }
