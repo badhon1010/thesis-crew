@@ -1,4 +1,4 @@
-import { collection, getDocs, query, serverTimestamp, where, doc, updateDoc, deleteDoc, getDoc, writeBatch } from "firebase/firestore";
+import { collection, getDocs, query, serverTimestamp, where, doc, updateDoc, getDoc, writeBatch } from "firebase/firestore";
 import { db } from "./firestore";
 
 export interface ResearchTopicInput {
