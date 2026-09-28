@@ -39,17 +39,17 @@ async function extractTextFromPDF(file: File): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   let fullText = "";
-  
+
   // Extract up to 10 pages to avoid context length limits and performance issues
-  const numPages = Math.min(pdf.numPages, 10); 
-  
+  const numPages = Math.min(pdf.numPages, 10);
+
   for (let i = 1; i <= numPages; i++) {
     const page = await pdf.getPage(i);
     const textContent = await page.getTextContent();
     const pageText = textContent.items.map((item: any) => item.str).join(" ");
     fullText += pageText + "\n\n";
   }
-  
+
   return fullText;
 }
 
@@ -114,38 +114,51 @@ export async function extractPaperMetadataPDF(file: File): Promise<ExtractedPape
       throw new Error(error.message || "Failed to extract metadata from PDF using Groq.");
     }
   } else if (geminiKey) {
-    // --- GEMINI IMPLEMENTATION ---
-    try {
-      const genAI = getGenAI();
-      const model = genAI.getGenerativeModel({ 
-        model: "gemini-3.8-flash", // updated to valid gemini model
-        generationConfig: {
-          responseMimeType: "application/json",
-        }
-      });
+    // --- GEMINI IMPLEMENTATION WITH FALLBACK ---
+    const genAI = getGenAI();
+    const pdfPart = await fileToGenerativePart(file);
+    let lastError: any = null;
 
-      const prompt = `
-        You are an expert academic assistant. 
-        Read the attached research paper (PDF) and extract its metadata into a strict JSON object.
-        The JSON object must have exactly the following keys:
-        - "title": (string) The title of the paper.
-        - "authors": (array of strings) The full names of the authors.
-        - "venue": (string) The conference, journal, or preprint server name (e.g. "IEEE TKDE", "NeurIPS", "arXiv"). Leave empty string if not found.
-        - "publicationDate": (string) The publication or submission date in YYYY-MM-DD format. If only year is found, use YYYY-01-01. Leave empty string if not found.
-        - "keywords": (array of strings) A list of 3 to 6 keywords relevant to the paper. Extract from paper if available, otherwise generate them.
-        - "abstract": (string) A concise, one-paragraph summary of the paper focusing on: 1) Problem Statement, 2) Methodology, 3) Key Contributions, 4) Future Work. Do not use headings or bullet points.
+    const candidateModels = [
+      "gemini-3.5-flash-lite",
+      "gemini-3.1-flash-lite",
+      "gemini-3.7-flash",
+      "gemini-3.8-flash"
+    ];
 
-        Return ONLY the JSON object.
-      `;
+    for (const modelName of candidateModels) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: {
+            responseMimeType: "application/json",
+          }
+        });
 
-      const pdfPart = await fileToGenerativePart(file);
-      const result = await model.generateContent([prompt, pdfPart]);
-      const response = await result.response;
-      return JSON.parse(response.text().trim()) as ExtractedPaperMetadata;
-    } catch (error: any) {
-      console.error("Error generating AI metadata from PDF with Gemini:", error);
-      throw new Error(error.message || "Failed to extract metadata from PDF using Gemini.");
+        const prompt = `
+          You are an expert academic assistant. 
+          Read the attached research paper (PDF) and extract its metadata into a strict JSON object.
+          The JSON object must have exactly the following keys:
+          - "title": (string) The title of the paper.
+          - "authors": (array of strings) The full names of the authors.
+          - "venue": (string) The conference, journal, or preprint server name (e.g. "IEEE TKDE", "NeurIPS", "arXiv"). Leave empty string if not found.
+          - "publicationDate": (string) The publication or submission date in YYYY-MM-DD format. If only year is found, use YYYY-01-01. Leave empty string if not found.
+          - "keywords": (array of strings) A list of 3 to 6 keywords relevant to the paper. Extract from paper if available, otherwise generate them.
+          - "abstract": (string) A concise, one-paragraph summary of the paper focusing on: 1) Problem Statement, 2) Methodology, 3) Key Contributions, 4) Future Work. Do not use headings or bullet points.
+
+          Return ONLY the JSON object.
+        `;
+
+        const result = await model.generateContent([prompt, pdfPart]);
+        const response = await result.response;
+        return JSON.parse(response.text().trim()) as ExtractedPaperMetadata;
+      } catch (error: any) {
+        console.warn(`PDF extraction with ${modelName} failed, falling back:`, error?.message || error);
+        lastError = error;
+      }
     }
+
+    throw new Error(lastError?.message || "Failed to extract metadata from PDF using Gemini.");
   } else {
     throw new Error("No AI API key found. Please add VITE_GROQ_API_KEY or VITE_GEMINI_API_KEY to your .env file.");
   }
@@ -193,14 +206,97 @@ export function startResearchChat() {
 Your goal is to assist students and teachers with research-related questions, methodology, topic selection, literature review strategies, and academic writing tips.
 Keep your answers concise, structured, and highly relevant to academic research. Use Markdown formatting when appropriate.`;
 
-  if (groqKey) {
-    // --- GROQ IMPLEMENTATION ---
+  // Candidate models in priority order: start with fast, high-availability models to prevent 503 errors
+  const candidateModels = [
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-3.7-flash",
+    "gemini-3.8-flash"
+  ];
+
+  if (geminiKey) {
+    // --- RESILIENT GEMINI IMPLEMENTATION WITH MODEL FALLBACK ---
+    const genAI = getGenAI();
+    const chatHistory: Array<{ role: "user" | "model"; parts: [{ text: string }] }> = [];
+
+    return {
+      sendMessage: async (userMessage: string) => {
+        let lastError: any = null;
+
+        for (const modelName of candidateModels) {
+          try {
+            const model = genAI.getGenerativeModel({
+              model: modelName,
+              systemInstruction: systemInstruction
+            });
+
+            const chat = model.startChat({ history: chatHistory });
+            const result = await chat.sendMessage(userMessage);
+            const responseText = result.response.text();
+
+            // Save conversation turn to memory
+            chatHistory.push({ role: "user", parts: [{ text: userMessage }] });
+            chatHistory.push({ role: "model", parts: [{ text: responseText }] });
+
+            return {
+              response: {
+                text: () => responseText
+              }
+            };
+          } catch (err: any) {
+            console.warn(`Gemini model ${modelName} returned error, trying fallback model...`, err?.message || err);
+            lastError = err;
+          }
+        }
+
+        // If all Gemini candidates failed and Groq key is present, fallback to Groq
+        if (groqKey) {
+          try {
+            const groqMessages = [
+              { role: "system", content: systemInstruction },
+              ...chatHistory.map(h => ({
+                role: h.role === "model" ? "assistant" : "user",
+                content: h.parts[0].text
+              })),
+              { role: "user", content: userMessage }
+            ];
+
+            const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${groqKey}`
+              },
+              body: JSON.stringify({
+                model: "llama-3.3-70b-versatile",
+                messages: groqMessages,
+                temperature: 0.7,
+              })
+            });
+
+            const data = await response.json();
+            if (response.ok && data.choices?.[0]?.message?.content) {
+              const reply = data.choices[0].message.content;
+              chatHistory.push({ role: "user", parts: [{ text: userMessage }] });
+              chatHistory.push({ role: "model", parts: [{ text: reply }] });
+              return { response: { text: () => reply } };
+            }
+          } catch (groqErr) {
+            console.warn("Groq fallback also failed:", groqErr);
+          }
+        }
+
+        throw lastError || new Error("All AI models are currently busy. Please try again.");
+      }
+    };
+  } else if (groqKey) {
+    // --- GROQ ONLY IMPLEMENTATION ---
     const chatHistory: any[] = [{ role: "system", content: systemInstruction }];
 
     return {
       sendMessage: async (userMessage: string) => {
         chatHistory.push({ role: "user", content: userMessage });
-        
+
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
           headers: {
@@ -208,30 +304,21 @@ Keep your answers concise, structured, and highly relevant to academic research.
             "Authorization": `Bearer ${groqKey}`
           },
           body: JSON.stringify({
-            model: "openai/gpt-oss-20b",
+            model: "llama-3.3-70b-versatile",
             messages: chatHistory,
             temperature: 0.7,
           })
         });
-        
+
         const data = await response.json();
         if (!response.ok) throw new Error(data.error?.message || "Failed to call Groq API");
-        
+
         const reply = data.choices[0].message.content;
         chatHistory.push({ role: "assistant", content: reply });
-        
+
         return { response: { text: () => reply } };
       }
     };
-  } else if (geminiKey) {
-    // --- GEMINI IMPLEMENTATION ---
-    const genAI = getGenAI();
-    const model = genAI.getGenerativeModel({
-      model: "gemini-3.8-flash", // updated to valid gemini model
-      systemInstruction: systemInstruction
-    });
-
-    return model.startChat({ history: [] });
   } else {
     throw new Error("No AI API key found. Please add VITE_GROQ_API_KEY or VITE_GEMINI_API_KEY to your .env file.");
   }
