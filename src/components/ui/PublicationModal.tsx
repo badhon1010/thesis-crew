@@ -60,6 +60,7 @@ export interface PublicationFormData {
   paperUrl: string;
   codeUrl: string;
   projectUrl: string;
+  overleafUrl?: string;
   volume: string;
   pages: string;
   generatedCitations?: {
@@ -126,6 +127,7 @@ export function PublicationModal({ isOpen, onClose, onSave, editingPublication, 
   const [paperUrl, setPaperUrl] = useState("");
   const [codeUrl, setCodeUrl] = useState("");
   const [projectUrl, setProjectUrl] = useState("");
+  const [overleafUrl, setOverleafUrl] = useState("");
   const [volume, setVolume] = useState("");
   const [pages, setPages] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -152,6 +154,7 @@ export function PublicationModal({ isOpen, onClose, onSave, editingPublication, 
         setPaperUrl(editingPublication.paperUrl || "");
         setCodeUrl(editingPublication.codeUrl || "");
         setProjectUrl(editingPublication.projectUrl || "");
+        setOverleafUrl(editingPublication.overleafUrl || "");
         setVolume(editingPublication.volume || "");
         setPages(editingPublication.pages || "");
       } else {
@@ -169,6 +172,7 @@ export function PublicationModal({ isOpen, onClose, onSave, editingPublication, 
         setPaperUrl("");
         setCodeUrl("");
         setProjectUrl("");
+        setOverleafUrl("");
         setVolume("");
         setPages("");
       }
@@ -244,6 +248,7 @@ export function PublicationModal({ isOpen, onClose, onSave, editingPublication, 
     if (!isValidUrl(paperUrl)) return setError("Paper / PDF link must start with http:// or https://");
     if (!isValidUrl(codeUrl)) return setError("Code link must start with http:// or https://");
     if (!isValidUrl(projectUrl)) return setError("Project link must start with http:// or https://");
+    if (!isValidUrl(overleafUrl)) return setError("Overleaf link must start with http:// or https://");
     if (status === "published" && !publicationDate)
       return setError("Published papers need a publication date — this flips the group to Published.");
 
@@ -265,6 +270,7 @@ export function PublicationModal({ isOpen, onClose, onSave, editingPublication, 
         paperUrl: paperUrl.trim(),
         codeUrl: codeUrl.trim(),
         projectUrl: projectUrl.trim(),
+        overleafUrl: overleafUrl.trim(),
         volume: volume.trim(),
         pages: pages.trim(),
       };
@@ -502,6 +508,20 @@ export function PublicationModal({ isOpen, onClose, onSave, editingPublication, 
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-400">Project page</label>
                   <input value={projectUrl} onChange={(e) => setProjectUrl(e.target.value)} placeholder="https://..." className={inputCls} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-1.5 flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    <span className="flex items-center gap-1.5 font-bold text-emerald-700 dark:text-emerald-400">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500" /> Overleaf Editor URL
+                    </span>
+                    <span className="text-[11px] font-normal text-slate-400">Open paper in Overleaf for collaborative editing</span>
+                  </label>
+                  <input
+                    value={overleafUrl}
+                    onChange={(e) => setOverleafUrl(e.target.value)}
+                    placeholder="https://www.overleaf.com/project/..."
+                    className={inputCls}
+                  />
                 </div>
               </div>
             </div>

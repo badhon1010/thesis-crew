@@ -188,6 +188,7 @@ interface Publication {
   paperUrl?: string;
   codeUrl?: string;
   projectUrl?: string;
+  overleafUrl?: string;
   volume?: string;
   pages?: string;
   createdBy?: string;
@@ -925,12 +926,13 @@ export default function ResearchGroupManagement() {
     const links: string[] = [];
     if (pub.doi) links.push(`https://doi.org/${pub.doi}`);
     if (pub.paperUrl) links.push(pub.paperUrl);
+    if (pub.overleafUrl) links.push(`Overleaf: ${pub.overleafUrl}`);
     if (pub.projectUrl) links.push(pub.projectUrl);
     return `${pub.title} — ${pub.venue}${links.length ? `\n${links.join("\n")}` : ""}`;
   };
 
   const handleCopyPublicationLink = async (pub: Publication) => {
-    const bestLink = pub.paperUrl || (pub.doi ? `https://doi.org/${pub.doi}` : "") || pub.projectUrl || pub.codeUrl || "";
+    const bestLink = pub.paperUrl || (pub.doi ? `https://doi.org/${pub.doi}` : "") || pub.overleafUrl || pub.projectUrl || pub.codeUrl || "";
     const text = bestLink || getPublicationShareText(pub);
     try {
       await navigator.clipboard.writeText(text);
@@ -2863,7 +2865,8 @@ export default function ResearchGroupManagement() {
                 p.venue.toLowerCase().includes(q) ||
                 (p.authors || []).join(" ").toLowerCase().includes(q) ||
                 (p.keywords || []).join(" ").toLowerCase().includes(q) ||
-                (p.doi || "").toLowerCase().includes(q)
+                (p.doi || "").toLowerCase().includes(q) ||
+                (p.overleafUrl || "").toLowerCase().includes(q)
               );
             })
             .sort((a, b) => {
@@ -2907,6 +2910,20 @@ export default function ResearchGroupManagement() {
                           <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold capitalize ${statusStyles[pub.status] || statusStyles.draft}`}>
                             {pub.status.replace("-", " ")}
                           </span>
+                          {pub.overleafUrl && (
+                            <a
+                              href={pub.overleafUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 rounded-full bg-emerald-100/90 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800 transition-all hover:bg-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:hover:bg-emerald-500/30"
+                              title="Open in Overleaf editor"
+                            >
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              Overleaf
+                              <ExternalLink className="h-2.5 w-2.5 opacity-70" />
+                            </a>
+                          )}
                         </div>
                         <h3
                           onClick={(e) => {
@@ -3032,6 +3049,32 @@ export default function ResearchGroupManagement() {
                       <a href={pub.projectUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:scale-105 active:scale-95 transition-all dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#0F0F0F]">
                         <Globe className="h-3 w-3" /> Project page
                       </a>
+                    )}
+                    {pub.overleafUrl ? (
+                      <a
+                        href={pub.overleafUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 hover:scale-105 active:scale-95 transition-all shadow-sm hover:shadow dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300 dark:hover:bg-emerald-500/25"
+                      >
+                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                        Edit in Overleaf
+                        <ExternalLink className="h-3 w-3 opacity-70" />
+                      </a>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingPublication(pub);
+                          setIsPublicationModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-500 hover:border-emerald-400 hover:bg-emerald-50/70 hover:text-emerald-700 hover:scale-105 active:scale-95 transition-all dark:border-[#333] dark:text-slate-400 dark:hover:border-emerald-500/40 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-300"
+                        title="Attach Overleaf editor URL"
+                      >
+                        <Plus className="h-3 w-3" /> Overleaf
+                      </button>
                     )}
                     <div className="ml-auto flex items-center gap-1.5">
                       {pub.generatedCitations?.apa && (
