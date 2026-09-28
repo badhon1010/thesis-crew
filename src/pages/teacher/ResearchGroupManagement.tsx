@@ -2910,20 +2910,6 @@ export default function ResearchGroupManagement() {
                           <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold capitalize ${statusStyles[pub.status] || statusStyles.draft}`}>
                             {pub.status.replace("-", " ")}
                           </span>
-                          {pub.overleafUrl && (
-                            <a
-                              href={pub.overleafUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-1 rounded-full bg-emerald-100/90 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800 transition-all hover:bg-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:hover:bg-emerald-500/30"
-                              title="Open in Overleaf editor"
-                            >
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                              Overleaf
-                              <ExternalLink className="h-2.5 w-2.5 opacity-70" />
-                            </a>
-                          )}
                         </div>
                         <h3
                           onClick={(e) => {
@@ -3040,16 +3026,6 @@ export default function ResearchGroupManagement() {
                         <FileDown className="h-3 w-3" /> Paper / PDF <ExternalLink className="h-3 w-3" />
                       </a>
                     )}
-                    {pub.codeUrl && (
-                      <a href={pub.codeUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:scale-105 active:scale-95 transition-all dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#0F0F0F]">
-                        <Code2 className="h-3 w-3" /> Code
-                      </a>
-                    )}
-                    {pub.projectUrl && (
-                      <a href={pub.projectUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:scale-105 active:scale-95 transition-all dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#0F0F0F]">
-                        <Globe className="h-3 w-3" /> Project page
-                      </a>
-                    )}
                     {pub.overleafUrl ? (
                       <a
                         href={pub.overleafUrl}
@@ -3075,6 +3051,16 @@ export default function ResearchGroupManagement() {
                       >
                         <Plus className="h-3 w-3" /> Overleaf
                       </button>
+                    )}
+                    {pub.codeUrl && (
+                      <a href={pub.codeUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:scale-105 active:scale-95 transition-all dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#0F0F0F]">
+                        <Code2 className="h-3 w-3" /> Code
+                      </a>
+                    )}
+                    {pub.projectUrl && (
+                      <a href={pub.projectUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:scale-105 active:scale-95 transition-all dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#0F0F0F]">
+                        <Globe className="h-3 w-3" /> Project page
+                      </a>
                     )}
                     <div className="ml-auto flex items-center gap-1.5">
                       {pub.generatedCitations?.apa && (
