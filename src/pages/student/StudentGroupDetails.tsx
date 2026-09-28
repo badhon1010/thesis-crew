@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -27,6 +27,7 @@ import {
   Video,
   ListTodo,
   Quote,
+  Loader2,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 
@@ -39,6 +40,11 @@ import { TaskViewModal } from "@/components/ui/TaskViewModal";
 import { MeetingViewModal } from "@/components/ui/MeetingViewModal";
 import { PublicationModal } from "@/components/ui/PublicationModal";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { DocumentModal } from "@/components/ui/DocumentModal";
+import { rtdb } from "@/firebase/database";
+import { ref as dbRef, get as dbGet, remove as dbRemove } from "firebase/database";
+import { storage } from "@/firebase/storage";
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import {
   doc,
   getDoc,
@@ -118,6 +124,10 @@ interface Document {
   url: string;
   uploadedBy: string;
   uploadedAt?: unknown;
+  isLink?: boolean;
+  rtdbPath?: string;
+  fileName?: string;
+  fileType?: string;
 }
 
 interface Meeting {
@@ -207,6 +217,37 @@ export default function StudentGroupDetails() {
   const [editingPublication, setEditingPublication] = useState<Publication | null>(null);
   const [deletePublicationId, setDeletePublicationId] = useState<string | null>(null);
   const [copiedPubId, setCopiedPubId] = useState<string | null>(null);
+
+  // Document states
+  const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
+  const [documentFilter, setDocumentFilter] = useState<"all" | "files" | "links">("all");
+  const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null);
+  const [isDeletingDoc, setIsDeletingDoc] = useState(false);
+  const [viewingDocId, setViewingDocId] = useState<string | null>(null);
+
+  const toMillis = (val: unknown): number => {
+    if (!val) return 0;
+    if (typeof (val as { toMillis?: () => number }).toMillis === "function") {
+      return (val as { toMillis: () => number }).toMillis();
+    }
+    if (typeof (val as { seconds?: number }).seconds === "number") {
+      return (val as { seconds: number }).seconds * 1000;
+    }
+    return 0;
+  };
+
+  const sortedDocuments = useMemo(
+    () => [...documents].sort((a, b) => toMillis(b.uploadedAt) - toMillis(a.uploadedAt)),
+    [documents]
+  );
+
+  const filteredDocuments = useMemo(
+    () =>
+      sortedDocuments.filter((d) =>
+        documentFilter === "all" ? true : documentFilter === "files" ? !d.isLink : !!d.isLink
+      ),
+    [sortedDocuments, documentFilter]
+  );
 
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({
     show: false,
@@ -498,6 +539,114 @@ export default function StudentGroupDetails() {
       }
     }
     setDraggedTaskId(null);
+  };
+
+  const handleSaveDocument = async (data: { title: string; type: string; url: string; file: File | null; isLink: boolean }) => {
+    if (!id || !auth.currentUser) return;
+    try {
+      let documentUrl = data.url;
+      let rtdbPath: string | null = null;
+
+      if (!data.isLink && data.file) {
+        console.log("Uploading file to Firebase Storage:", data.file.name, "Size:", data.file.size);
+        
+        const safeFileName = data.file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+        const docKey = `${Date.now()}_${safeFileName}`;
+        rtdbPath = `researchGroups/${id}/documents/${docKey}`;
+        
+        const fileRef = storageRef(storage, rtdbPath);
+        await uploadBytes(fileRef, data.file);
+        documentUrl = await getDownloadURL(fileRef);
+        console.log("Firebase Storage upload finished.");
+      }
+
+      const currentStudent = teamMembers.find(
+        (m) => m.studentEmail === auth.currentUser?.email || m.studentId === auth.currentUser?.uid
+      );
+      const uploaderName = currentStudent?.studentName || auth.currentUser.displayName || "Student";
+
+      console.log("Saving document metadata to Firestore...");
+      await addDoc(collection(db, "researchGroups", id, "documents"), {
+        title: data.title,
+        type: data.type,
+        url: documentUrl,
+        isLink: data.isLink,
+        rtdbPath,
+        fileName: data.file?.name || null,
+        fileType: data.file?.type || null,
+        uploadedBy: uploaderName,
+        uploadedAt: serverTimestamp(),
+      });
+
+      showToast("success", "Resource added successfully");
+    } catch (error) {
+      console.error("Error saving document:", error);
+      showToast("error", "Failed to upload document");
+      throw error;
+    }
+  };
+
+  const triggerDeleteDocument = (docData: Document) => {
+    setDocumentToDelete(docData);
+  };
+
+  const confirmDeleteDocument = async () => {
+    if (!id || !documentToDelete) return;
+    setIsDeletingDoc(true);
+    try {
+      if (!documentToDelete.isLink && documentToDelete.rtdbPath) {
+        if (documentToDelete.rtdbPath.startsWith("researchGroupDocuments/")) {
+          await dbRemove(dbRef(rtdb, documentToDelete.rtdbPath)).catch((e) =>
+            console.error("Error deleting from Realtime Database", e)
+          );
+        } else {
+          const fileRef = storageRef(storage, documentToDelete.rtdbPath);
+          await deleteObject(fileRef).catch((e) =>
+            console.error("Error deleting from Storage", e)
+          );
+        }
+      }
+      await deleteDoc(doc(db, "researchGroups", id, "documents", documentToDelete.id));
+      showToast("success", "Resource deleted successfully");
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      showToast("error", "Failed to delete resource");
+    } finally {
+      setIsDeletingDoc(false);
+      setDocumentToDelete(null);
+    }
+  };
+
+  const handleViewDocument = async (docData: Document) => {
+    if (docData.isLink || (!docData.rtdbPath?.startsWith("researchGroupDocuments/") && docData.url)) {
+      window.open(docData.url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (!docData.rtdbPath) {
+      showToast("error", "This file is no longer available.");
+      return;
+    }
+    setViewingDocId(docData.id);
+    try {
+      if (docData.rtdbPath.startsWith("researchGroupDocuments/")) {
+        const snapshot = await dbGet(dbRef(rtdb, docData.rtdbPath));
+        if (!snapshot.exists()) {
+          showToast("error", "This file is no longer available.");
+          return;
+        }
+        const stored = snapshot.val() as { data: string; type?: string; name?: string };
+        const res = await fetch(stored.data);
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        window.open(objectUrl, "_blank", "noopener,noreferrer");
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      }
+    } catch (error) {
+      console.error("Error opening document:", error);
+      showToast("error", "Failed to open this file.");
+    } finally {
+      setViewingDocId(null);
+    }
   };
 
 
@@ -1008,11 +1157,9 @@ export default function StudentGroupDetails() {
                   </h2>
                   <div className="space-y-3">
                     {documents.slice(0, 3).map((doc) => (
-                      <a 
+                      <div 
                         key={doc.id} 
-                        href={doc.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        onClick={() => handleViewDocument(doc)}
                         className="group flex cursor-pointer items-start gap-3 rounded-lg p-2 -mx-2 transition-all hover:-translate-y-0.5 hover:bg-slate-50 active:scale-[0.98] dark:hover:bg-[#222]"
                       >
                         <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400 transition-colors group-hover:text-indigo-500" />
@@ -1020,7 +1167,7 @@ export default function StudentGroupDetails() {
                           <p className="truncate text-sm font-semibold text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">{doc.title}</p>
                           <p className="mt-0.5 text-xs capitalize text-slate-500 dark:text-slate-400">{doc.type}</p>
                         </div>
-                      </a>
+                      </div>
                     ))}
                     {documents.length === 0 && (
                       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-8 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
@@ -1463,12 +1610,40 @@ export default function StudentGroupDetails() {
 
         {activeTab === "documents" && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-            <div className="mb-6 flex items-center justify-between">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Documents & Resources</h2>
-              <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-indigo-700 hover:scale-105 active:scale-95 shadow-sm hover:shadow-md">
+              <button
+                onClick={() => setIsDocumentModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+              >
                 <Upload className="h-4 w-4" /> Upload Document
               </button>
             </div>
+
+            {documents.length > 0 && (
+              <div className="mb-6 flex gap-2">
+                {(
+                  [
+                    { key: "all", label: "All", count: documents.length },
+                    { key: "files", label: "Files", count: documents.filter((d) => !d.isLink).length },
+                    { key: "links", label: "Links", count: documents.filter((d) => !!d.isLink).length },
+                  ] as const
+                ).map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => setDocumentFilter(f.key)}
+                    className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                      documentFilter === f.key
+                        ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300"
+                        : "border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:border-[#2A2A2A] dark:text-slate-400 dark:hover:text-slate-200"
+                    }`}
+                  >
+                    {f.label} <span className="text-xs opacity-70">({f.count})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="space-y-3">
               {documents.length === 0 ? (
                 <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 py-16 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
@@ -1476,13 +1651,32 @@ export default function StudentGroupDetails() {
                     <FileText className="h-8 w-8" />
                   </div>
                   <p className="text-xl font-bold text-slate-900 dark:text-white">No Documents Yet</p>
-                  <p className="mt-2 max-w-sm text-sm text-slate-500 dark:text-slate-400">Upload papers, datasets, code, and other resources relevant to your research.</p>
+                  <p className="mt-2 max-w-sm text-sm text-slate-500 dark:text-slate-400">
+                    Upload papers, datasets, code, and other resources relevant to your research.
+                  </p>
+                </div>
+              ) : filteredDocuments.length === 0 ? (
+                <div className="py-12 text-center">
+                  {documentFilter === "links" ? (
+                    <LinkIcon className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
+                  ) : (
+                    <FileText className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
+                  )}
+                  <p className="mt-4 text-sm font-medium text-slate-900 dark:text-white">
+                    No {documentFilter} to show
+                  </p>
+                  <button
+                    onClick={() => setDocumentFilter("all")}
+                    className="mt-2 text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                  >
+                    Show all resources
+                  </button>
                 </div>
               ) : (
-                documents.map((doc) => (
+                filteredDocuments.map((doc) => (
                   <div
                     key={doc.id}
-                    onClick={() => window.open(doc.url, "_blank")}
+                    onClick={() => handleViewDocument(doc)}
                     className="group flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 p-4 hover:border-indigo-200 hover:shadow-md hover:-translate-y-1 transition-all duration-200 dark:border-[#2A2A2A] dark:hover:border-indigo-500/30 dark:hover:bg-[#1a1a1a]"
                   >
                     <div className="flex flex-1 items-center gap-4">
@@ -1497,23 +1691,38 @@ export default function StudentGroupDetails() {
                             : "bg-slate-100 text-slate-600 dark:bg-slate-500/20 dark:text-slate-400"
                         }`}
                       >
-                        <FileText className="h-5 w-5" />
+                        {doc.isLink ? <LinkIcon className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
                       </div>
                       <div>
                         <h3 className="font-semibold text-slate-900 dark:text-white">{doc.title}</h3>
                         <p className="mt-0.5 text-xs capitalize text-slate-500 dark:text-slate-400">
-                          {doc.type} • Uploaded by {doc.uploadedBy}
+                          {doc.type} • {doc.isLink ? "Shared" : "Uploaded"} by {doc.uploadedBy}
                         </p>
                       </div>
                     </div>
                     <div className="flex gap-2">
                       <div className="flex flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10">
-                          <ExternalLink className="h-4 w-4" />
-                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewDocument(doc);
+                          }}
+                          disabled={viewingDocId === doc.id}
+                          className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50 disabled:opacity-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
+                        >
+                          {viewingDocId === doc.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </button>
                       </div>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); }} // Implement delete logic if needed
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerDeleteDocument(doc);
+                        }}
+                        disabled={isDeletingDoc}
                         className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -1976,6 +2185,21 @@ export default function StudentGroupDetails() {
         title="Delete Publication"
         message="Are you sure you want to delete this publication? This action cannot be undone."
         confirmText="Delete Publication"
+      />
+
+      <DocumentModal
+        isOpen={isDocumentModalOpen}
+        onClose={() => setIsDocumentModalOpen(false)}
+        onSave={handleSaveDocument}
+      />
+
+      <ConfirmModal
+        isOpen={!!documentToDelete}
+        onClose={() => setDocumentToDelete(null)}
+        onConfirm={confirmDeleteDocument}
+        title="Delete Resource"
+        message="Are you sure you want to delete this resource? This action cannot be undone."
+        confirmText="Delete Resource"
       />
     </DashboardLayout>
   );
