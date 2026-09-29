@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useMemo } from "react";
+import { useRef, useState, useEffect } from "react";
 import {
   X,
   Upload,
@@ -120,7 +120,7 @@ export function DocumentModal({ isOpen, onClose, onSave }: DocumentModalProps) {
     if (!isOpen) resetForm();
   }, [isOpen]);
 
-  const FileIcon = useMemo(() => (file ? iconForFile(file.name) : Upload), [file]);
+  const FileIcon = file ? iconForFile(file.name) : Upload;
 
   if (!isOpen) return null;
 

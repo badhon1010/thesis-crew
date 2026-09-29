@@ -297,7 +297,11 @@ export default function StudentResearchPapers() {
     requestRef.current?.abort();
     const controller = new AbortController();
     requestRef.current = controller;
-    append ? setLoadingMore(true) : setLoading(true);
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
     setError("");
 
     const fromYear = year ? Number(year) : EARLIEST_YEAR;
@@ -516,7 +520,7 @@ export default function StudentResearchPapers() {
   const findFreeFullText = async (work: CrossrefWork, key: string) => {
     const title = work.title?.[0] || "research paper";
     if (!work.DOI) {
-      window.open(`https://scholar.google.com/scholar?q=${encodeURIComponent(`\"${title}\"`)}`, "_blank", "noopener,noreferrer");
+      window.open(`https://scholar.google.com/scholar?q=${encodeURIComponent(`"${title}"`)}`, "_blank", "noopener,noreferrer");
       return;
     }
     setFreeTextLinks((current) => ({ ...current, [key]: { ...current[key], loading: true } }));
@@ -527,10 +531,10 @@ export default function StudentResearchPapers() {
       const locations = [data.best_oa_location, ...(data.locations || [])].filter(Boolean);
       const url = locations.find((location) => location?.pdf_url)?.pdf_url || locations.find((location) => location?.landing_page_url)?.landing_page_url;
       setFreeTextLinks((current) => ({ ...current, [key]: { url, checked: true } }));
-      if (!url) window.open(`https://scholar.google.com/scholar?q=${encodeURIComponent(`\"${title}\"`)}`, "_blank", "noopener,noreferrer");
+      if (!url) window.open(`https://scholar.google.com/scholar?q=${encodeURIComponent(`"${title}"`)}`, "_blank", "noopener,noreferrer");
     } catch {
       setFreeTextLinks((current) => ({ ...current, [key]: { checked: true } }));
-      window.open(`https://scholar.google.com/scholar?q=${encodeURIComponent(`\"${title}\"`)}`, "_blank", "noopener,noreferrer");
+      window.open(`https://scholar.google.com/scholar?q=${encodeURIComponent(`"${title}"`)}`, "_blank", "noopener,noreferrer");
     }
   };
 
