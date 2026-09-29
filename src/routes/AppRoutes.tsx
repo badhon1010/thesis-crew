@@ -20,6 +20,7 @@ import StudentGroupDetails from "@/pages/student/StudentGroupDetails";
 import StudentFindPeers from "@/pages/student/StudentFindPeers";
 import StudentMessages from "@/pages/student/StudentMessages";
 import StudentRequests from "@/pages/student/StudentRequests";
+import StudentResearchPapers from "@/pages/student/StudentResearchPapers";
 import { AdminRoute } from "@/components/auth/AdminRoute";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminUsers from "@/pages/admin/AdminUsers";
@@ -46,6 +47,7 @@ export function AppRoutes() {
       </Route>
 
       <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
+      <Route path="/teacher/research-papers" element={<StudentResearchPapers />} />
       <Route path="/teacher/topics" element={<TeacherResearchTopics />} />
       <Route path="/teacher/research-groups" element={<TeacherResearchGroups />} />
       <Route path="/teacher/research-groups/:id" element={<ResearchGroupManagement />} />
@@ -57,6 +59,7 @@ export function AppRoutes() {
 
       <Route path="/student/dashboard" element={<StudentDashboard />} />
       <Route path="/student/research-topics" element={<ResearchTopics />} />
+      <Route path="/student/research-papers" element={<StudentResearchPapers />} />
       <Route path="/student/research-topics/:id" element={<StudentTopicDetails />} />
       <Route path="/student/profile" element={<StudentProfile />} />
       <Route path="/student/my-groups" element={<StudentMyGroups />} />

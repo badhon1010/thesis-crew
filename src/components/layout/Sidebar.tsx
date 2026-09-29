@@ -16,6 +16,7 @@ import {
   FolderKanban,
   ShieldCheck,
   MessageSquare,
+  Search,
 } from "lucide-react";
 import { auth } from "../../firebase/auth";
 import { signOut } from "firebase/auth";
@@ -97,6 +98,7 @@ export function Sidebar({ role, isOpen, onClose, isCollapsed, onToggleCollapse }
       ? [
           { name: "Dashboard", path: "/student/dashboard", icon: LayoutDashboard },
           { name: "Research Topics", path: "/student/research-topics", icon: BookOpen },
+          { name: "Research Papers", path: "/student/research-papers", icon: Search },
           { name: "My Requests", path: "/student/requests", icon: FolderKanban },
           { name: "My Research Groups", path: "/student/my-groups", icon: Users },
           { name: "Find Peers", path: "/student/find-peers", icon: UserRoundPlus },
@@ -105,6 +107,7 @@ export function Sidebar({ role, isOpen, onClose, isCollapsed, onToggleCollapse }
       : role === "teacher"
       ? [
           { name: "Dashboard", path: "/teacher/dashboard", icon: LayoutDashboard },
+          { name: "Research Papers", path: "/teacher/research-papers", icon: Search },
           { name: "Create Research Topic", path: "/teacher/topics/create", icon: SquarePen },
           { name: "My Research Topics", path: "/teacher/topics", icon: SquareLibrary },
           { name: "Research Group", path: "/teacher/research-groups", icon: Users },
