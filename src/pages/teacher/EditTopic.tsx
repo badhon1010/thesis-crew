@@ -116,7 +116,7 @@ export default function EditTopic() {
 
   return (
     <DashboardLayout role="teacher">
-      <div className="mx-auto max-w-4xl px-2 sm:px-0">
+      <div className="mx-auto max-w-6xl px-2 sm:px-4">
         
         <ToastAlert
           show={toast.show}

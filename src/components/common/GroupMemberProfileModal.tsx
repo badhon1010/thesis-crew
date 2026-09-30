@@ -1,8 +1,9 @@
-import { X, User, GraduationCap, Award, BookOpen, Code, Users } from "lucide-react";
+import { X, GraduationCap, Award, BookOpen, Code, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
 import type { TeamMemberInfo } from "@/firebase/teamFormation";
+import { UserAvatar } from "./UserAvatar";
 
 interface StudentProfile {
   name: string;
@@ -12,6 +13,7 @@ interface StudentProfile {
   researchInterests?: string;
   skills?: string[];
   email?: string;
+  photoURL?: string;
 }
 
 interface GroupMemberProfileModalProps {
@@ -38,13 +40,14 @@ export function GroupMemberProfileModal({
         try {
           for (const member of teamMembers) {
             try {
-              const docRef = doc(db, "users", member.studentId);
+              const uid = member.uid || member.studentId;
+              const docRef = doc(db, "users", uid);
               const docSnap = await getDoc(docRef);
               if (docSnap.exists()) {
-                profileMap.set(member.studentId, docSnap.data() as StudentProfile);
+                profileMap.set(uid, docSnap.data() as StudentProfile);
               } else {
                 // Use the data from teamMembers if profile doesn't exist
-                profileMap.set(member.studentId, {
+                profileMap.set(uid, {
                   name: member.name,
                   studentId: member.studentId,
                   email: member.email,
@@ -54,9 +57,9 @@ export function GroupMemberProfileModal({
                 });
               }
             } catch (error) {
-              console.error(`Failed to load profile for ${member.studentId}:`, error);
+              console.error(`Failed to load profile for ${member.uid}:`, error);
               // Use fallback data
-              profileMap.set(member.studentId, {
+              profileMap.set(member.uid || member.studentId, {
                 name: member.name,
                 studentId: member.studentId,
                 email: member.email,
@@ -76,7 +79,7 @@ export function GroupMemberProfileModal({
       fetchProfiles();
       // Set first member as selected by default
       if (teamMembers.length > 0) {
-        setSelectedMemberId(teamMembers[0].studentId);
+        setSelectedMemberId(teamMembers[0].uid || teamMembers[0].studentId);
       }
     }
   }, [isOpen, teamMembers]);
@@ -130,20 +133,25 @@ export function GroupMemberProfileModal({
                     Team Members
                   </p>
                   <div className="space-y-2">
-                    {teamMembers.map((member, index) => (
+                    {teamMembers.map((member, index) => {
+                      const memberUid = member.uid || member.studentId;
+                      return (
                       <button
-                        key={member.studentId}
-                        onClick={() => setSelectedMemberId(member.studentId)}
+                        key={memberUid}
+                        onClick={() => setSelectedMemberId(memberUid)}
                         className={`w-full rounded-lg p-3 text-left transition-colors ${
-                          selectedMemberId === member.studentId
+                          selectedMemberId === memberUid
                             ? "bg-indigo-50 text-indigo-900 dark:bg-indigo-500/20 dark:text-indigo-200"
                             : "hover:bg-slate-100 dark:hover:bg-[#1A1A1A]"
                         }`}
                       >
                         <div className="flex items-center gap-2">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-xs font-bold text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400">
-                            {member.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
-                          </div>
+                          <UserAvatar 
+                            userId={memberUid} 
+                            name={member.name} 
+                            photoURL={profiles.get(memberUid)?.photoURL}
+                            className="h-8 w-8 text-xs rounded-lg" 
+                          />
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
                               {member.name}
@@ -156,7 +164,7 @@ export function GroupMemberProfileModal({
                           </div>
                         </div>
                       </button>
-                    ))}
+                    )})}
                   </div>
                 </div>
               </div>
@@ -167,9 +175,12 @@ export function GroupMemberProfileModal({
                   <div className="space-y-6">
                     {/* Student Info */}
                     <div className="flex items-center gap-4">
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
-                        <User className="h-8 w-8" />
-                      </div>
+                      <UserAvatar 
+                        userId={selectedMemberId || selectedProfile.studentId} 
+                        name={selectedProfile.name} 
+                        photoURL={selectedProfile.photoURL}
+                        className="h-16 w-16 text-xl" 
+                      />
                       <div>
                         <h4 className="text-xl font-bold text-slate-900 dark:text-white">
                           {selectedProfile.name || "N/A"}

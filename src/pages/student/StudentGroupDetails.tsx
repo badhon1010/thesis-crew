@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -27,6 +27,19 @@ import {
   Video,
   ListTodo,
   Quote,
+  Loader2,
+  Search,
+  Share2,
+  Globe,
+  Code2,
+  GraduationCap,
+  FileDown,
+  Award,
+  Sparkles,
+  Send,
+  Building2,
+  Presentation,
+  Target,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 
@@ -37,15 +50,18 @@ import { StudentProfileModal } from "@/components/common/StudentProfileModal";
 import { MilestoneViewModal } from "@/components/ui/MilestoneViewModal";
 import { TaskViewModal } from "@/components/ui/TaskViewModal";
 import { MeetingViewModal } from "@/components/ui/MeetingViewModal";
-import { PublicationModal } from "@/components/ui/PublicationModal";
+import { PublicationModal, type PublicationFormData, type PublicationStatus, type PublicationType } from "@/components/ui/PublicationModal";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { DocumentModal } from "@/components/ui/DocumentModal";
+import { rtdb } from "@/firebase/database";
+import { ref as dbRef, get as dbGet, remove as dbRemove } from "firebase/database";
+import { storage } from "@/firebase/storage";
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import {
   doc,
   getDoc,
   collection,
   query,
-  where,
-  getDocs,
   onSnapshot,
   updateDoc,
   addDoc,
@@ -55,6 +71,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
 import { notifyTeacherOfTaskUpdate, notifyTeacherOfMilestoneCompletion } from "@/firebase/notifications";
+import { UserAvatar } from "@/components/common/UserAvatar";
 
 interface ResearchTopic {
   id: string;
@@ -119,6 +136,10 @@ interface Document {
   url: string;
   uploadedBy: string;
   uploadedAt?: unknown;
+  isLink?: boolean;
+  rtdbPath?: string;
+  fileName?: string;
+  fileType?: string;
 }
 
 interface Meeting {
@@ -142,15 +163,29 @@ interface Publication {
   id: string;
   title: string;
   venue: string;
-  type: string;
-  status: string;
+  publisher?: string;
+  type: PublicationType | "conference" | "journal" | "workshop" | "preprint" | string;
+  status: PublicationStatus | "draft" | "submitted" | "under-review" | "accepted" | "published" | "rejected" | string;
+  authors?: string[];
   abstract?: string;
+  keywords?: string[];
   submissionDate?: string;
   acceptanceDate?: string;
   publicationDate?: string;
   doi?: string;
   paperUrl?: string;
+  codeUrl?: string;
+  projectUrl?: string;
+  overleafUrl?: string;
+  volume?: string;
+  pages?: string;
+  createdBy?: string;
   createdAt?: unknown;
+  updatedAt?: unknown;
+  generatedCitations?: {
+    apa: string;
+    ieee: string;
+  };
 }
 
 type TabType = "overview" | "milestones" | "tasks" | "chat" | "documents" | "meetings" | "publications";
@@ -203,6 +238,42 @@ export default function StudentGroupDetails() {
   const [isPublicationModalOpen, setIsPublicationModalOpen] = useState(false);
   const [editingPublication, setEditingPublication] = useState<Publication | null>(null);
   const [deletePublicationId, setDeletePublicationId] = useState<string | null>(null);
+  const [copiedPubId, setCopiedPubId] = useState<string | null>(null);
+  const [pubSectionTab, setPubSectionTab] = useState<"all" | "published" | "ongoing">("all");
+  const [pubSearch, setPubSearch] = useState("");
+  const [pubStatusFilter, setPubStatusFilter] = useState<"all" | Publication["status"]>("all");
+  const [pubTypeFilter, setPubTypeFilter] = useState<"all" | Publication["type"]>("all");
+
+  // Document states
+  const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
+  const [documentFilter, setDocumentFilter] = useState<"all" | "files" | "links">("all");
+  const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null);
+  const [isDeletingDoc, setIsDeletingDoc] = useState(false);
+  const [viewingDocId, setViewingDocId] = useState<string | null>(null);
+
+  const toMillis = (val: unknown): number => {
+    if (!val) return 0;
+    if (typeof (val as { toMillis?: () => number }).toMillis === "function") {
+      return (val as { toMillis: () => number }).toMillis();
+    }
+    if (typeof (val as { seconds?: number }).seconds === "number") {
+      return (val as { seconds: number }).seconds * 1000;
+    }
+    return 0;
+  };
+
+  const sortedDocuments = useMemo(
+    () => [...documents].sort((a, b) => toMillis(b.uploadedAt) - toMillis(a.uploadedAt)),
+    [documents]
+  );
+
+  const filteredDocuments = useMemo(
+    () =>
+      sortedDocuments.filter((d) =>
+        documentFilter === "all" ? true : documentFilter === "files" ? !d.isLink : !!d.isLink
+      ),
+    [sortedDocuments, documentFilter]
+  );
 
   const [toast, setToast] = useState<{ show: boolean; type: "success" | "error"; message: string }>({
     show: false,
@@ -255,37 +326,32 @@ export default function StudentGroupDetails() {
             const memberIds = (teamData.memberIds as string[]) || [];
 
             if (memberIds.length > 0) {
-              const joinRequestsQuery = query(
-                collection(db, "joinRequests"),
-                where("projectId", "==", id),
-                where("status", "==", "accepted")
-              );
-              const joinRequestsSnap = await getDocs(joinRequestsQuery);
-
               const membersMap = new Map<string, TeamMember>();
-
-              joinRequestsSnap.docs.forEach((doc) => {
-                const data = doc.data();
-                if (data.requestType === "group" && Array.isArray(data.teamMembers) && data.teamMembers.length > 0) {
-                  data.teamMembers.forEach((tm: { studentId: string; name: string; email?: string; department?: string }) => {
-                    if (tm.studentId && !membersMap.has(tm.studentId)) {
-                      membersMap.set(tm.studentId, {
-                        studentId: tm.studentId,
-                        studentName: tm.name || "Unnamed student",
-                        studentEmail: tm.email,
-                        department: tm.department,
-                      });
-                    }
-                  });
-                } else if (data.studentId && !membersMap.has(data.studentId)) {
-                  membersMap.set(data.studentId, {
-                    studentId: data.studentId,
-                    studentName: data.studentName || "Unnamed student",
-                    studentEmail: data.studentEmail,
-                    department: data.studentDepartment,
+              await Promise.all(memberIds.map(async (memberId) => {
+                try {
+                  const userDoc = await getDoc(doc(db, "users", memberId));
+                  if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    membersMap.set(memberId, {
+                      studentId: memberId,
+                      studentName: data.name || "Unnamed student",
+                      studentEmail: data.email,
+                      department: data.department,
+                    });
+                  } else {
+                    membersMap.set(memberId, {
+                      studentId: memberId,
+                      studentName: "Unnamed student",
+                    });
+                  }
+                } catch (error) {
+                  console.error("Failed to load team member profile:", error);
+                  membersMap.set(memberId, {
+                    studentId: memberId,
+                    studentName: "Unnamed student",
                   });
                 }
-              });
+              }));
 
               setTeamMembers(Array.from(membersMap.values()));
             } else {
@@ -501,23 +567,137 @@ export default function StudentGroupDetails() {
     setDraggedTaskId(null);
   };
 
-
-
-  const handleSavePublication = async (publicationData: Omit<Publication, "id" | "createdAt">) => {
-    if (!id) return;
+  const handleSaveDocument = async (data: { title: string; type: string; url: string; file: File | null; isLink: boolean }) => {
+    if (!id || !auth.currentUser) return;
     try {
+      let documentUrl = data.url;
+      let rtdbPath: string | null = null;
+
+      if (!data.isLink && data.file) {
+        console.log("Uploading file to Firebase Storage:", data.file.name, "Size:", data.file.size);
+        
+        const safeFileName = data.file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+        const docKey = `${Date.now()}_${safeFileName}`;
+        rtdbPath = `researchGroups/${id}/documents/${docKey}`;
+        
+        const fileRef = storageRef(storage, rtdbPath);
+        await uploadBytes(fileRef, data.file);
+        documentUrl = await getDownloadURL(fileRef);
+        console.log("Firebase Storage upload finished.");
+      }
+
+      const currentStudent = teamMembers.find(
+        (m) => m.studentEmail === auth.currentUser?.email || m.studentId === auth.currentUser?.uid
+      );
+      const uploaderName = currentStudent?.studentName || auth.currentUser.displayName || "Student";
+
+      console.log("Saving document metadata to Firestore...");
+      await addDoc(collection(db, "researchGroups", id, "documents"), {
+        title: data.title,
+        type: data.type,
+        url: documentUrl,
+        isLink: data.isLink,
+        rtdbPath,
+        fileName: data.file?.name || null,
+        fileType: data.file?.type || null,
+        uploadedBy: uploaderName,
+        uploadedAt: serverTimestamp(),
+      });
+
+      showToast("success", "Resource added successfully");
+    } catch (error) {
+      console.error("Error saving document:", error);
+      showToast("error", "Failed to upload document");
+      throw error;
+    }
+  };
+
+  const triggerDeleteDocument = (docData: Document) => {
+    setDocumentToDelete(docData);
+  };
+
+  const confirmDeleteDocument = async () => {
+    if (!id || !documentToDelete) return;
+    setIsDeletingDoc(true);
+    try {
+      if (!documentToDelete.isLink && documentToDelete.rtdbPath) {
+        if (documentToDelete.rtdbPath.startsWith("researchGroupDocuments/")) {
+          await dbRemove(dbRef(rtdb, documentToDelete.rtdbPath)).catch((e) =>
+            console.error("Error deleting from Realtime Database", e)
+          );
+        } else {
+          const fileRef = storageRef(storage, documentToDelete.rtdbPath);
+          await deleteObject(fileRef).catch((e) =>
+            console.error("Error deleting from Storage", e)
+          );
+        }
+      }
+      await deleteDoc(doc(db, "researchGroups", id, "documents", documentToDelete.id));
+      showToast("success", "Resource deleted successfully");
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      showToast("error", "Failed to delete resource");
+    } finally {
+      setIsDeletingDoc(false);
+      setDocumentToDelete(null);
+    }
+  };
+
+  const handleViewDocument = async (docData: Document) => {
+    if (docData.isLink || (!docData.rtdbPath?.startsWith("researchGroupDocuments/") && docData.url)) {
+      window.open(docData.url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (!docData.rtdbPath) {
+      showToast("error", "This file is no longer available.");
+      return;
+    }
+    setViewingDocId(docData.id);
+    try {
+      if (docData.rtdbPath.startsWith("researchGroupDocuments/")) {
+        const snapshot = await dbGet(dbRef(rtdb, docData.rtdbPath));
+        if (!snapshot.exists()) {
+          showToast("error", "This file is no longer available.");
+          return;
+        }
+        const stored = snapshot.val() as { data: string; type?: string; name?: string };
+        const res = await fetch(stored.data);
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        window.open(objectUrl, "_blank", "noopener,noreferrer");
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      }
+    } catch (error) {
+      console.error("Error opening document:", error);
+      showToast("error", "Failed to open this file.");
+    } finally {
+      setViewingDocId(null);
+    }
+  };
+
+
+
+  const handleSavePublication = async (data: PublicationFormData) => {
+    if (!id || !auth.currentUser) return;
+    try {
+      const payload = {
+        ...data,
+        acceptanceDate: data.status === "accepted" || data.status === "published" ? data.publicationDate || "" : "",
+        updatedAt: serverTimestamp(),
+      };
       if (editingPublication) {
-        await updateDoc(doc(db, "researchGroups", id, "publications", editingPublication.id), {
-          ...publicationData,
-        });
+        await updateDoc(doc(db, "researchGroups", id, "publications", editingPublication.id), payload);
         showToast("success", "Publication updated successfully");
       } else {
         await addDoc(collection(db, "researchGroups", id, "publications"), {
-          ...publicationData,
+          ...payload,
+          createdBy: auth.currentUser?.displayName || "Student",
           createdAt: serverTimestamp(),
         });
         showToast("success", "Publication added successfully");
       }
+      setIsPublicationModalOpen(false);
+      setEditingPublication(null);
     } catch (error) {
       console.error("Error saving publication:", error);
       showToast("error", "Failed to save publication");
@@ -539,6 +719,64 @@ export default function StudentGroupDetails() {
     }
   };
 
+  const getPublicationShareText = (pub: Publication) => {
+    const links: string[] = [];
+    if (pub.doi) links.push(`https://doi.org/${pub.doi}`);
+    if (pub.paperUrl) links.push(pub.paperUrl);
+    if (pub.overleafUrl) links.push(`Overleaf: ${pub.overleafUrl}`);
+    if (pub.projectUrl) links.push(pub.projectUrl);
+    return `${pub.title} — ${pub.venue}${links.length ? `\n${links.join("\n")}` : ""}`;
+  };
+
+  const handleCopyPublicationLink = async (pub: Publication, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const bestLink = pub.paperUrl || (pub.doi ? `https://doi.org/${pub.doi}` : "") || pub.overleafUrl || pub.projectUrl || pub.codeUrl || "";
+    const text = bestLink || getPublicationShareText(pub);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedPubId(pub.id);
+      showToast("success", bestLink ? "Publication link copied — ready to share." : "Citation copied to clipboard.");
+      setTimeout(() => setCopiedPubId(null), 2000);
+    } catch {
+      showToast("error", "Failed to copy link");
+    }
+  };
+
+  const handleNativeSharePublication = async (pub: Publication, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const shareUrl = pub.paperUrl || (pub.doi ? `https://doi.org/${pub.doi}` : "") || window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: pub.title,
+          text: `${pub.title} (${pub.venue})`,
+          url: shareUrl,
+        });
+        return;
+      } catch (err: unknown) {
+        if ((err as { name?: string })?.name === "AbortError") return;
+      }
+    }
+    handleCopyPublicationLink(pub);
+  };
+
+  const handleCopyCitation = async (pub: Publication, format: "apa" | "ieee", e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const text = pub.generatedCitations?.[format];
+    if (!text) {
+      showToast("error", "Citation not available for this publication.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedPubId(pub.id + format);
+      showToast("success", `${format.toUpperCase()} citation copied to clipboard.`);
+      setTimeout(() => setCopiedPubId(null), 2000);
+    } catch {
+      showToast("error", "Failed to copy citation");
+    }
+  };
+
   const handleCopyMeetingLink = (meeting: Meeting) => {
     if (!meeting.meetingLink) return;
     navigator.clipboard.writeText(meeting.meetingLink).then(() => {
@@ -551,7 +789,7 @@ export default function StudentGroupDetails() {
   if (loading) {
     return (
       <DashboardLayout role="student">
-        <div className="mx-auto max-w-7xl px-2 sm:px-4">
+        <div className="mx-auto max-w-6xl px-2 sm:px-4">
           <div className="mb-6 h-10 w-48 animate-pulse rounded-full bg-slate-200 dark:bg-[#181818]"></div>
           
           <div className="mb-8 h-48 w-full animate-pulse rounded-3xl bg-slate-200 dark:bg-[#181818]"></div>
@@ -656,6 +894,7 @@ export default function StudentGroupDetails() {
         isOpen={!!selectedStudentId}
         onClose={() => setSelectedStudentId(null)}
         studentId={selectedStudentId || ""}
+        hideCgpa={true}
       />
 
       <MilestoneViewModal
@@ -672,7 +911,7 @@ export default function StudentGroupDetails() {
         onClose={() => setViewingTask(null)}
       />
 
-      <div className="mx-auto max-w-7xl px-2 sm:px-4">
+      <div className="mx-auto max-w-6xl px-2 sm:px-4">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <button
@@ -706,9 +945,11 @@ export default function StudentGroupDetails() {
               <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">{topic.title}</h1>
               
               <div className="mt-4 flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-                  {topic.supervisorName ? topic.supervisorName.charAt(0).toUpperCase() : "S"}
-                </div>
+                <UserAvatar 
+                  userId={topic.supervisorId} 
+                  name={topic.supervisorName || "Supervisor"} 
+                  className="h-9 w-9 text-sm"
+                />
                 <div>
                   <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Supervisor</p>
                   <p className="text-sm font-semibold text-slate-900 dark:text-slate-200">{topic.supervisorName || "N/A"}</p>
@@ -868,9 +1109,11 @@ export default function StudentGroupDetails() {
                         onClick={() => setSelectedStudentId(member.studentId)}
                         className="group relative flex cursor-pointer items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md active:scale-[0.98] dark:border-[#2A2A2A] dark:bg-[#0F0F0F] dark:hover:bg-[#181818]"
                       >
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 text-sm font-bold text-indigo-700 dark:from-indigo-500/20 dark:to-violet-500/20 dark:text-indigo-300">
-                          {member.studentName.charAt(0).toUpperCase()}
-                        </div>
+                        <UserAvatar 
+                          userId={member.studentId} 
+                          name={member.studentName} 
+                          className="h-10 w-10 text-sm"
+                        />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{member.studentName}</p>
                           {member.department && (
@@ -988,11 +1231,9 @@ export default function StudentGroupDetails() {
                   </h2>
                   <div className="space-y-3">
                     {documents.slice(0, 3).map((doc) => (
-                      <a 
+                      <div 
                         key={doc.id} 
-                        href={doc.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        onClick={() => handleViewDocument(doc)}
                         className="group flex cursor-pointer items-start gap-3 rounded-lg p-2 -mx-2 transition-all hover:-translate-y-0.5 hover:bg-slate-50 active:scale-[0.98] dark:hover:bg-[#222]"
                       >
                         <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400 transition-colors group-hover:text-indigo-500" />
@@ -1000,7 +1241,7 @@ export default function StudentGroupDetails() {
                           <p className="truncate text-sm font-semibold text-slate-900 transition-colors group-hover:text-indigo-600 dark:text-white dark:group-hover:text-indigo-400">{doc.title}</p>
                           <p className="mt-0.5 text-xs capitalize text-slate-500 dark:text-slate-400">{doc.type}</p>
                         </div>
-                      </a>
+                      </div>
                     ))}
                     {documents.length === 0 && (
                       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-8 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
@@ -1443,12 +1684,40 @@ export default function StudentGroupDetails() {
 
         {activeTab === "documents" && (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-            <div className="mb-6 flex items-center justify-between">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">Documents & Resources</h2>
-              <button className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-indigo-700 hover:scale-105 active:scale-95 shadow-sm hover:shadow-md">
+              <button
+                onClick={() => setIsDocumentModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+              >
                 <Upload className="h-4 w-4" /> Upload Document
               </button>
             </div>
+
+            {documents.length > 0 && (
+              <div className="mb-6 flex gap-2">
+                {(
+                  [
+                    { key: "all", label: "All", count: documents.length },
+                    { key: "files", label: "Files", count: documents.filter((d) => !d.isLink).length },
+                    { key: "links", label: "Links", count: documents.filter((d) => !!d.isLink).length },
+                  ] as const
+                ).map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => setDocumentFilter(f.key)}
+                    className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                      documentFilter === f.key
+                        ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300"
+                        : "border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700 dark:border-[#2A2A2A] dark:text-slate-400 dark:hover:text-slate-200"
+                    }`}
+                  >
+                    {f.label} <span className="text-xs opacity-70">({f.count})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="space-y-3">
               {documents.length === 0 ? (
                 <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 py-16 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
@@ -1456,13 +1725,32 @@ export default function StudentGroupDetails() {
                     <FileText className="h-8 w-8" />
                   </div>
                   <p className="text-xl font-bold text-slate-900 dark:text-white">No Documents Yet</p>
-                  <p className="mt-2 max-w-sm text-sm text-slate-500 dark:text-slate-400">Upload papers, datasets, code, and other resources relevant to your research.</p>
+                  <p className="mt-2 max-w-sm text-sm text-slate-500 dark:text-slate-400">
+                    Upload papers, datasets, code, and other resources relevant to your research.
+                  </p>
+                </div>
+              ) : filteredDocuments.length === 0 ? (
+                <div className="py-12 text-center">
+                  {documentFilter === "links" ? (
+                    <LinkIcon className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
+                  ) : (
+                    <FileText className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600" />
+                  )}
+                  <p className="mt-4 text-sm font-medium text-slate-900 dark:text-white">
+                    No {documentFilter} to show
+                  </p>
+                  <button
+                    onClick={() => setDocumentFilter("all")}
+                    className="mt-2 text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                  >
+                    Show all resources
+                  </button>
                 </div>
               ) : (
-                documents.map((doc) => (
+                filteredDocuments.map((doc) => (
                   <div
                     key={doc.id}
-                    onClick={() => window.open(doc.url, "_blank")}
+                    onClick={() => handleViewDocument(doc)}
                     className="group flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 p-4 hover:border-indigo-200 hover:shadow-md hover:-translate-y-1 transition-all duration-200 dark:border-[#2A2A2A] dark:hover:border-indigo-500/30 dark:hover:bg-[#1a1a1a]"
                   >
                     <div className="flex flex-1 items-center gap-4">
@@ -1477,23 +1765,38 @@ export default function StudentGroupDetails() {
                             : "bg-slate-100 text-slate-600 dark:bg-slate-500/20 dark:text-slate-400"
                         }`}
                       >
-                        <FileText className="h-5 w-5" />
+                        {doc.isLink ? <LinkIcon className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
                       </div>
                       <div>
                         <h3 className="font-semibold text-slate-900 dark:text-white">{doc.title}</h3>
                         <p className="mt-0.5 text-xs capitalize text-slate-500 dark:text-slate-400">
-                          {doc.type} • Uploaded by {doc.uploadedBy}
+                          {doc.type} • {doc.isLink ? "Shared" : "Uploaded"} by {doc.uploadedBy}
                         </p>
                       </div>
                     </div>
                     <div className="flex gap-2">
                       <div className="flex flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10">
-                          <ExternalLink className="h-4 w-4" />
-                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewDocument(doc);
+                          }}
+                          disabled={viewingDocId === doc.id}
+                          className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50 disabled:opacity-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10"
+                        >
+                          {viewingDocId === doc.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </button>
                       </div>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); }} // Implement delete logic if needed
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerDeleteDocument(doc);
+                        }}
+                        disabled={isDeletingDoc}
                         className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -1763,154 +2066,598 @@ export default function StudentGroupDetails() {
           </div>
         )}
 
-        {activeTab === "publications" && (
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Publications & Submissions</h2>
-              <button 
-                onClick={() => {
-                  setEditingPublication(null);
-                  setIsPublicationModalOpen(true);
-                }}
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-indigo-700 hover:scale-105 active:scale-95 shadow-sm hover:shadow-md"
-              >
-                <Plus className="h-4 w-4" /> Add Publication
-              </button>
-            </div>
-            <div className="space-y-4">
-              {publications.length === 0 ? (
-                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 py-16 text-center dark:border-[#2A2A2A] dark:bg-[#181818]/50">
-                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 shadow-inner dark:bg-indigo-500/20 dark:text-indigo-400">
-                    <BookOpen className="h-8 w-8" />
-                  </div>
-                  <p className="text-xl font-bold text-slate-900 dark:text-white">No Publications Yet</p>
-                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Track conference and journal submissions here.</p>
-                </div>
-              ) : (
-                publications.map((pub) => {
-                  const borderColor = pub.status === "published"
-                    ? "border-l-emerald-500"
-                    : pub.status === "accepted"
-                    ? "border-l-blue-500"
-                    : pub.status === "under-review"
-                    ? "border-l-amber-500"
-                    : pub.status === "rejected"
-                    ? "border-l-rose-500"
-                    : "border-l-slate-500";
-                    
-                  return (
-                    <div
-                      key={pub.id}
-                      onClick={() => pub.paperUrl ? window.open(pub.paperUrl, "_blank") : null}
-                      className={`group relative overflow-hidden rounded-xl border-y border-r border-l-4 p-5 ${borderColor} bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-y-indigo-300 hover:border-r-indigo-300 ${pub.paperUrl ? "cursor-pointer" : ""} dark:border-y-[#2A2A2A] dark:border-r-[#2A2A2A] dark:hover:border-y-indigo-500/50 dark:hover:border-r-indigo-500/50 dark:bg-[#1A1A1A]`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-bold text-lg text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{pub.title}</h3>
-                            <span
-                              className={`rounded-full px-2.5 py-0.5 text-xs font-bold capitalize ${
-                                pub.status === "published"
-                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
-                                  : pub.status === "accepted"
-                                  ? "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
-                                  : pub.status === "under-review"
-                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
-                                  : pub.status === "rejected"
-                                  ? "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300"
-                                  : "bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-300"
-                              }`}
-                            >
-                              {pub.status.replace("-", " ")}
-                            </span>
-                          </div>
-                          
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <span className="inline-flex items-center rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-[#2A2A2A] dark:text-slate-300">
-                              <MapPin className="mr-1.5 h-3.5 w-3.5 text-slate-400" />
-                              {pub.venue}
-                            </span>
-                            <span className="inline-flex items-center rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-[#2A2A2A] dark:text-slate-300">
-                              <FileText className="mr-1.5 h-3.5 w-3.5 text-slate-400" />
-                              {pub.type}
-                            </span>
-                            {pub.doi && (
-                              <span className="inline-flex items-center rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-[#2A2A2A] dark:text-slate-300">
-                                <LinkIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400" />
-                                {pub.doi}
-                              </span>
-                            )}
-                          </div>
-                          
-                          {/* Abstract */}
-                          {pub.abstract && (
-                            <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-[#262626] dark:bg-[#0F0F0F]">
-                              <p className="flex items-start gap-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-300">
-                                <Quote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-300 dark:text-slate-600" />
-                                <span className={expandedPubId === pub.id ? "" : "line-clamp-2"}>{pub.abstract}</span>
-                              </p>
-                              {pub.abstract.length > 180 && (
-                                <button 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setExpandedPubId(expandedPubId === pub.id ? null : pub.id);
-                                  }}
-                                  className="mt-1.5 text-xs font-bold text-indigo-600 hover:underline dark:text-indigo-400"
-                                >
-                                  {expandedPubId === pub.id ? "Show less" : "Read abstract"}
-                                </button>
-                              )}
-                            </div>
-                          )}
+        {activeTab === "publications" && (() => {
+          const typeMeta: Record<string, { label: string; tile: string; icon: React.ReactNode }> = {
+            journal: { label: "Journal", tile: "bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300", icon: <BookOpen className="h-5 w-5" /> },
+            conference: { label: "Conference", tile: "bg-violet-100 text-violet-600 dark:bg-violet-500/20 dark:text-violet-300", icon: <Presentation className="h-5 w-5" /> },
+            workshop: { label: "Workshop", tile: "bg-teal-100 text-teal-600 dark:bg-teal-500/20 dark:text-teal-300", icon: <Target className="h-5 w-5" /> },
+            preprint: { label: "Preprint", tile: "bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-300", icon: <FileText className="h-5 w-5" /> },
+            "book-chapter": { label: "Book Chapter", tile: "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300", icon: <BookOpen className="h-5 w-5" /> },
+            poster: { label: "Poster", tile: "bg-pink-100 text-pink-600 dark:bg-pink-500/20 dark:text-pink-300", icon: <Eye className="h-5 w-5" /> },
+            demo: { label: "Demo", tile: "bg-cyan-100 text-cyan-600 dark:bg-cyan-500/20 dark:text-cyan-300", icon: <Video className="h-5 w-5" /> },
+            thesis: { label: "Thesis", tile: "bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300", icon: <GraduationCap className="h-5 w-5" /> },
+            magazine: { label: "Magazine", tile: "bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-300", icon: <FileText className="h-5 w-5" /> },
+            symposium: { label: "Symposium", tile: "bg-fuchsia-100 text-fuchsia-600 dark:bg-fuchsia-500/20 dark:text-fuchsia-300", icon: <Users className="h-5 w-5" /> },
+            other: { label: "Other", tile: "bg-slate-100 text-slate-600 dark:bg-slate-500/20 dark:text-slate-300", icon: <FileText className="h-5 w-5" /> },
+          };
+          const statusStyles: Record<string, string> = {
+            published: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300",
+            accepted: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
+            "under-review": "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
+            revision: "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300",
+            submitted: "bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300",
+            rejected: "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300",
+            draft: "bg-slate-100 text-slate-600 dark:bg-slate-500/20 dark:text-slate-300",
+          };
+          const publishedCount = publications.filter((p) => p.status === "published").length;
+          const totalPublishedCount = publishedCount;
+          const totalOngoingCount = publications.filter((p) => p.status !== "published").length;
+          const decided = publications.filter((p) => ["published", "accepted", "rejected"].includes(p.status)).length;
+          const acceptanceRate = decided === 0 ? 0 : Math.round(((publishedCount + publications.filter((p) => p.status === "accepted").length) / decided) * 100);
+          const isGroupPublished = publishedCount > 0;
 
-                          {pub.paperUrl && (
-                            <a 
-                              href={pub.paperUrl} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-600 transition-colors hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20"
-                            >
-                              <ExternalLink className="h-4 w-4" /> View Paper
-                            </a>
-                          )}
+          const q = pubSearch.trim().toLowerCase();
+          const filtered = publications
+            .filter((p) => {
+              if (pubSectionTab === "published") return p.status === "published";
+              if (pubSectionTab === "ongoing") return p.status !== "published";
+              return true;
+            })
+            .filter((p) => (pubStatusFilter === "all" ? true : p.status === pubStatusFilter))
+            .filter((p) => (pubTypeFilter === "all" ? true : p.type === pubTypeFilter))
+            .filter((p) => {
+              if (!q) return true;
+              return (
+                p.title.toLowerCase().includes(q) ||
+                p.venue.toLowerCase().includes(q) ||
+                (p.authors || []).join(" ").toLowerCase().includes(q) ||
+                (p.keywords || []).join(" ").toLowerCase().includes(q) ||
+                (p.doi || "").toLowerCase().includes(q) ||
+                (p.overleafUrl || "").toLowerCase().includes(q)
+              );
+            })
+            .sort((a, b) => {
+              const rank = (s: string) => ({ published: 0, accepted: 1, "under-review": 2, revision: 3, submitted: 4, draft: 5, rejected: 6 } as Record<string, number>)[s] ?? 7;
+              return rank(a.status) - rank(b.status);
+            });
+
+          const publishedPapers = filtered.filter((p) => p.status === "published");
+          const ongoingPapers = filtered.filter((p) => p.status !== "published");
+
+          const renderPublicationCard = (pub: Publication) => {
+            const meta = typeMeta[pub.type] || typeMeta.other;
+            const expanded = expandedPubId === pub.id;
+            const doiUrl = pub.doi ? `https://doi.org/${pub.doi}` : "";
+
+            return (
+              <article
+                key={pub.id}
+                className={`group relative overflow-hidden rounded-2xl border bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg dark:bg-[#181818] ${
+                  pub.status === "published"
+                    ? "border-emerald-200 hover:border-emerald-400 dark:border-emerald-500/30 dark:hover:border-emerald-400/60"
+                    : "border-slate-200 hover:border-indigo-300 dark:border-[#2A2A2A] dark:hover:border-indigo-500/50"
+                }`}
+              >
+                {pub.status === "published" && <div className="h-1 w-full bg-emerald-500" />}
+                <div className="p-5 sm:p-6">
+                  {/* Top row */}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex min-w-0 items-start gap-3.5">
+                      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${meta.tile}`}>
+                        {meta.icon}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                            {meta.label}
+                          </span>
+                          <span className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+                            <Building2 className="h-3 w-3" /> {pub.venue}
+                          </span>
+                          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold capitalize ${statusStyles[pub.status] || statusStyles.draft}`}>
+                            {pub.status.replace("-", " ")}
+                          </span>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex shrink-0 gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingPublication(pub);
-                              setIsPublicationModalOpen(true);
-                            }}
-                            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400"
-                          >
-                            <Edit2 className="h-5 w-5" />
-                          </button>
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeletePublicationId(pub.id);
-                            }}
-                            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                          </button>
-                        </div>
-                        <div className="flex shrink-0 items-center justify-center opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0">
-                          <div className="rounded-full bg-slate-100 p-2 text-indigo-600 dark:bg-slate-800 dark:text-indigo-400">
-                            <ChevronRight className="h-4 w-4" />
-                          </div>
-                          </div>
+                        <h3
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingPublication(pub);
+                            setIsPublicationModalOpen(true);
+                          }}
+                          className="mt-1.5 text-lg font-extrabold leading-snug text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors cursor-pointer"
+                        >
+                          {pub.title}
+                        </h3>
+                        {(pub.authors?.length || pub.publisher || pub.volume || pub.pages) && (
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            {(pub.authors || []).join(", ")}
+                            {pub.publisher ? ` · ${pub.publisher}` : ""}
+                            {pub.volume ? ` · ${pub.volume}` : ""}
+                            {pub.pages ? ` · pp. ${pub.pages}` : ""}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex shrink-0 gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingPublication(pub);
+                            setIsPublicationModalOpen(true);
+                          }}
+                          title="Edit publication"
+                          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletePublicationId(pub.id);
+                          }}
+                          title="Remove publication"
+                          className="rounded-lg p-2 text-rose-500 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="flex shrink-0 items-center justify-center opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0">
+                        <div className="rounded-full bg-slate-100 p-2 text-indigo-600 dark:bg-slate-800 dark:text-indigo-400">
+                          <ChevronRight className="h-4 w-4" />
                         </div>
                       </div>
                     </div>
-                  );
-                })
+                  </div>
+
+                  {/* Authors */}
+                  {(pub.authors?.length ?? 0) > 0 && (
+                    <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                      <Users className="h-3.5 w-3.5 text-slate-400" />
+                      {pub.authors!.slice(0, 6).map((a) => (
+                        <span key={a} className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 py-1 pl-1 pr-2.5 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                          <span className="flex h-5 w-5 items-center justify-center">
+                            <UserAvatar name={a} className="h-full w-full text-[10px]" />
+                          </span>
+                          {a}
+                        </span>
+                      ))}
+                      {(pub.authors?.length ?? 0) > 6 && (
+                        <span className="text-xs font-semibold text-slate-400">+{(pub.authors?.length ?? 0) - 6} more</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Abstract */}
+                  {pub.abstract && (
+                    <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-[#262626] dark:bg-[#0F0F0F]">
+                      <p className="flex items-start gap-2 text-[13px] leading-relaxed text-slate-600 dark:text-slate-300">
+                        <Quote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-300 dark:text-slate-600" />
+                        <span className={expanded ? "" : "line-clamp-2"}>{pub.abstract}</span>
+                      </p>
+                      {pub.abstract.length > 180 && (
+                        <button onClick={() => setExpandedPubId(expanded ? null : pub.id)} className="mt-1.5 text-xs font-bold text-indigo-600 hover:underline dark:text-indigo-400">
+                          {expanded ? "Show less" : "Read abstract"}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Keywords */}
+                  {(pub.keywords?.length ?? 0) > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {pub.keywords!.map((k) => (
+                        <span key={k} className="rounded-full border border-slate-200 px-2.5 py-0.5 text-[11px] font-semibold text-slate-500 dark:border-[#333] dark:text-slate-400">
+                          #{k}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Dates */}
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                    {pub.submissionDate && <span className="flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> Submitted {new Date(pub.submissionDate).toLocaleDateString()}</span>}
+                    {pub.publicationDate && <span className="flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5" /> Published {new Date(pub.publicationDate).toLocaleDateString()}</span>}
+                    {pub.acceptanceDate && pub.status !== "published" && <span>Accepted {new Date(pub.acceptanceDate).toLocaleDateString()}</span>}
+                  </div>
+
+                  {/* Link bar */}
+                  <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4 dark:border-[#262626]">
+                    {pub.doi && (
+                      <a href={doiUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-100 hover:scale-105 active:scale-95 transition-all dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300 dark:hover:bg-amber-500/20">
+                        <LinkIcon className="h-3 w-3" /> DOI: {pub.doi.length > 28 ? `${pub.doi.slice(0, 28)}…` : pub.doi}
+                      </a>
+                    )}
+                    {pub.paperUrl && (
+                      <a href={pub.paperUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 hover:scale-105 active:scale-95 transition-all shadow-sm hover:shadow-md">
+                        <FileDown className="h-3 w-3" /> Paper / PDF <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                    {pub.overleafUrl ? (
+                      <a
+                        href={pub.overleafUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 hover:scale-105 active:scale-95 transition-all shadow-sm hover:shadow dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300 dark:hover:bg-emerald-500/25"
+                      >
+                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                        Edit in Overleaf
+                        <ExternalLink className="h-3 w-3 opacity-70" />
+                      </a>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingPublication(pub);
+                          setIsPublicationModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-500 hover:border-emerald-400 hover:bg-emerald-50/70 hover:text-emerald-700 hover:scale-105 active:scale-95 transition-all dark:border-[#333] dark:text-slate-400 dark:hover:border-emerald-500/40 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-300"
+                        title="Attach Overleaf editor URL"
+                      >
+                        <Plus className="h-3 w-3" /> Overleaf
+                      </button>
+                    )}
+                    {pub.codeUrl && (
+                      <a href={pub.codeUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:scale-105 active:scale-95 transition-all dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#0F0F0F]">
+                        <Code2 className="h-3 w-3" /> Code
+                      </a>
+                    )}
+                    {pub.projectUrl && (
+                      <a href={pub.projectUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:scale-105 active:scale-95 transition-all dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#0F0F0F]">
+                        <Globe className="h-3 w-3" /> Project page
+                      </a>
+                    )}
+                    <div className="ml-auto flex items-center gap-1.5">
+                      {pub.generatedCitations?.apa && (
+                        <button
+                          onClick={(e) => handleCopyCitation(pub, "apa", e)}
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition-all hover:scale-105 active:scale-95 ${copiedPubId === pub.id + "apa" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300" : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"}`}
+                        >
+                          <Copy className="h-3 w-3" /> {copiedPubId === pub.id + "apa" ? "Copied APA" : "APA"}
+                        </button>
+                      )}
+                      {pub.generatedCitations?.ieee && (
+                        <button
+                          onClick={(e) => handleCopyCitation(pub, "ieee", e)}
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition-all hover:scale-105 active:scale-95 ${copiedPubId === pub.id + "ieee" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300" : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"}`}
+                        >
+                          <Copy className="h-3 w-3" /> {copiedPubId === pub.id + "ieee" ? "Copied IEEE" : "IEEE"}
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => handleCopyPublicationLink(pub, e)}
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition-all hover:scale-105 active:scale-95 ${copiedPubId === pub.id ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300" : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"}`}
+                      >
+                        <Copy className="h-3 w-3" /> {copiedPubId === pub.id ? "Copied!" : "Copy link"}
+                      </button>
+                      <button
+                        onClick={(e) => handleNativeSharePublication(pub, e)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 hover:scale-105 active:scale-95 transition-all dark:border-[#333] dark:text-slate-400 dark:hover:bg-[#0F0F0F]"
+                      >
+                        <Share2 className="h-3 w-3" /> Share
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            );
+          };
+
+          return (
+            <div className="space-y-6">
+              {/* Minimal header */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-500/10">
+                      <BookOpen className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="text-base font-bold text-slate-900 dark:text-white">Publications & Research Outputs</h2>
+                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                        {publications.length} total
+                        {isGroupPublished ? (
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400"> · Published ({totalPublishedCount})</span>
+                        ) : (
+                          <span> · In Progress ({totalOngoingCount})</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setEditingPublication(null);
+                      setIsPublicationModalOpen(true);
+                    }}
+                    className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700"
+                  >
+                    <Plus className="h-4 w-4" /> Add Publication
+                  </button>
+                </div>
+              </div>
+
+              {/* Published celebration */}
+              {isGroupPublished && (
+                <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white">
+                    <Award className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-emerald-800 dark:text-emerald-200">
+                      This group has {totalPublishedCount} published paper{totalPublishedCount === 1 ? "" : "s"} live!
+                    </p>
+                    <p className="mt-0.5 text-xs text-emerald-700 dark:text-emerald-300">
+                      The header badge, group status and citations reflect these outputs. Keep tracking new submissions in the pipeline.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Stats */}
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {[
+                  { label: "Total outputs", section: "all", filter: "all", value: publications.length, icon: <BookOpen className="h-4 w-4" />, cls: "text-indigo-600 dark:text-indigo-400 border-transparent hover:border-indigo-300 dark:hover:border-indigo-500/50" },
+                  { label: "Published papers", section: "published", filter: "all", value: totalPublishedCount, icon: <CheckCircle2 className="h-4 w-4" />, cls: "text-emerald-600 dark:text-emerald-400 border-transparent hover:border-emerald-300 dark:hover:border-emerald-500/50" },
+                  { label: "In pipeline", section: "ongoing", filter: "all", value: totalOngoingCount, icon: <Send className="h-4 w-4" />, cls: "text-amber-600 dark:text-amber-400 border-transparent hover:border-amber-300 dark:hover:border-amber-500/50" },
+                  { label: "Acceptance rate", section: "all", filter: "accepted", value: `${acceptanceRate}%`, icon: <Sparkles className="h-4 w-4" />, cls: "text-violet-600 dark:text-violet-400 border-transparent hover:border-violet-300 dark:hover:border-violet-500/50" },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    onClick={() => {
+                      setPubSectionTab(s.section as any);
+                      if (s.filter && s.filter !== "all") setPubStatusFilter(s.filter as any);
+                      else setPubStatusFilter("all");
+                    }}
+                    className={`group cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md active:scale-95 dark:border-[#2A2A2A] dark:bg-[#181818] ${s.cls}`}
+                  >
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide opacity-80 group-hover:opacity-100 transition-opacity">
+                      {s.icon} <span className="group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{s.label}</span>
+                    </div>
+                    <p className="mt-1.5 text-2xl font-extrabold text-slate-900 group-hover:scale-105 origin-left transition-transform dark:text-white">{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Sub-tab view switcher & filter toolbar */}
+              {publications.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5 rounded-xl bg-slate-100 p-1 dark:bg-[#222]">
+                      <button
+                        onClick={() => {
+                          setPubSectionTab("all");
+                          setPubStatusFilter("all");
+                        }}
+                        className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all ${
+                          pubSectionTab === "all"
+                            ? "bg-white text-indigo-700 shadow-sm dark:bg-[#333] dark:text-indigo-400"
+                            : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                        }`}
+                      >
+                        <BookOpen className="h-3.5 w-3.5" />
+                        <span>All Outputs ({publications.length})</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setPubSectionTab("published");
+                          setPubStatusFilter("all");
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all ${
+                          pubSectionTab === "published"
+                            ? "bg-white text-emerald-700 shadow-sm dark:bg-[#333] dark:text-emerald-400"
+                            : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                        }`}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>Published Papers ({totalPublishedCount})</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setPubSectionTab("ongoing");
+                          setPubStatusFilter("all");
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-bold transition-all ${
+                          pubSectionTab === "ongoing"
+                            ? "bg-white text-amber-700 shadow-sm dark:bg-[#333] dark:text-amber-400"
+                            : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                        }`}
+                      >
+                        <Clock className="h-3.5 w-3.5 text-amber-500" />
+                        <span>Ongoing Submissions ({totalOngoingCount})</span>
+                      </button>
+                    </div>
+
+                    <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                      Showing {filtered.length} of {publications.length}
+                    </div>
+                  </div>
+
+                  {/* Search and Filters Toolbar */}
+                  <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818] lg:flex-row lg:items-center">
+                    <div className="relative flex-1">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <input
+                        value={pubSearch}
+                        onChange={(e) => setPubSearch(e.target.value)}
+                        placeholder="Search title, venue, author, keyword, DOI…"
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-[#333] dark:bg-[#0F0F0F] dark:text-white"
+                      />
+                    </div>
+
+                    {/* Status filter pills */}
+                    {pubSectionTab !== "published" && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {(pubSectionTab === "ongoing"
+                          ? (["all", "under-review", "submitted", "accepted", "revision", "draft", "rejected"] as const)
+                          : (["all", "published", "under-review", "submitted", "accepted", "draft", "rejected"] as const)
+                        ).map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => setPubStatusFilter(s)}
+                            className={`rounded-full px-3 py-1.5 text-xs font-bold capitalize transition-all ${
+                              pubStatusFilter === s
+                                ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900"
+                                : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                            }`}
+                          >
+                            {s === "all" ? (pubSectionTab === "ongoing" ? "All Ongoing" : "All Status") : s.replace("-", " ")}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <select
+                      value={pubTypeFilter}
+                      onChange={(e) => setPubTypeFilter(e.target.value as Publication["type"] | "all")}
+                      className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-700 focus:border-indigo-500 focus:outline-none dark:border-[#333] dark:bg-[#0F0F0F] dark:text-slate-300"
+                    >
+                      <option value="all">All types</option>
+                      <option value="journal">Journal</option>
+                      <option value="conference">Conference</option>
+                      <option value="workshop">Workshop</option>
+                      <option value="preprint">Preprint</option>
+                      <option value="book-chapter">Book chapter</option>
+                      <option value="poster">Poster</option>
+                      <option value="demo">Demo</option>
+                      <option value="thesis">Thesis</option>
+                      <option value="magazine">Magazine</option>
+                      <option value="symposium">Symposium</option>
+                      <option value="other">Other</option>
+                    </select>
+
+                    {(pubSearch || pubStatusFilter !== "all" || pubTypeFilter !== "all") && (
+                      <button
+                        onClick={() => {
+                          setPubSearch("");
+                          setPubStatusFilter("all");
+                          setPubTypeFilter("all");
+                        }}
+                        className="text-xs font-semibold text-rose-600 hover:underline dark:text-rose-400 whitespace-nowrap"
+                      >
+                        Reset filters
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* List */}
+              {publications.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center dark:border-[#2A2A2A] dark:bg-[#181818]">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-md">
+                    <BookOpen className="h-8 w-8" />
+                  </div>
+                  <p className="mt-4 text-base font-bold text-slate-900 dark:text-white">No publications yet — start the group&apos;s story</p>
+                  <p className="mx-auto mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">
+                    Add a journal article, conference paper, arXiv preprint, poster or thesis. Attach DOI and share links so students, reviewers and visitors can find it.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setEditingPublication(null);
+                      setIsPublicationModalOpen(true);
+                    }}
+                    className="mt-6 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                  >
+                    <Plus className="h-4 w-4" /> Add First Publication
+                  </button>
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="rounded-2xl border border-slate-200 bg-white px-6 py-14 text-center dark:border-[#2A2A2A] dark:bg-[#181818]">
+                  <Search className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600" />
+                  <p className="mt-3 text-sm font-bold text-slate-900 dark:text-white">No matches for these filters</p>
+                  <button
+                    onClick={() => {
+                      setPubSearch("");
+                      setPubStatusFilter("all");
+                      setPubTypeFilter("all");
+                    }}
+                    className="mt-3 text-sm font-semibold text-indigo-600 hover:underline dark:text-indigo-400"
+                  >
+                    Clear search & filters
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {/* Section 1: Published Papers */}
+                  {(pubSectionTab === "all" || pubSectionTab === "published") && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-200 pb-3 dark:border-[#2A2A2A]">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
+                            <Award className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-base font-bold text-slate-900 dark:text-white">Published Papers</h3>
+                              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300">
+                                {publishedPapers.length}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              Officially published peer-reviewed research outputs
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {publishedPapers.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center dark:border-[#2A2A2A] dark:bg-[#181818]">
+                          <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">No published papers yet</p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            Papers marked with status &quot;Published&quot; will be featured in this section.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {publishedPapers.map((pub) => renderPublicationCard(pub))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Section 2: Ongoing Submissions & Pipeline */}
+                  {(pubSectionTab === "all" || pubSectionTab === "ongoing") && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-200 pb-3 dark:border-[#2A2A2A]">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+                            <Clock className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-base font-bold text-slate-900 dark:text-white">Ongoing Submissions & Pipeline</h3>
+                              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+                                {ongoingPapers.length}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              Manuscripts under review, in revision, submitted, or in preparation
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {ongoingPapers.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center dark:border-[#2A2A2A] dark:bg-[#181818]">
+                          <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">No ongoing submissions</p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            Manuscripts in draft, submitted, or under review will appear in this section.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {ongoingPapers.map((pub) => renderPublicationCard(pub))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          </div>
-        )}
+          );
+        })()}
         </div>
       </div>
 
@@ -1940,6 +2687,21 @@ export default function StudentGroupDetails() {
         title="Delete Publication"
         message="Are you sure you want to delete this publication? This action cannot be undone."
         confirmText="Delete Publication"
+      />
+
+      <DocumentModal
+        isOpen={isDocumentModalOpen}
+        onClose={() => setIsDocumentModalOpen(false)}
+        onSave={handleSaveDocument}
+      />
+
+      <ConfirmModal
+        isOpen={!!documentToDelete}
+        onClose={() => setDocumentToDelete(null)}
+        onConfirm={confirmDeleteDocument}
+        title="Delete Resource"
+        message="Are you sure you want to delete this resource? This action cannot be undone."
+        confirmText="Delete Resource"
       />
     </DashboardLayout>
   );

@@ -1,17 +1,69 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useState, useEffect } from "react";
+import { auth } from "@/firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getFirestore, onSnapshot } from "firebase/firestore";
 import { Sidebar } from "./Sidebar";
 import { ThemeToggle } from "../common/ThemeToggle";
 import { Menu } from "lucide-react";
 import { Link } from "react-router-dom";
 import { StudentNotifications } from "../common/StudentNotifications";
+import { AIChatWidget } from "../common/AIChatWidget";
+import { UserAvatar } from "../common/UserAvatar";
 
 interface DashboardLayoutProps {
   children: ReactNode;
-  role: "student" | "teacher";
+  role: "student" | "teacher" | "admin";
 }
 
 export function DashboardLayout({ children, role }: DashboardLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("sidebarCollapsed") === "true";
+    }
+    return false;
+  });
+  
+  const [photoURL, setPhotoURL] = useState<string | null>(null);
+
+  useEffect(() => {
+    const db = getFirestore();
+    let unsubscribeDoc: (() => void) | undefined;
+    
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (unsubscribeDoc) {
+        unsubscribeDoc();
+        unsubscribeDoc = undefined;
+      }
+      
+      if (user) {
+        // Fallback to auth photoURL initially
+        setPhotoURL(user.photoURL);
+        
+        // Listen to Firestore for updates (handles large Base64 images)
+        unsubscribeDoc = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
+          if (docSnap.exists() && docSnap.data().photoURL) {
+            setPhotoURL(docSnap.data().photoURL);
+          }
+        });
+      } else {
+        setPhotoURL(null);
+      }
+    });
+    
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeDoc) unsubscribeDoc();
+    };
+  }, []);
+
+  const toggleCollapse = () => {
+    setIsCollapsed(prev => {
+      const newState = !prev;
+      localStorage.setItem("sidebarCollapsed", String(newState));
+      return newState;
+    });
+  };
 
   return (
     <div className="min-h-screen bg-[#fcfcfd] text-slate-900 selection:bg-blue-500 selection:text-white dark:bg-[#000000] dark:text-slate-100">
@@ -20,10 +72,12 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
         role={role}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        isCollapsed={isCollapsed}
+        onToggleCollapse={toggleCollapse}
       />
 
       {/* Main content area */}
-      <div className="lg:pl-72 transition-all duration-300">
+      <div className="dashboard-main" data-sidebar-collapsed={isCollapsed}>
         
         {/* Glass effect header */}
         <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-slate-200/80 bg-white/80 px-6 backdrop-blur-xl dark:border-[#2A2A2A]/60 dark:bg-[#121212]/80 lg:justify-end">
@@ -38,17 +92,20 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
 
           <div className="flex items-center gap-4">
             <ThemeToggle />
-            <StudentNotifications role={role} />
+            {role !== "admin" && <StudentNotifications role={role} />}
             
             {/* Profile Icon */}
             <Link 
-              to={role === "student" ? "/student/profile" : "/teacher/dashboard"}
+              to={role === "student" ? "/student/profile" : role === "admin" ? "/admin/profile" : "/teacher/profile"}
               title="My Profile"
-              className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-blue-500/30 bg-blue-50 transition-colors hover:bg-blue-100 dark:border-[#3B82F6]/30 dark:bg-[#3B82F6]/10 dark:hover:bg-[#3B82F6]/20"
+              className="flex items-center justify-center transition-colors cursor-pointer"
             >
-              <span className="text-sm font-semibold text-blue-600 dark:text-[#3B82F6]">
-                U
-              </span>
+              <UserAvatar 
+                userId={auth.currentUser?.uid || ""} 
+                name={auth.currentUser?.displayName || (role === "admin" ? "Admin" : "User")} 
+                photoURL={photoURL || undefined}
+                className="h-10 w-10 text-sm ring-2 ring-blue-500/30"
+              />
             </Link>
 
           </div>
@@ -56,11 +113,17 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
 
         {/* Actual page content */}
         <main className="p-6 lg:p-10">
-          <div className="mx-auto max-w-6xl">
+          <div
+            className="dashboard-page-content mx-auto w-full max-w-[1600px]"
+            data-sidebar-collapsed={isCollapsed}
+          >
             {children}
           </div>
         </main>
       </div>
+      
+      {/* Global AI Chat Widget */}
+      <AIChatWidget />
     </div>
   );
 }

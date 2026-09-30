@@ -1,4 +1,4 @@
-import { addDoc, collection, getDocs, query, serverTimestamp, where, doc, updateDoc, deleteDoc, getDoc } from "firebase/firestore";
+import { collection, getDocs, query, serverTimestamp, where, doc, updateDoc, getDoc, writeBatch } from "firebase/firestore";
 import { db } from "./firestore";
 
 export interface ResearchTopicInput {
@@ -26,19 +26,34 @@ const researchTopicsCollection = collection(db, "researchTopics");
 export async function createResearchTopic(
   topic: ResearchTopicInput
 ): Promise<string> {
-  const docRef = await addDoc(researchTopicsCollection, {
+  const docRef = doc(researchTopicsCollection);
+  
+  const batch = writeBatch(db);
+  
+  batch.set(docRef, {
     ...topic,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     ...(topic.status === "published" ? { publishedAt: serverTimestamp() } : {}),
   });
 
-  // Auto-create "General" chat group
-  await addDoc(collection(db, "researchGroups", docRef.id, "conversations"), {
+  batch.set(doc(db, "researchGroups", docRef.id), {
+    supervisorId: topic.supervisorId,
+    groupStatus: "ongoing",
+    publishedCount: 0,
+    progress: 0,
+    updatedAt: serverTimestamp(),
+  });
+
+  // Auto-create "General" chat group atomically
+  const conversationRef = doc(collection(db, "researchGroups", docRef.id, "conversations"));
+  batch.set(conversationRef, {
     name: "General",
     createdAt: serverTimestamp(),
     hiddenBy: []
   });
+
+  await batch.commit();
 
   return docRef.id;
 }
@@ -104,6 +119,22 @@ export async function updateResearchTopic(id: string, data: Partial<ResearchTopi
 }
 
 export async function deleteResearchTopic(id: string): Promise<void> {
+  const batch = writeBatch(db);
+
+  // 1. Delete the topic itself
   const docRef = doc(db, "researchTopics", id);
-  await deleteDoc(docRef);
+  batch.delete(docRef);
+
+  // 2. Delete the associated team (if any)
+  const teamRef = doc(db, "teams", id);
+  batch.delete(teamRef);
+
+  // 3. Delete all associated join requests
+  const joinRequestsQuery = query(collection(db, "joinRequests"), where("projectId", "==", id));
+  const joinRequestsSnapshot = await getDocs(joinRequestsQuery);
+  joinRequestsSnapshot.docs.forEach((requestDoc) => {
+    batch.delete(requestDoc.ref);
+  });
+
+  await batch.commit();
 }

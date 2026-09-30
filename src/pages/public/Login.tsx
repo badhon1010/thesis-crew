@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Eye, EyeOff, FlaskConical, ArrowRight, ArrowLeft } from "lucide-react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Eye, EyeOff, FlaskConical, ArrowRight, ArrowLeft, ShieldCheck } from "lucide-react";
 import { ThemeToggle } from "../../components/common/ThemeToggle";
 import { auth } from "../../firebase/auth";
 import { db } from "../../firebase/firestore";
@@ -9,11 +9,12 @@ import { doc, getDoc } from "firebase/firestore";
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"student" | "teacher">("student");
+  const [role, setRole] = useState<"student" | "teacher">(location.state?.role || "student");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -30,9 +31,26 @@ export default function Login() {
       const userDocSnap = await getDoc(userDocRef);
 
       if (userDocSnap.exists()) {
-        const actualRole = userDocSnap.data().role;
+        const userData = userDocSnap.data();
+        const actualRole = userData.role;
         
-        //Role Match Check
+        // Account Suspension Check
+        if (userData.accountStatus === "suspended") {
+          setError("Your account has been suspended. Please contact the administrator.");
+          await signOut(auth);
+          setLoading(false);
+          return;
+        }
+
+        // Admin Role Restriction - Admins must use dedicated Admin Login
+        if (actualRole === "admin") {
+          setError("Admin accounts are not allowed to log in here. Please use Admin Login.");
+          await signOut(auth);
+          setLoading(false);
+          return;
+        }
+
+        // Role Match Check
         if (actualRole !== role) {
           setError(`Access Denied! This account is registered as a ${actualRole}.`);
           await signOut(auth); // Log out the user
@@ -94,7 +112,15 @@ export default function Login() {
         </section>
 
         <section className="relative flex min-h-screen items-center justify-center bg-white px-6 py-12 dark:bg-[#000000]">
-          <div className="absolute right-6 top-6">
+          <div className="absolute right-6 top-6 flex items-center gap-3">
+            <Link
+              to="/admin/login"
+              title="Admin Login Portal"
+              className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-indigo-600 dark:border-[#2A2A2A] dark:bg-[#121212]/80 dark:text-slate-300 dark:hover:bg-[#181818] dark:hover:text-indigo-400"
+            >
+              <ShieldCheck className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+              <span>Admin Login</span>
+            </Link>
             <ThemeToggle />
           </div>
 

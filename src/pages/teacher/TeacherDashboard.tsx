@@ -20,6 +20,9 @@ export default function TeacherDashboard() {
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState("Supervisor");
   const [currentTime, setCurrentTime] = useState(new Date());
+  
+  // Teacher profile state for completion widget
+  const [profile, setProfile] = useState<any>({});
 
   const [toast, setToast] = useState<{
     show: boolean;
@@ -53,9 +56,13 @@ export default function TeacherDashboard() {
       unsubscribePublications?.();
       if (user) {
         const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists() && userDoc.data().name) {
-          const fullName = userDoc.data().name;
-          setUserName(fullName.split(" ")[0]);
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setProfile(data);
+          if (data.name) {
+            const fullName = data.name;
+            setUserName(fullName.split(" ")[0]);
+          }
         } else {
           const fallbackName = user.displayName?.split(" ")[0] || user.email?.split("@")[0] || "Teacher";
           setUserName(fallbackName.charAt(0).toUpperCase() + fallbackName.slice(1));
@@ -70,9 +77,9 @@ export default function TeacherDashboard() {
             getFullCapacityTeams(user.uid),
           ]);
 
-          // Filter out topics that have reached full capacity
+          // Filter out topics that have reached full capacity and drafts
           const fullProjectIds = new Set(fullTeams.map((t) => t.projectId));
-          setTopics(data.filter((t) => !fullProjectIds.has(t.id)));
+          setTopics(data.filter((t) => !fullProjectIds.has(t.id) && t.status !== "draft"));
         } catch (error) {
           console.error("Failed to load research topics:", error);
           showToast("error", "Failed to load research topics.");
@@ -225,26 +232,32 @@ export default function TeacherDashboard() {
         />
 
         {/* Header Section */}
-        <div className="mb-8">
-          <div className="mb-3 flex flex-wrap items-center gap-3">
-            <div className="inline-flex items-center gap-2 rounded-full border-2 border-indigo-200 bg-indigo-50 px-4 py-1.5 dark:border-indigo-500/30 dark:bg-indigo-500/10">
-              <div className="h-2 w-2 animate-pulse rounded-full bg-indigo-600 dark:bg-indigo-400" />
-              <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">SUPERVISOR WORKSPACE</span>
+        <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+          <div>
+            <div className="mb-3 flex flex-wrap items-center gap-3">
+              <div className="inline-flex items-center gap-2 rounded-full border-2 border-indigo-200 bg-indigo-50 px-4 py-1.5 dark:border-indigo-500/30 dark:bg-indigo-500/10">
+                <div className="h-2 w-2 animate-pulse rounded-full bg-indigo-600 dark:bg-indigo-400" />
+                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">SUPERVISOR WORKSPACE</span>
+              </div>
+              <div className="flex items-center gap-2 rounded-full border-2 border-slate-200 bg-slate-50 px-4 py-1.5 dark:border-[#2A2A2A] dark:bg-[#0F0F0F]">
+                <Clock className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{formattedDate}</span>
+                <span className="text-slate-400">•</span>
+                <span className="text-xs font-bold tabular-nums text-slate-900 dark:text-white">{formattedTime}</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2 rounded-full border-2 border-slate-200 bg-slate-50 px-4 py-1.5 dark:border-[#2A2A2A] dark:bg-[#0F0F0F]">
-              <Clock className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
-              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{formattedDate}</span>
-              <span className="text-slate-400">•</span>
-              <span className="text-xs font-bold tabular-nums text-slate-900 dark:text-white">{formattedTime}</span>
-            </div>
-          </div>
 
-          <h1 className="mb-2 text-4xl font-extrabold text-slate-900 dark:text-white">
-            {greeting()}, {userName}
-          </h1>
-          <p className="text-base text-slate-600 dark:text-slate-400">
-            Manage research topics, review applications, and track team progress
-          </p>
+            <h1 className="mb-2 text-4xl font-extrabold text-slate-900 dark:text-white">
+              {greeting()}, {userName}
+            </h1>
+            <p className="text-base text-slate-600 dark:text-slate-400">
+              Manage research topics, review applications, and track team progress
+            </p>
+          </div>
+          
+          <div className="shrink-0">
+            <SmallTeacherProfileCompletionWidget profile={profile} />
+          </div>
         </div>
 
         {/* Stats Cards Grid */}
@@ -281,7 +294,7 @@ export default function TeacherDashboard() {
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
+        <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
 
           {/* Research Topics List */}
           <section className="overflow-hidden rounded-2xl border-2 border-slate-200 bg-white shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]">
@@ -529,5 +542,42 @@ function StatCard({
     <div className={baseClasses}>
       {content}
     </div>
+  );
+}
+
+function SmallTeacherProfileCompletionWidget({ profile }: { profile: any }) {
+  const steps = [
+    { label: "Basic info", isComplete: !!(profile.name && profile.facultyInitial && profile.department && profile.designation) },
+    { label: "Keywords", isComplete: !!(profile.researchInterests || (profile.skills && profile.skills.length > 0)) },
+    { label: "Photo", isComplete: !!profile.photoURL },
+  ];
+  
+  const completedSteps = steps.filter(s => s.isComplete).length;
+  const totalSteps = steps.length;
+  const percentage = Math.round((completedSteps / totalSteps) * 100);
+
+  if (completedSteps === totalSteps) {
+    return null;
+  }
+
+  return (
+    <Link 
+      to="/teacher/profile"
+      className="group flex items-center gap-3 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 transition-colors hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/20"
+      title={`${totalSteps - completedSteps} steps left to complete profile`}
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+          Profile {percentage}%
+        </span>
+        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-indigo-200 dark:bg-indigo-900/50">
+          <div 
+            className="h-full rounded-full bg-indigo-600 transition-all duration-500 dark:bg-indigo-400"
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
+      </div>
+      <ArrowRight className="h-3.5 w-3.5 text-indigo-500 transition-transform group-hover:translate-x-0.5 dark:text-indigo-400" />
+    </Link>
   );
 }

@@ -5,6 +5,7 @@ import { collection, query, onSnapshot } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
 import type { Team } from "@/firebase/teamFormation";
 import type { ResearchTopic } from "@/firebase/researchTopics";
+import { UserAvatar } from "@/components/common/UserAvatar";
 
 export interface ResearchGroupWithTopic extends Team {
   topic?: ResearchTopic;
@@ -226,12 +227,15 @@ export function GroupCard({ group, role }: GroupCardProps) {
             {/* Member Avatars */}
             <div className="mb-6 flex items-center justify-between">
               <div className="flex -space-x-3">
-                {Array.from({ length: Math.min(group.memberIds.length, 6) }).map((_, i) => (
+                {group.memberIds.slice(0, 6).map((memberId, i) => (
                   <div
-                    key={i}
-                    className={`flex h-9 w-9 items-center justify-center rounded-full border-2 border-white text-xs font-bold shadow-sm ring-2 ring-transparent transition-transform hover:z-10 hover:-translate-y-1 hover:ring-indigo-200 dark:border-[#181818] dark:hover:ring-indigo-500/30 ${avatarColors[i % avatarColors.length]}`}
+                    key={memberId}
+                    className="relative transition-transform hover:z-10 hover:-translate-y-1"
                   >
-                    {String.fromCharCode(65 + i)}
+                    <UserAvatar 
+                      userId={memberId}
+                      className={`h-9 w-9 text-xs border-2 border-white ring-2 ring-transparent dark:border-[#181818] shadow-sm ${avatarColors[i % avatarColors.length]}`} 
+                    />
                   </div>
                 ))}
                 {group.memberIds.length > 6 && (

@@ -12,10 +12,11 @@ interface TeamSubmissionModalProps {
   topic: ResearchTopic;
   leaderId: string;
   leaderProfile: any;
+  aiMatchAnalysis?: any;
   onSuccess: () => void;
 }
 
-export function TeamSubmissionModal({ isOpen, onClose, topic, leaderId, leaderProfile, onSuccess }: TeamSubmissionModalProps) {
+export function TeamSubmissionModal({ isOpen, onClose, topic, leaderId, leaderProfile, aiMatchAnalysis, onSuccess }: TeamSubmissionModalProps) {
   const [teamMembers, setTeamMembers] = useState<TeamMemberInfo[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchBy, setSearchBy] = useState<"studentId" | "email">("studentId");
@@ -100,7 +101,7 @@ export function TeamSubmissionModal({ isOpen, onClose, topic, leaderId, leaderPr
     setError("");
     
     try {
-      await submitGroupJoinRequest(topic, leaderId, leaderProfile, teamMembers, requestMessage);
+      await submitGroupJoinRequest(topic, leaderId, leaderProfile, teamMembers, requestMessage, aiMatchAnalysis);
       onSuccess();
       onClose();
     } catch (err) {

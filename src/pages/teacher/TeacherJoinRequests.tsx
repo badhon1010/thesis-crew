@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, Clock3, Loader2, UserRound, X, Eye, Users } from "lucide-react";
+import { Check, Clock3, Loader2, UserRound, X, Eye, Users, Sparkles } from "lucide-react";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, onSnapshot, query, where, type Unsubscribe } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ToastAlert } from "@/components/common/ToastAlert";
 import { StudentProfileModal } from "@/components/common/StudentProfileModal";
 import { GroupMemberProfileModal } from "@/components/common/GroupMemberProfileModal";
+import { UserAvatar } from "@/components/common/UserAvatar";
 import { auth } from "@/firebase/auth";
 import { db } from "@/firebase/firestore";
 import { calculateSkillMatch } from "@/utils/skillMatching";
 import { reviewJoinRequest, type JoinRequest } from "@/firebase/teamFormation";
+import { RejectRequestModal } from "@/components/teacher/RejectRequestModal";
 
 export default function TeacherJoinRequests() {
   const [requests, setRequests] = useState<JoinRequest[]>([]);
@@ -19,6 +21,7 @@ export default function TeacherJoinRequests() {
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [selectedGroupMembers, setSelectedGroupMembers] = useState<JoinRequest["teamMembers"] | []>([]);
+  const [rejectModalData, setRejectModalData] = useState<{ request: JoinRequest | null; isOpen: boolean }>({ request: null, isOpen: false });
 
   useEffect(() => {
     let unsubscribeRequests: Unsubscribe | undefined;
@@ -54,22 +57,24 @@ export default function TeacherJoinRequests() {
 
   const handleReview = async (request: JoinRequest, decision: "accepted" | "rejected") => {
     if (!auth.currentUser) return;
+    
+    if (decision === "rejected") {
+      setRejectModalData({ request, isOpen: true });
+      return;
+    }
+
     setReviewingId(request.id);
     try {
-      await reviewJoinRequest(request.id, auth.currentUser.uid, decision);
+      await reviewJoinRequest(request.id, auth.currentUser.uid, decision, "");
       if (request.requestType === "group") {
         setToast({
           type: "success",
-          message: decision === "accepted"
-            ? `Group of ${request.teamMembers?.length || 0} students was added to the team.`
-            : "Group request rejected."
+          message: `Group of ${request.teamMembers?.length || 0} students was added to the team.`
         });
       } else {
         setToast({
           type: "success",
-          message: decision === "accepted"
-            ? `${request.studentName} was added to the team.`
-            : "Join request rejected."
+          message: `${request.studentName} was added to the team.`
         });
       }
     } catch (error) {
@@ -80,9 +85,30 @@ export default function TeacherJoinRequests() {
     }
   };
 
+  const confirmReject = async (feedback: string) => {
+    const request = rejectModalData.request;
+    if (!auth.currentUser || !request) return;
+
+    setReviewingId(request.id);
+    try {
+      await reviewJoinRequest(request.id, auth.currentUser.uid, "rejected", feedback);
+      if (request.requestType === "group") {
+        setToast({ type: "success", message: "Group request rejected." });
+      } else {
+        setToast({ type: "success", message: "Join request rejected." });
+      }
+    } catch (error) {
+      console.error("Failed to reject join request:", error);
+      setToast({ type: "error", message: error instanceof Error ? error.message : "Could not review the request." });
+    } finally {
+      setReviewingId(null);
+      setRejectModalData({ request: null, isOpen: false });
+    }
+  };
+
   return (
     <DashboardLayout role="teacher">
-      <div className="mx-auto max-w-5xl px-2 sm:px-0">
+      <div className="mx-auto max-w-6xl px-2 sm:px-4">
         {toast && <ToastAlert type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
 
         <StudentProfileModal
@@ -95,6 +121,13 @@ export default function TeacherJoinRequests() {
           isOpen={(selectedGroupMembers?.length ?? 0) > 0}
           teamMembers={selectedGroupMembers || []}
           onClose={() => setSelectedGroupMembers([])}
+        />
+
+        <RejectRequestModal
+          isOpen={rejectModalData.isOpen}
+          onClose={() => setRejectModalData({ request: null, isOpen: false })}
+          onConfirm={confirmReject}
+          studentName={rejectModalData.request?.studentName || "Student"}
         />
 
         <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
@@ -154,9 +187,11 @@ export default function TeacherJoinRequests() {
                   <article key={request.id} className="p-6">
                     <div className="flex flex-col justify-between gap-5 sm:flex-row">
                       <div className="flex min-w-0 gap-4">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 font-bold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
-                          {request.studentName.split(" ").map((part) => part[0]).join("").slice(0, 2)}
-                        </div>
+                        <UserAvatar 
+                          userId={request.studentId} 
+                          name={request.studentName} 
+                          className="h-11 w-11 text-sm rounded-xl"
+                        />
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="font-semibold text-slate-900 dark:text-white">
@@ -171,7 +206,7 @@ export default function TeacherJoinRequests() {
                             </button>
                           </div>
                           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            {request.studentEmail || "No email added"} · {request.studentDepartment || "Department not added"}
+                            {request.universityId ? `${request.universityId} · ` : ""}{request.studentEmail || "No email added"} · {request.studentDepartment || "Department not added"}
                           </p>
                           <p className="mt-3 text-sm font-medium text-indigo-700 dark:text-indigo-300">
                             {request.topicTitle}
@@ -195,14 +230,25 @@ export default function TeacherJoinRequests() {
                         </div>
                       </div>
                       <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
-                        <div className="rounded-lg bg-emerald-50 px-3 py-2 text-right dark:bg-emerald-950/30">
-                          <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                            {match.score}% match
-                          </p>
-                          <p className="mt-0.5 text-[10px] text-emerald-700/70 dark:text-emerald-300/70">
-                            {match.matchedSkills.length} of {match.matchedSkills.length + match.missingSkills.length} required skills
-                          </p>
-                        </div>
+                        {request.aiMatchAnalysis ? (
+                          <div className="rounded-lg bg-indigo-50 px-3 py-2 text-right dark:bg-indigo-500/10">
+                            <div className="flex items-center justify-end gap-1 text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                              <Sparkles className="h-4 w-4" /> {request.aiMatchAnalysis.matchScore}% match
+                            </div>
+                            <p className="mt-0.5 text-[10px] text-indigo-700/70 dark:text-indigo-300/70">
+                              AI Analyzed
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="rounded-lg bg-emerald-50 px-3 py-2 text-right dark:bg-emerald-950/30">
+                            <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                              {match.score}% match
+                            </p>
+                            <p className="mt-0.5 text-[10px] text-emerald-700/70 dark:text-emerald-300/70">
+                              {match.matchedSkills.length} of {match.matchedSkills.length + match.missingSkills.length} required skills
+                            </p>
+                          </div>
+                        )}
                         <div className="flex gap-2">
                           <button
                             disabled={busy}
@@ -268,7 +314,7 @@ export default function TeacherJoinRequests() {
                 
                 // Construct a complete list of team members, including the leader
                 const leaderMember = {
-                  studentId: request.studentId,
+                  studentId: request.universityId || request.studentId,
                   uid: request.teamLeaderId || request.studentId, // Ensure uid fallback
                   name: request.studentName,
                   email: request.studentEmail,
@@ -323,9 +369,11 @@ export default function TeacherJoinRequests() {
                             <div className="space-y-2">
                               {fullTeamMembers.map((member, index) => (
                                 <div key={member.studentId} className="flex items-center gap-2 rounded-lg bg-slate-50 p-2 dark:bg-[#121212]">
-                                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-xs font-bold text-violet-600 dark:bg-violet-500/20 dark:text-violet-400">
-                                    {member.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
-                                  </div>
+                                  <UserAvatar 
+                                    userId={member.uid || member.studentId} 
+                                    name={member.name} 
+                                    className="h-7 w-7 text-xs rounded-lg"
+                                  />
                                   <div className="min-w-0 flex-1">
                                     <p className="text-xs font-semibold text-slate-900 dark:text-white">
                                       {member.name} {index === 0 && <span className="text-[10px] text-violet-600 dark:text-violet-400">(Leader)</span>}
@@ -341,14 +389,25 @@ export default function TeacherJoinRequests() {
                         </div>
                       </div>
                       <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
-                        <div className="rounded-lg bg-emerald-50 px-3 py-2 text-right dark:bg-emerald-950/30">
-                          <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                            {avgMatch.score}% match
-                          </p>
-                          <p className="mt-0.5 text-[10px] text-emerald-700/70 dark:text-emerald-300/70">
-                            Team average
-                          </p>
-                        </div>
+                        {request.aiMatchAnalysis ? (
+                          <div className="rounded-lg bg-indigo-50 px-3 py-2 text-right dark:bg-indigo-500/10">
+                            <div className="flex items-center justify-end gap-1 text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                              <Sparkles className="h-4 w-4" /> {request.aiMatchAnalysis.matchScore}% match
+                            </div>
+                            <p className="mt-0.5 text-[10px] text-indigo-700/70 dark:text-indigo-300/70">
+                              AI Analyzed Team Match
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="rounded-lg bg-emerald-50 px-3 py-2 text-right dark:bg-emerald-950/30">
+                            <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                              {avgMatch.score}% match
+                            </p>
+                            <p className="mt-0.5 text-[10px] text-emerald-700/70 dark:text-emerald-300/70">
+                              Team average
+                            </p>
+                          </div>
+                        )}
                         <div className="flex gap-2">
                           <button
                             disabled={busy}

@@ -1,6 +1,9 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   BookOpen,
+  ChevronLeft,
+  ChevronRight,
   LayoutDashboard,
   LogOut,
   FlaskConical,
@@ -8,19 +11,78 @@ import {
   SquarePen,
   SquareLibrary,
   Users,
+  UserRoundPlus,
+  UserCircle,
+  FolderKanban,
+  ShieldCheck,
+  MessageSquare,
+  Search,
 } from "lucide-react";
 import { auth } from "../../firebase/auth";
 import { signOut } from "firebase/auth";
 
 interface SidebarProps {
-  role: "student" | "teacher";
+  role: "student" | "teacher" | "admin";
   isOpen: boolean;
   onClose: () => void;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
-export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
+type SidebarLabelPhase = "closed" | "opening" | "open" | "closing";
+
+function SidebarLabel({
+  text,
+  isCollapsed,
+  className = "",
+}: {
+  text: string;
+  isCollapsed: boolean;
+  className?: string;
+}) {
+  const characters = Array.from(text);
+
+  return (
+    <span aria-hidden={isCollapsed} className={`dashboard-sidebar-label ${className}`}>
+      <span className="sr-only">{text}</span>
+      <span aria-hidden="true">
+        {characters.map((character, index) => (
+          <span
+            key={`${character}-${index}`}
+            className="dashboard-sidebar-label-char"
+            style={{
+              transitionDelay: `${(isCollapsed ? characters.length - index - 1 : index) * 8}ms`,
+            }}
+          >
+            {character}
+          </span>
+        ))}
+      </span>
+    </span>
+  );
+}
+
+export function Sidebar({ role, isOpen, onClose, isCollapsed, onToggleCollapse }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const [labelPhase, setLabelPhase] = useState<SidebarLabelPhase>(isCollapsed ? "closed" : "open");
+  const previousCollapsed = useRef(isCollapsed);
+
+  useLayoutEffect(() => {
+    if (previousCollapsed.current === isCollapsed) {
+      return;
+    }
+    previousCollapsed.current = isCollapsed;
+
+    setLabelPhase(isCollapsed ? "closing" : "opening");
+
+    const timeout = window.setTimeout(
+      () => setLabelPhase(isCollapsed ? "closed" : "open"),
+      isCollapsed ? 260 : 420,
+    );
+
+    return () => window.clearTimeout(timeout);
+  }, [isCollapsed]);
 
   const handleLogout = async () => {
     try {
@@ -36,49 +98,79 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
       ? [
           { name: "Dashboard", path: "/student/dashboard", icon: LayoutDashboard },
           { name: "Research Topics", path: "/student/research-topics", icon: BookOpen },
+          { name: "Research Papers", path: "/student/research-papers", icon: Search },
+          { name: "My Requests", path: "/student/requests", icon: FolderKanban },
           { name: "My Research Groups", path: "/student/my-groups", icon: Users },
+          { name: "Find Peers", path: "/student/find-peers", icon: UserRoundPlus },
+          { name: "Messages", path: "/student/messages", icon: MessageSquare },
         ]
-      : [
+      : role === "teacher"
+      ? [
           { name: "Dashboard", path: "/teacher/dashboard", icon: LayoutDashboard },
+          { name: "Research Papers", path: "/teacher/research-papers", icon: Search },
           { name: "Create Research Topic", path: "/teacher/topics/create", icon: SquarePen },
           { name: "My Research Topics", path: "/teacher/topics", icon: SquareLibrary },
           { name: "Research Group", path: "/teacher/research-groups", icon: Users },
-          { name: "Team Requests", path: "/teacher/requests", icon: Users }
+          { name: "Team Requests", path: "/teacher/requests", icon: UserRoundPlus }
+        ]
+      : [
+          { name: "Dashboard", path: "/admin/dashboard", icon: LayoutDashboard },
+          { name: "User Management", path: "/admin/users", icon: Users },
+          { name: "Research Topics", path: "/admin/topics", icon: BookOpen },
+          { name: "Research Groups", path: "/admin/groups", icon: FolderKanban },
+          { name: "Admin Profile", path: "/admin/profile", icon: UserCircle },
         ];
 
   return (
     <>
-      {isOpen && (
-        <div
-          onClick={onClose}
-          className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm lg:hidden"
-        />
-      )}
+      <div
+        onClick={onClose}
+        aria-hidden="true"
+        className={`dashboard-sidebar-backdrop fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm lg:hidden ${
+          isOpen ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+      />
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-slate-200/80 bg-white transition-transform duration-300 ease-in-out dark:border-[#2A2A2A] dark:bg-[#121212] lg:translate-x-0 ${
-          isOpen ? "translate-x-0" : "-translate-x-full"
+        data-sidebar-collapsed={isCollapsed}
+        data-sidebar-label-phase={labelPhase}
+        className={`dashboard-sidebar fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200/80 bg-white dark:border-[#2A2A2A] dark:bg-[#121212] ${
+          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
-        <div className="flex h-20 items-center justify-between px-8 border-b border-slate-100 dark:border-slate-800/50">
-          <Link to="/" className="flex items-center gap-3 transition-opacity hover:opacity-80">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 text-white shadow-lg shadow-indigo-500/25">
+        <div className="dashboard-sidebar-header flex h-20 items-center justify-between border-b border-slate-100 dark:border-slate-800/50">
+          <button onClick={onToggleCollapse} className="dashboard-sidebar-brand flex items-center outline-none transition-opacity hover:opacity-80">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)]">
               <FlaskConical className="h-5 w-5" />
             </div>
-            <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-              ThesisCrew
-            </span>
-          </Link>
+            <SidebarLabel
+              text="ThesisCrew"
+              isCollapsed={isCollapsed}
+              className="text-xl font-bold tracking-tight text-slate-900 dark:text-white"
+            />
+          </button>
 
           <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 lg:hidden"
+            type="button"
+            onClick={onToggleCollapse}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="dashboard-sidebar-collapse-toggle absolute right-0 top-1/2 z-10 hidden h-7 w-7 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-md transition-colors hover:bg-slate-50 hover:text-indigo-600 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-slate-300 dark:hover:bg-[#222222] dark:hover:text-indigo-400 lg:flex"
           >
-            <X className="h-5 w-5" />
+            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </button>
+
+          {!isCollapsed && (
+            <button
+              onClick={onClose}
+              className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60 lg:hidden"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
         </div>
 
-        <nav className="flex-1 space-y-2 px-4 py-6">
+        <nav className="dashboard-sidebar-nav flex-1 space-y-2 overflow-x-hidden px-3 py-6">
           {links.map((link) => {
             const isActive = location.pathname === link.path;
             const Icon = link.icon;
@@ -88,32 +180,54 @@ export function Sidebar({ role, isOpen, onClose }: SidebarProps) {
                 key={link.path}
                 to={link.path}
                 onClick={onClose}
-                className={`group flex items-center gap-3 rounded-xl px-4 py-3.5 text-sm font-semibold transition-all duration-200 ${
+                title={isCollapsed ? link.name : undefined}
+                className={`dashboard-sidebar-link group flex items-center rounded-xl text-sm font-semibold transition-colors duration-200 ${
                   isActive
-                    ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300 shadow-sm"
+                    ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300 shadow-[0_0_8px_rgba(0,0,0,0.15)] dark:shadow-[0_0_8px_rgba(0,0,0,0.35)]"
                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/40 dark:hover:text-white"
                 }`}
               >
                 <Icon
-                  className={`h-5 w-5 transition-colors ${
+                  className={`dashboard-sidebar-icon h-5 w-5 shrink-0 transition-colors ${
                     isActive
                       ? "text-indigo-600 dark:text-indigo-400"
                       : "text-slate-400 group-hover:text-slate-600 dark:text-slate-500 dark:group-hover:text-slate-300"
                   }`}
                 />
-                {link.name}
+                <SidebarLabel text={link.name} isCollapsed={isCollapsed} />
               </Link>
             );
           })}
         </nav>
 
-        <div className="border-t border-slate-100 p-4 dark:border-slate-800/80">
+        <div className="dashboard-sidebar-footer space-y-2 border-t border-slate-100 dark:border-slate-800/80">
+          {role === "admin" && (
+            <div
+              title={isCollapsed ? "Admin Mode" : undefined}
+              className="dashboard-sidebar-admin-mode flex items-center text-xs font-semibold text-indigo-600 dark:text-indigo-400"
+            >
+              <ShieldCheck className="dashboard-sidebar-icon h-5 w-5 shrink-0 transition-colors" />
+              <SidebarLabel text="Admin Mode" isCollapsed={isCollapsed} />
+            </div>
+          )}
+
+          <Link
+            to={role === "student" ? "/student/profile" : role === "admin" ? "/admin/profile" : "/teacher/profile"}
+            onClick={onClose}
+            title={isCollapsed ? "Edit profile" : undefined}
+            className="dashboard-sidebar-action flex items-center rounded-xl text-sm font-semibold text-slate-600 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:text-slate-400 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-400"
+          >
+            <UserCircle className="dashboard-sidebar-icon h-5 w-5 shrink-0 text-slate-400 transition-colors" />
+            <SidebarLabel text="Edit profile" isCollapsed={isCollapsed} />
+          </Link>
+
           <button
             onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-slate-600 transition-all hover:bg-red-50 hover:text-red-600 dark:text-slate-400 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+            title={isCollapsed ? "Log out" : undefined}
+            className="dashboard-sidebar-action flex items-center rounded-xl text-sm font-semibold text-slate-600 transition-colors hover:bg-red-50 hover:text-red-600 dark:text-slate-400 dark:hover:bg-red-500/10 dark:hover:text-red-400"
           >
-            <LogOut className="h-5 w-5 text-slate-400 transition-colors" />
-            Log out
+            <LogOut className="dashboard-sidebar-icon h-5 w-5 shrink-0 text-slate-400 transition-colors" />
+            <SidebarLabel text="Log out" isCollapsed={isCollapsed} />
           </button>
         </div>
       </aside>
