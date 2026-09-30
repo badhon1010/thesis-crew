@@ -101,18 +101,59 @@ export default function StudentProfile() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  //Add skills
-  const handleAddSkill = (e?: React.KeyboardEvent | React.MouseEvent) => {
-    if (e && 'key' in e && e.key !== 'Enter') return;
-    e?.preventDefault(); // Prevent form submission
-    
-    const trimmedSkill = skillInput.trim();
-    if (trimmedSkill && !formData.skills.includes(trimmedSkill)) {
-      setFormData((prev) => ({
+  // Helper to add comma-separated or single skills
+  const addSkills = (rawInput: string) => {
+    const tokens = rawInput
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    if (tokens.length === 0) return;
+
+    setFormData((prev) => {
+      const existingLower = new Set(prev.skills.map((s) => s.toLowerCase()));
+      const uniqueNew: string[] = [];
+
+      for (const token of tokens) {
+        const lower = token.toLowerCase();
+        if (!existingLower.has(lower)) {
+          existingLower.add(lower);
+          uniqueNew.push(token);
+        }
+      }
+
+      if (uniqueNew.length === 0) return prev;
+
+      return {
         ...prev,
-        skills: [...prev.skills, trimmedSkill],
-      }));
-      setSkillInput("");
+        skills: [...prev.skills, ...uniqueNew],
+      };
+    });
+    setSkillInput("");
+  };
+
+  const handleSkillKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      if (skillInput.trim()) {
+        addSkills(skillInput);
+      }
+    }
+  };
+
+  const handleSkillChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (val.includes(',')) {
+      addSkills(val);
+    } else {
+      setSkillInput(skillInput === "" ? val.trimStart() : val);
+    }
+  };
+
+  const handleAddSkill = (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    if (skillInput.trim()) {
+      addSkills(skillInput);
     }
   };
 
@@ -129,6 +170,22 @@ export default function StudentProfile() {
     if (!userUid) return showToast("error", "You must be logged in!");
     setSaving(true);
     
+    // Include any pending skills from skillInput before saving
+    let finalSkills = formData.skills;
+    if (skillInput.trim()) {
+      const tokens = skillInput
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      const existingLower = new Set(formData.skills.map((s) => s.toLowerCase()));
+      const toAdd = tokens.filter((s) => !existingLower.has(s.toLowerCase()));
+      if (toAdd.length > 0) {
+        finalSkills = [...formData.skills, ...toAdd];
+        setFormData((prev) => ({ ...prev, skills: finalSkills }));
+      }
+      setSkillInput("");
+    }
+
     try {
       const docRef = doc(db, "users", userUid);
       await updateDoc(docRef, {
@@ -137,7 +194,7 @@ export default function StudentProfile() {
         department: formData.department,
         cgpa: formData.cgpa,
         researchInterests: formData.researchInterests,
-        skills: formData.skills,
+        skills: finalSkills,
         photoURL: formData.photoURL,
       });
       showToast("success", "Profile updated successfully!");
@@ -412,9 +469,9 @@ export default function StudentProfile() {
                   <input
                     type="text"
                     value={skillInput}
-                    onChange={(e) => setSkillInput(e.target.value)}
-                    onKeyDown={handleAddSkill}
-                    placeholder="Type a skill and press Enter..."
+                    onChange={handleSkillChange}
+                    onKeyDown={handleSkillKeyDown}
+                    placeholder="Type skills (separate with commas or press Enter)..."
                     className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
                   />
                   <button
