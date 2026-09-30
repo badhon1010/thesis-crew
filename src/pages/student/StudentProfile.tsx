@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Loader2, Save, UserCircle, X, Plus, Lock, Mail, Key, Eye, EyeOff, Camera } from "lucide-react";
+import { Loader2, Save, UserCircle, X, Plus, Lock, Mail, Key, Eye, EyeOff, Camera, ChevronDown } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { auth } from "@/firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
@@ -8,6 +8,7 @@ import { validateUiuEmail } from "@/utils/emailValidation";
 import { onAuthStateChanged, updateEmail, updatePassword, sendPasswordResetEmail, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { ImageCropperModal } from "@/components/common/ImageCropperModal";
 import { ToastAlert } from "@/components/common/ToastAlert";
+import { DEPARTMENTS } from "@/constants/departments";
 
 interface UserProfile {
   name: string;
@@ -96,7 +97,7 @@ export default function StudentProfile() {
     return () => unsubscribe();
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
@@ -154,6 +155,24 @@ export default function StudentProfile() {
     e?.preventDefault();
     if (skillInput.trim()) {
       addSkills(skillInput);
+    }
+  };
+
+  const handleResearchInterestsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value;
+    if (val.endsWith(',') && !val.endsWith(', ')) {
+      val = val + ' ';
+    }
+    setFormData((prev) => ({ ...prev, researchInterests: val }));
+  };
+
+  const handleResearchInterestsKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const trimmed = formData.researchInterests.trim();
+      if (trimmed && !trimmed.endsWith(',')) {
+        setFormData((prev) => ({ ...prev, researchInterests: trimmed + ', ' }));
+      }
     }
   };
 
@@ -422,13 +441,31 @@ export default function StudentProfile() {
               </div>
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-900 dark:text-slate-300">Department</label>
-                <input
-                  type="text"
-                  name="department"
-                  value={formData.department}
-                  onChange={handleChange}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
-                />
+                <div className="relative">
+                  <select
+                    name="department"
+                    value={formData.department}
+                    onChange={handleChange}
+                    className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 pr-10 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white"
+                  >
+                    <option value="" disabled className="text-slate-400 dark:bg-[#181818] dark:text-slate-500">
+                      Select Department
+                    </option>
+                    {formData.department && !DEPARTMENTS.includes(formData.department as any) && (
+                      <option value={formData.department} className="text-slate-900 dark:bg-[#181818] dark:text-white">
+                        {formData.department}
+                      </option>
+                    )}
+                    {DEPARTMENTS.map((dept) => (
+                      <option key={dept} value={dept} className="text-slate-900 dark:bg-[#181818] dark:text-white">
+                        {dept}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400 dark:text-slate-500">
+                    <ChevronDown className="h-4 w-4" />
+                  </div>
+                </div>
               </div>
               <div>
                 <label className="mb-2 block text-sm font-semibold text-slate-900 dark:text-slate-300">CGPA</label>
@@ -455,7 +492,8 @@ export default function StudentProfile() {
                   type="text"
                   name="researchInterests"
                   value={formData.researchInterests}
-                  onChange={handleChange}
+                  onChange={handleResearchInterestsChange}
+                  onKeyDown={handleResearchInterestsKeyDown}
                   placeholder="e.g., Artificial Intelligence, IoT, Web Development"
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
                 />

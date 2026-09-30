@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Check, FlaskConical } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, FlaskConical } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ThemeToggle } from "../../components/common/ThemeToggle";
@@ -8,6 +8,7 @@ import { auth } from "../../firebase/auth";
 import { db } from "../../firebase/firestore";
 import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
+import { DEPARTMENTS } from "../../constants/departments";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -22,11 +23,28 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [cgpa, setCgpa] = useState("");
   const [researchInterests, setResearchInterests] = useState("");
-  const [researchAreas, setResearchAreas] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [toastMessage, setToastMessage] = useState("");
+
+  const handleResearchInterestsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value;
+    if (val.endsWith(',') && !val.endsWith(', ')) {
+      val = val + ' ';
+    }
+    setResearchInterests(val);
+  };
+
+  const handleResearchInterestsKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const trimmed = researchInterests.trim();
+      if (trimmed && !trimmed.endsWith(',')) {
+        setResearchInterests(trimmed + ', ');
+      }
+    }
+  };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +67,8 @@ export default function Register() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
+      const cleanResearchInterests = researchInterests.replace(/,\s*$/, '').trim();
+
       const userData: any = {
         uid: user.uid,
         name: name,
@@ -61,10 +81,11 @@ export default function Register() {
       if (role === "student") {
         userData.studentId = universityId;
         userData.cgpa = cgpa;
-        userData.researchInterests = researchInterests;
+        userData.researchInterests = cleanResearchInterests;
       } else {
         userData.designation = designation;
-        userData.researchAreas = researchAreas;
+        userData.researchInterests = cleanResearchInterests;
+        userData.researchAreas = cleanResearchInterests;
       }
 
       await setDoc(doc(db, "users", user.uid), userData);
@@ -199,11 +220,12 @@ export default function Register() {
                 required
               />
 
-              <Field
+              <SelectField
                 label="Department"
-                placeholder="Computer Science & Engineering"
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
+                options={DEPARTMENTS}
+                placeholder="Select Department"
               />
 
               {role === "student" ? (
@@ -251,9 +273,10 @@ export default function Register() {
 
                   <Field
                     label="Research interests"
-                    placeholder="AI, ML, Computer Vision"
+                    placeholder="e.g., Artificial Intelligence, IoT, Web Development"
                     value={researchInterests}
-                    onChange={(e) => setResearchInterests(e.target.value)}
+                    onChange={handleResearchInterestsChange}
+                    onKeyDown={handleResearchInterestsKeyDown}
                   />
                 </>
               )}
@@ -261,10 +284,11 @@ export default function Register() {
               {role === "teacher" && (
                 <div className="sm:col-span-2">
                   <Field
-                    label="Research areas"
-                    placeholder="Machine Learning, IoT, Data Science"
-                    value={researchAreas}
-                    onChange={(e) => setResearchAreas(e.target.value)}
+                    label="Research interests"
+                    placeholder="e.g., Artificial Intelligence, IoT, Web Development"
+                    value={researchInterests}
+                    onChange={handleResearchInterestsChange}
+                    onKeyDown={handleResearchInterestsKeyDown}
                   />
                 </div>
               )}
@@ -301,6 +325,7 @@ function Field({
   type = "text",
   value,
   onChange,
+  onKeyDown,
   required,
 }: {
   label: string;
@@ -308,6 +333,7 @@ function Field({
   type?: string;
   value?: string;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   required?: boolean;
 }) {
   return (
@@ -321,9 +347,55 @@ function Field({
         placeholder={placeholder}
         value={value}
         onChange={onChange}
+        onKeyDown={onKeyDown}
         required={required}
         className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
       />
+    </div>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder = "Select Department",
+  required,
+}: {
+  label: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  options: readonly string[];
+  placeholder?: string;
+  required?: boolean;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-semibold text-slate-800 dark:text-slate-200">
+        {label}
+      </label>
+
+      <div className="relative">
+        <select
+          value={value}
+          onChange={onChange}
+          required={required}
+          className="h-12 w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 pr-10 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white"
+        >
+          <option value="" disabled className="text-slate-400 dark:bg-[#181818] dark:text-slate-500">
+            {placeholder}
+          </option>
+          {options.map((opt) => (
+            <option key={opt} value={opt} className="text-slate-900 dark:bg-[#181818] dark:text-white">
+              {opt}
+            </option>
+          ))}
+        </select>
+        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400 dark:text-slate-500">
+          <ChevronDown className="h-4 w-4" />
+        </div>
+      </div>
     </div>
   );
 }
