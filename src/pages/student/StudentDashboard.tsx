@@ -160,17 +160,31 @@ export default function StudentDashboard() {
   const handleAddSkill = async (event: React.FormEvent) => {
     event.preventDefault();
     const user = auth.currentUser;
-    const skill = skillInput.trim();
-    if (!user || !skill) return;
-    if (profile.skills?.some((existingSkill) => existingSkill.toLocaleLowerCase() === skill.toLocaleLowerCase())) {
-      setSkillError("This skill is already in your profile.");
+    const tokens = skillInput
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    if (!user || tokens.length === 0) return;
+
+    const existingLower = new Set((profile.skills ?? []).map((s) => s.toLowerCase()));
+    const uniqueNew: string[] = [];
+    for (const token of tokens) {
+      const lower = token.toLowerCase();
+      if (!existingLower.has(lower)) {
+        existingLower.add(lower);
+        uniqueNew.push(token);
+      }
+    }
+
+    if (uniqueNew.length === 0) {
+      setSkillError("These skill(s) are already in your profile.");
       return;
     }
 
     setSavingSkill(true);
     setSkillError("");
     try {
-      await updateDoc(doc(db, "users", user.uid), { skills: [...(profile.skills ?? []), skill] });
+      await updateDoc(doc(db, "users", user.uid), { skills: [...(profile.skills ?? []), ...uniqueNew] });
       setSkillInput("");
     } catch (error) {
       console.error("Failed to add skill:", error);

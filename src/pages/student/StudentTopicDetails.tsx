@@ -39,6 +39,7 @@ interface SupervisorProfile {
   email?: string;
   department?: string;
   designation?: string;
+  researchInterests?: string;
   researchAreas?: string;
 }
 
@@ -264,7 +265,7 @@ export default function StudentTopicDetails() {
         )}
       </section>
       </main>
-      <aside className="space-y-6"><section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]"><div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"><GraduationCap className="h-6 w-6" /></div><h2 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">Supervisor</h2><p className="mt-3 font-semibold text-slate-900 dark:text-white">{supervisor.name || topic.supervisorName || "Supervisor details unavailable"}</p><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{supervisor.designation || "Faculty supervisor"}</p><div className="mt-5 space-y-3 border-t border-slate-100 pt-5 text-sm dark:border-[#2A2A2A]"><p className="text-slate-600 dark:text-slate-300"><span className="font-medium text-slate-900 dark:text-white">Department: </span>{supervisor.department || "Not specified"}</p><p className="text-slate-600 dark:text-slate-300"><span className="font-medium text-slate-900 dark:text-white">Research areas: </span>{supervisor.researchAreas || "Not specified"}</p>{supervisor.email && <a href={`mailto:${supervisor.email}`} className="inline-flex items-center gap-2 font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"><Mail className="h-4 w-4" />{supervisor.email}</a>}</div></section>
+      <aside className="space-y-6"><section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818]"><div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"><GraduationCap className="h-6 w-6" /></div><h2 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">Supervisor</h2><p className="mt-3 font-semibold text-slate-900 dark:text-white">{supervisor.name || topic.supervisorName || "Supervisor details unavailable"}</p><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{supervisor.designation || "Faculty supervisor"}</p><div className="mt-5 space-y-3 border-t border-slate-100 pt-5 text-sm dark:border-[#2A2A2A]"><p className="text-slate-600 dark:text-slate-300"><span className="font-medium text-slate-900 dark:text-white">Department: </span>{supervisor.department || "Not specified"}</p><p className="text-slate-600 dark:text-slate-300"><span className="font-medium text-slate-900 dark:text-white">Research interests: </span>{supervisor.researchInterests || supervisor.researchAreas || "Not specified"}</p>{supervisor.email && <a href={`mailto:${supervisor.email}`} className="inline-flex items-center gap-2 font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"><Mail className="h-4 w-4" />{supervisor.email}</a>}</div></section>
       <section className={`rounded-2xl border p-6 ${
           requestStatus === "accepted" 
             ? "border-emerald-100 bg-emerald-50/60 dark:border-emerald-500/20 dark:bg-emerald-500/5"
