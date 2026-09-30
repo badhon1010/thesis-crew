@@ -4,7 +4,7 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
 import { type ResearchTopic } from "@/firebase/researchTopics";
 import { submitGroupJoinRequest, type TeamMemberInfo } from "@/firebase/teamFormation";
-import { calculateSkillMatch } from "@/utils/skillMatching";
+
 
 interface TeamSubmissionModalProps {
   isOpen: boolean;
@@ -184,9 +184,6 @@ export function TeamSubmissionModal({ isOpen, onClose, topic, leaderId, leaderPr
                           <div>
                             <div className="flex items-center gap-2">
                               <p className="text-sm font-semibold text-slate-900 dark:text-white">{student.name}</p>
-                              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400">
-                                {calculateSkillMatch(student.skills || [], topic.requiredSkills).score}% match
-                              </span>
                             </div>
                             <p className="text-xs text-slate-500">ID: {student.studentId} | {student.email}</p>
                           </div>
@@ -232,9 +229,6 @@ export function TeamSubmissionModal({ isOpen, onClose, topic, leaderId, leaderPr
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold text-slate-900 dark:text-white">{member.name}</p>
-                    <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400">
-                      {calculateSkillMatch(member.skills || [], topic.requiredSkills).score}% match
-                    </span>
                   </div>
                   <p className="text-xs text-slate-500">ID: {member.studentId} | {member.email}</p>
                 </div>
