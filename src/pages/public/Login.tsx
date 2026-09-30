@@ -175,16 +175,24 @@ export default function Login() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@university.edu"
+                  placeholder={role === "student" ? "e.g. student@bscse.uiu.ac.bd" : "e.g. faculty@cse.uiu.ac.bd"}
                   className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
                 />
               </div>
 
               {/* Password */}
               <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-800 dark:text-slate-200">
-                  Password
-                </label>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="block text-sm font-semibold text-slate-800 dark:text-slate-200">
+                    Password
+                  </label>
+                  <Link
+                    to="/forgot-password"
+                    className="text-xs font-semibold text-indigo-600 transition hover:text-indigo-500 dark:text-indigo-400"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
                 <div className="relative">
                   <input
                     type={showPassword ? "text" : "password"}

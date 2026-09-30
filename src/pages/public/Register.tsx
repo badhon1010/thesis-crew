@@ -192,7 +192,7 @@ export default function Register() {
 
               <Field
                 label="University email *"
-                placeholder={role === "student" ? "student@bscse.uiu.ac.bd" : "faculty@cse.uiu.ac.bd"}
+                placeholder={role === "student" ? "e.g. student@bscse.uiu.ac.bd" : "e.g. faculty@cse.uiu.ac.bd"}
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}

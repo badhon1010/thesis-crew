@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import Landing from "@/pages/public/Landing";
 import Login from "@/pages/public/Login";
+import ForgotPassword from "@/pages/public/ForgotPassword";
 import Register from "@/pages/public/Register";
 import StudentDashboard from "@/pages/student/StudentDashboard";
 import ResearchTopics from "@/pages/student/ResearchTopics";
@@ -34,6 +35,7 @@ export function AppRoutes() {
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/register" element={<Register />} />
 

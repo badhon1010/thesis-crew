@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, Clock3, Loader2, UserRound, X, Eye, Users, Sparkles } from "lucide-react";
+import { Check, Clock3, Loader2, UserRound, X, Eye, Users } from "lucide-react";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, onSnapshot, query, where, type Unsubscribe } from "firebase/firestore";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -10,7 +10,7 @@ import { GroupMemberProfileModal } from "@/components/common/GroupMemberProfileM
 import { UserAvatar } from "@/components/common/UserAvatar";
 import { auth } from "@/firebase/auth";
 import { db } from "@/firebase/firestore";
-import { calculateSkillMatch } from "@/utils/skillMatching";
+
 import { reviewJoinRequest, type JoinRequest } from "@/firebase/teamFormation";
 import { RejectRequestModal } from "@/components/teacher/RejectRequestModal";
 
@@ -181,7 +181,7 @@ export default function TeacherJoinRequests() {
           ) : (
             <div className="divide-y divide-slate-100 dark:divide-[#2A2A2A]">
               {individualRequests.map((request) => {
-                const match = calculateSkillMatch(request.studentSkills, request.topicRequiredSkills);
+
                 const busy = reviewingId === request.id;
                 return (
                   <article key={request.id} className="p-6">
@@ -230,25 +230,7 @@ export default function TeacherJoinRequests() {
                         </div>
                       </div>
                       <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
-                        {request.aiMatchAnalysis ? (
-                          <div className="rounded-lg bg-indigo-50 px-3 py-2 text-right dark:bg-indigo-500/10">
-                            <div className="flex items-center justify-end gap-1 text-sm font-bold text-indigo-600 dark:text-indigo-400">
-                              <Sparkles className="h-4 w-4" /> {request.aiMatchAnalysis.matchScore}% match
-                            </div>
-                            <p className="mt-0.5 text-[10px] text-indigo-700/70 dark:text-indigo-300/70">
-                              AI Analyzed
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="rounded-lg bg-emerald-50 px-3 py-2 text-right dark:bg-emerald-950/30">
-                            <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                              {match.score}% match
-                            </p>
-                            <p className="mt-0.5 text-[10px] text-emerald-700/70 dark:text-emerald-300/70">
-                              {match.matchedSkills.length} of {match.matchedSkills.length + match.missingSkills.length} required skills
-                            </p>
-                          </div>
-                        )}
+                        {/* Skill matching score removed as per request */}
                         <div className="flex gap-2">
                           <button
                             disabled={busy}
@@ -327,9 +309,7 @@ export default function TeacherJoinRequests() {
                 const fullTeamMembers = [leaderMember, ...otherMembers];
                 const teamSize = fullTeamMembers.length;
 
-                // Calculate average skill match across all team members
-                const allSkills = fullTeamMembers.flatMap(m => m.skills || []);
-                const avgMatch = calculateSkillMatch(allSkills, request.topicRequiredSkills);
+
 
                 return (
                   <article key={request.id} className="p-6">
@@ -389,25 +369,7 @@ export default function TeacherJoinRequests() {
                         </div>
                       </div>
                       <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
-                        {request.aiMatchAnalysis ? (
-                          <div className="rounded-lg bg-indigo-50 px-3 py-2 text-right dark:bg-indigo-500/10">
-                            <div className="flex items-center justify-end gap-1 text-sm font-bold text-indigo-600 dark:text-indigo-400">
-                              <Sparkles className="h-4 w-4" /> {request.aiMatchAnalysis.matchScore}% match
-                            </div>
-                            <p className="mt-0.5 text-[10px] text-indigo-700/70 dark:text-indigo-300/70">
-                              AI Analyzed Team Match
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="rounded-lg bg-emerald-50 px-3 py-2 text-right dark:bg-emerald-950/30">
-                            <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                              {avgMatch.score}% match
-                            </p>
-                            <p className="mt-0.5 text-[10px] text-emerald-700/70 dark:text-emerald-300/70">
-                              Team average
-                            </p>
-                          </div>
-                        )}
+                        {/* Skill matching score removed as per request */}
                         <div className="flex gap-2">
                           <button
                             disabled={busy}
