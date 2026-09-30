@@ -132,6 +132,9 @@ export function DocumentModal({ isOpen, onClose, onSave }: DocumentModalProps) {
     onClose();
   };
 
+  const MAX_FILE_SIZE_MB = 8;
+  const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
   const handleRemoveFile = (e: React.MouseEvent) => {
     e.stopPropagation();
     setFile(null);
@@ -142,8 +145,13 @@ export function DocumentModal({ isOpen, onClose, onSave }: DocumentModalProps) {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
+    setError(null);
     const droppedFile = e.dataTransfer.files?.[0];
     if (droppedFile) {
+      if (droppedFile.size > MAX_FILE_SIZE_BYTES) {
+        setError(`File size exceeds ${MAX_FILE_SIZE_MB} MB limit. Please select a smaller file.`);
+        return;
+      }
       setFile(droppedFile);
       if (!title) setTitle(droppedFile.name.replace(/\.[^/.]+$/, ""));
     }
@@ -162,8 +170,14 @@ export function DocumentModal({ isOpen, onClose, onSave }: DocumentModalProps) {
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setError(null);
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
+      if (selectedFile.size > MAX_FILE_SIZE_BYTES) {
+        setError(`File size exceeds ${MAX_FILE_SIZE_MB} MB limit. Please select a smaller file.`);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
       setFile(selectedFile);
       if (!title) setTitle(selectedFile.name.replace(/\.[^/.]+$/, ""));
     }
@@ -174,16 +188,26 @@ export function DocumentModal({ isOpen, onClose, onSave }: DocumentModalProps) {
     if (!title.trim()) return setError("Give this resource a title.");
     if (isLink && !url.trim()) return setError("Paste a URL to share.");
     if (!isLink && !file) return setError("Select or drop a file to upload.");
+    if (!isLink && file && file.size > MAX_FILE_SIZE_BYTES) {
+      return setError(`File size exceeds ${MAX_FILE_SIZE_MB} MB limit. Please select a smaller file.`);
+    }
 
     setIsSaving(true);
     try {
-      await onSave({
+      const savePromise = onSave({
         title: title.trim(),
         type,
         url: isLink ? url.trim() : "",
         file: isLink ? null : file,
         isLink,
       });
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Saving timed out. Please check your connection and try again.")), 35000)
+      );
+
+      await Promise.race([savePromise, timeoutPromise]);
+
       // The user may have already hit Cancel while this was in flight —
       // in that case the modal is unmounted, so skip touching its state.
       if (!isMountedRef.current) return;
@@ -359,7 +383,7 @@ export function DocumentModal({ isOpen, onClose, onSave }: DocumentModalProps) {
                       <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-300">
                         Drag a file here, or click to browse
                       </p>
-                      <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">PDF, code, datasets, slides — up to 10 MB</p>
+                      <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">PDF, code, datasets, slides — up to 8 MB</p>
                     </>
                   )}
                 </div>

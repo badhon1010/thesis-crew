@@ -54,9 +54,9 @@ import { PublicationModal, type PublicationFormData, type PublicationStatus, typ
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { DocumentModal } from "@/components/ui/DocumentModal";
 import { rtdb } from "@/firebase/database";
-import { ref as dbRef, get as dbGet, remove as dbRemove } from "firebase/database";
+import { ref as dbRef, set as dbSet, get as dbGet, remove as dbRemove } from "firebase/database";
 import { storage } from "@/firebase/storage";
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { ref as storageRef, deleteObject } from "firebase/storage";
 import {
   doc,
   getDoc,
@@ -567,6 +567,18 @@ export default function StudentGroupDetails() {
     setDraggedTaskId(null);
   };
 
+  // Reads a File into a base64 data URL (e.g. "data:application/pdf;base64,....").
+  // Realtime Database can only store strings/JSON, not raw binary, so files are
+  // base64-encoded before being written.
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error || new Error("Failed to read file"));
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleSaveDocument = async (data: { title: string; type: string; url: string; file: File | null; isLink: boolean }) => {
     if (!id || !auth.currentUser) return;
     try {
@@ -574,16 +586,23 @@ export default function StudentGroupDetails() {
       let rtdbPath: string | null = null;
 
       if (!data.isLink && data.file) {
-        console.log("Uploading file to Firebase Storage:", data.file.name, "Size:", data.file.size);
-        
-        const safeFileName = data.file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+        console.log("Reading file for Realtime Database upload:", data.file.name, "Size:", data.file.size);
+        const base64Data = await fileToBase64(data.file);
+
+        // Firebase keys can't contain ".", "#", "$", "[", "]", or "/"
+        const safeFileName = data.file.name.replace(/[.#$/\[\]]/g, "_");
         const docKey = `${Date.now()}_${safeFileName}`;
-        rtdbPath = `researchGroups/${id}/documents/${docKey}`;
-        
-        const fileRef = storageRef(storage, rtdbPath);
-        await uploadBytes(fileRef, data.file);
-        documentUrl = await getDownloadURL(fileRef);
-        console.log("Firebase Storage upload finished.");
+        rtdbPath = `researchGroupDocuments/${id}/${docKey}`;
+
+        console.log("Writing file bytes to Realtime Database at:", rtdbPath);
+        await dbSet(dbRef(rtdb, rtdbPath), {
+          name: data.file.name,
+          type: data.file.type,
+          size: data.file.size,
+          data: base64Data,
+        });
+        console.log("Realtime Database write finished.");
+        documentUrl = "";
       }
 
       const currentStudent = teamMembers.find(
@@ -626,13 +645,20 @@ export default function StudentGroupDetails() {
             console.error("Error deleting from Realtime Database", e)
           );
         } else {
-          const fileRef = storageRef(storage, documentToDelete.rtdbPath);
-          await deleteObject(fileRef).catch((e) =>
-            console.error("Error deleting from Storage", e)
-          );
+          try {
+            const fileRef = storageRef(storage, documentToDelete.rtdbPath);
+            await Promise.race([
+              deleteObject(fileRef),
+              new Promise((_, reject) => setTimeout(() => reject(new Error("Storage timeout")), 2500))
+            ]).catch((e) => console.warn("Storage cleanup failed/skipped:", e));
+          } catch (e) {
+            console.warn("Storage cleanup error:", e);
+          }
         }
       }
-      await deleteDoc(doc(db, "researchGroups", id, "documents", documentToDelete.id));
+      await deleteDoc(
+        doc(db, "researchGroups", id, "documents", documentToDelete.id)
+      );
       showToast("success", "Resource deleted successfully");
     } catch (error) {
       console.error("Error deleting document:", error);
@@ -664,8 +690,18 @@ export default function StudentGroupDetails() {
         const res = await fetch(stored.data);
         const blob = await res.blob();
         const objectUrl = URL.createObjectURL(blob);
-        window.open(objectUrl, "_blank", "noopener,noreferrer");
+        const newTab = window.open(objectUrl, "_blank", "noopener,noreferrer");
+        if (!newTab) {
+          const link = document.createElement("a");
+          link.href = objectUrl;
+          link.download = stored.name || docData.fileName || docData.title;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
         setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      } else {
+        showToast("error", "This file is no longer available.");
       }
     } catch (error) {
       console.error("Error opening document:", error);
