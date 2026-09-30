@@ -63,9 +63,9 @@ import { GroupChat } from "@/components/chat/GroupChat";
 import { ConfirmModal } from "@/components/common/ConfirmModal";
 import { auth } from "@/firebase/auth";
 import { rtdb } from "@/firebase/database";
-import { ref as dbRef, get as dbGet, remove as dbRemove } from "firebase/database";
+import { ref as dbRef, set as dbSet, get as dbGet, remove as dbRemove } from "firebase/database";
 import { storage } from "@/firebase/storage";
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { ref as storageRef, deleteObject } from "firebase/storage";
 import {
   doc,
   getDoc,
@@ -668,6 +668,18 @@ export default function ResearchGroupManagement() {
     await moveTask(task, newStatus);
   };
 
+  // Reads a File into a base64 data URL (e.g. "data:application/pdf;base64,....").
+  // Realtime Database can only store strings/JSON, not raw binary, so files are
+  // base64-encoded before being written.
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error || new Error("Failed to read file"));
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleSaveDocument = async (data: { title: string; type: string; url: string; file: File | null; isLink: boolean }) => {
     if (!id || !auth.currentUser) return;
     try {
@@ -675,16 +687,25 @@ export default function ResearchGroupManagement() {
       let rtdbPath: string | null = null;
 
       if (!data.isLink && data.file) {
-        console.log("Uploading file to Firebase Storage:", data.file.name, "Size:", data.file.size);
-        
-        const safeFileName = data.file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+        console.log("Reading file for Realtime Database upload:", data.file.name, "Size:", data.file.size);
+        const base64Data = await fileToBase64(data.file);
+
+        // Firebase keys can't contain ".", "#", "$", "[", "]", or "/"
+        const safeFileName = data.file.name.replace(/[.#$/\[\]]/g, "_");
         const docKey = `${Date.now()}_${safeFileName}`;
-        rtdbPath = `researchGroups/${id}/documents/${docKey}`; // using rtdbPath to store storagePath for backward compatibility
-        
-        const fileRef = storageRef(storage, rtdbPath);
-        await uploadBytes(fileRef, data.file);
-        documentUrl = await getDownloadURL(fileRef);
-        console.log("Firebase Storage upload finished.");
+        rtdbPath = `researchGroupDocuments/${id}/${docKey}`;
+
+        console.log("Writing file bytes to Realtime Database at:", rtdbPath);
+        await dbSet(dbRef(rtdb, rtdbPath), {
+          name: data.file.name,
+          type: data.file.type,
+          size: data.file.size,
+          data: base64Data,
+        });
+        console.log("Realtime Database write finished.");
+        // Files stored in Realtime Database don't have a static download URL —
+        // the "url" field stays empty and the viewer fetches by rtdbPath instead.
+        documentUrl = "";
       }
 
       console.log("Saving document metadata to Firestore...");
@@ -696,13 +717,14 @@ export default function ResearchGroupManagement() {
         rtdbPath,
         fileName: data.file?.name || null,
         fileType: data.file?.type || null,
-        uploadedBy: auth.currentUser.displayName || "Teacher",
+        uploadedBy: auth.currentUser.displayName || "Supervisor",
         uploadedAt: serverTimestamp(),
       });
 
       showToast("success", "Resource added successfully");
     } catch (error) {
       console.error("Error saving document:", error);
+      showToast("error", "Failed to upload document");
       throw error;
     }
   };
@@ -719,8 +741,15 @@ export default function ResearchGroupManagement() {
         if (documentToDelete.rtdbPath.startsWith("researchGroupDocuments/")) {
           await dbRemove(dbRef(rtdb, documentToDelete.rtdbPath)).catch(e => console.error("Error deleting from Realtime Database", e));
         } else {
-          const fileRef = storageRef(storage, documentToDelete.rtdbPath);
-          await deleteObject(fileRef).catch(e => console.error("Error deleting from Storage", e));
+          try {
+            const fileRef = storageRef(storage, documentToDelete.rtdbPath);
+            await Promise.race([
+              deleteObject(fileRef),
+              new Promise((_, reject) => setTimeout(() => reject(new Error("Storage timeout")), 2500))
+            ]).catch(e => console.warn("Storage cleanup skipped/failed:", e));
+          } catch (e) {
+            console.warn("Storage cleanup error:", e);
+          }
         }
       }
       await deleteDoc(doc(db, "researchGroups", id, "documents", documentToDelete.id));
@@ -759,9 +788,19 @@ export default function ResearchGroupManagement() {
         const res = await fetch(stored.data);
         const blob = await res.blob();
         const objectUrl = URL.createObjectURL(blob);
-        window.open(objectUrl, "_blank", "noopener,noreferrer");
+        const newTab = window.open(objectUrl, "_blank", "noopener,noreferrer");
+        if (!newTab) {
+          const link = document.createElement("a");
+          link.href = objectUrl;
+          link.download = stored.name || docData.fileName || docData.title;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
         // Give the new tab time to load the blob before revoking it.
         setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      } else {
+        showToast("error", "This file is no longer available.");
       }
     } catch (error) {
       console.error("Error opening document:", error);
@@ -2388,7 +2427,7 @@ export default function ResearchGroupManagement() {
                 filteredDocuments.map((doc) => (
                   <div
                     key={doc.id}
-                    onClick={() => window.open(doc.url, "_blank")}
+                    onClick={() => handleViewDocument(doc)}
                     className="group flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 p-4 hover:border-indigo-200 hover:shadow-md hover:-translate-y-1 transition-all duration-200 dark:border-[#2A2A2A] dark:hover:border-indigo-500/30 dark:hover:bg-[#1a1a1a]"
                   >
                     <div className="flex flex-1 items-center gap-4">
