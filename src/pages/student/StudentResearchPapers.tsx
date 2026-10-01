@@ -201,6 +201,62 @@ function convertOpenAlexPaper(paper: OpenAlexWork, rank: number): CrossrefWork {
   };
 }
 
+function convertArxivPaper(entry: Element, rank: number): CrossrefWork {
+  const title = entry.querySelector("title")?.textContent?.replace(/\s+/g, ' ').trim() || undefined;
+  const abstract = entry.querySelector("summary")?.textContent?.replace(/\s+/g, ' ').trim() || undefined;
+  const publishedDate = entry.querySelector("published")?.textContent || "";
+  const year = publishedDate ? parseInt(publishedDate.slice(0, 4), 10) : undefined;
+  let doi = undefined;
+  const links = entry.querySelectorAll("link[title='doi']");
+  links.forEach(l => { if (l.getAttribute("href")?.includes("doi.org")) doi = normalizeDoi(l.getAttribute("href") || undefined) });
+  if (!doi) {
+    const dois = entry.querySelectorAll("doi");
+    if (dois.length) doi = normalizeDoi(dois[0].textContent || undefined);
+  }
+  const authors = Array.from(entry.querySelectorAll("author name")).map(n => ({ name: n.textContent?.trim() || "" })).filter(a => !!a.name);
+  const pdfLink = entry.querySelector("link[title='pdf']")?.getAttribute("href") || undefined;
+  const url = entry.querySelector("id")?.textContent || undefined;
+
+  return {
+    DOI: doi || undefined,
+    title: title ? [title] : undefined,
+    author: authors,
+    abstract: abstract,
+    published: year ? { "date-parts": [[year]] } : undefined,
+    URL: url,
+    link: pdfLink ? [{ URL: pdfLink, "content-type": "application/pdf" }] : undefined,
+    type: "Preprint",
+    sourceLabels: ["arXiv"],
+    sourceRelevance: Math.max(0, 1 - rank / PAGE_SIZE),
+  };
+}
+
+interface PlosPaper {
+  id?: string;
+  journal?: string;
+  publication_date?: string;
+  article_type?: string;
+  author_display?: string[];
+  abstract?: string[];
+  title_display?: string;
+}
+
+function convertPlosPaper(paper: PlosPaper, rank: number): CrossrefWork {
+  const year = paper.publication_date ? parseInt(paper.publication_date.slice(0, 4), 10) : undefined;
+  return {
+    DOI: normalizeDoi(paper.id) || undefined,
+    title: paper.title_display ? [paper.title_display] : undefined,
+    author: paper.author_display?.map(name => ({ name })) || [],
+    abstract: paper.abstract?.[0] || undefined,
+    "container-title": paper.journal ? [paper.journal] : undefined,
+    published: year ? { "date-parts": [[year]] } : undefined,
+    URL: paper.id ? `https://journals.plos.org/plosone/article?id=${paper.id}` : undefined,
+    type: paper.article_type || "Research Article",
+    sourceLabels: ["PLOS"],
+    sourceRelevance: Math.max(0, 1 - rank / PAGE_SIZE),
+  };
+}
+
 function mergePaperSources(crossrefWorks: CrossrefWork[], semanticWorks: CrossrefWork[]): CrossrefWork[] {
   const merged = new Map<string, CrossrefWork>();
   const keyFor = (work: CrossrefWork) => normalizeDoi(work.DOI) || (normalizeTitle(work.title?.[0])
@@ -283,6 +339,10 @@ export default function StudentResearchPapers() {
   const [semanticHasMore, setSemanticHasMore] = useState(false);
   const [openAlexPage, setOpenAlexPage] = useState(1);
   const [openAlexHasMore, setOpenAlexHasMore] = useState(false);
+  const [arxivOffset, setArxivOffset] = useState(0);
+  const [arxivHasMore, setArxivHasMore] = useState(false);
+  const [plosOffset, setPlosOffset] = useState(0);
+  const [plosHasMore, setPlosHasMore] = useState(false);
   const [sourceWarnings, setSourceWarnings] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -390,11 +450,61 @@ export default function StudentResearchPapers() {
         if (!append) setOpenAlexPage(1);
       }
 
-      if (!crossrefWorks.length && !semanticWorks.length && !openAlexWorks.length && sourceErrors.length === 3) {
+      const currentArxivOffset = append ? arxivOffset : 0;
+      let arxivWorks: CrossrefWork[] = [];
+      try {
+        const arxivParams = new URLSearchParams({
+          search_query: `all:${queryText.trim()}`,
+          start: String(currentArxivOffset),
+          max_results: String(PAGE_SIZE),
+        });
+        const response = await fetch(`https://export.arxiv.org/api/query?${arxivParams.toString()}`, { signal: controller.signal });
+        if (!response.ok) throw new Error(`arXiv returned ${response.status}`);
+        const text = await response.text();
+        const doc = new DOMParser().parseFromString(text, "text/xml");
+        const entries = Array.from(doc.querySelectorAll("entry"));
+        arxivWorks = entries.map((entry, index) => convertArxivPaper(entry, index));
+        const totalResultsStr = doc.querySelector("totalResults")?.textContent;
+        const arxivTotal = totalResultsStr ? parseInt(totalResultsStr, 10) : 0;
+        const nextOffset = currentArxivOffset + arxivWorks.length;
+        setArxivOffset(nextOffset);
+        setArxivHasMore(arxivWorks.length > 0 && nextOffset < arxivTotal);
+      } catch (arxivError) {
+        if (arxivError instanceof DOMException && arxivError.name === "AbortError") return;
+        sourceErrors.push(arxivError instanceof TypeError ? "arXiv could not be reached" : arxivError instanceof Error ? `arXiv: ${arxivError.message}` : "arXiv unavailable");
+        setArxivHasMore(false);
+        if (!append) setArxivOffset(0);
+      }
+
+      const currentPlosOffset = append ? plosOffset : 0;
+      let plosWorks: CrossrefWork[] = [];
+      try {
+        const plosParams = new URLSearchParams({
+          q: `everything:${queryText.trim()}`,
+          start: String(currentPlosOffset),
+          rows: String(PAGE_SIZE),
+        });
+        const response = await fetch(`https://api.plos.org/search?${plosParams.toString()}`, { signal: controller.signal });
+        if (!response.ok) throw new Error(`PLOS returned ${response.status}`);
+        const data = await response.json();
+        const docs = data.response?.docs || [];
+        plosWorks = docs.map((doc: PlosPaper, index: number) => convertPlosPaper(doc, index));
+        const plosTotal = data.response?.numFound || 0;
+        const nextOffset = currentPlosOffset + plosWorks.length;
+        setPlosOffset(nextOffset);
+        setPlosHasMore(plosWorks.length > 0 && nextOffset < plosTotal);
+      } catch (plosError) {
+        if (plosError instanceof DOMException && plosError.name === "AbortError") return;
+        sourceErrors.push(plosError instanceof TypeError ? "PLOS could not be reached" : plosError instanceof Error ? `PLOS: ${plosError.message}` : "PLOS unavailable");
+        setPlosHasMore(false);
+        if (!append) setPlosOffset(0);
+      }
+
+      if (!crossrefWorks.length && !semanticWorks.length && !openAlexWorks.length && !arxivWorks.length && !plosWorks.length && sourceErrors.length === 5) {
         throw new Error("All paper indexes are temporarily unavailable. Please try again shortly.");
       }
       setSourceWarnings(sourceErrors);
-      let foundWorks = mergePaperSources(crossrefWorks, [...semanticWorks, ...openAlexWorks]);
+      let foundWorks = mergePaperSources(crossrefWorks, [...semanticWorks, ...openAlexWorks, ...arxivWorks, ...plosWorks]);
       const dois = foundWorks.map((work) => work.DOI).filter((doi): doi is string => !!doi);
       if (dois.length) {
         try {
@@ -435,6 +545,10 @@ export default function StudentResearchPapers() {
         setSemanticHasMore(false);
         setOpenAlexPage(1);
         setOpenAlexHasMore(false);
+        setArxivOffset(0);
+        setArxivHasMore(false);
+        setPlosOffset(0);
+        setPlosHasMore(false);
       }
     } finally {
       if (requestRef.current === controller) {
@@ -457,6 +571,10 @@ export default function StudentResearchPapers() {
     setSemanticHasMore(false);
     setOpenAlexPage(1);
     setOpenAlexHasMore(false);
+    setArxivOffset(0);
+    setArxivHasMore(false);
+    setPlosOffset(0);
+    setPlosHasMore(false);
     setSourceWarnings([]);
     void fetchWorks(queryText, yearInput, sortMode[0] || "relevance", "*", false);
   };
@@ -471,6 +589,10 @@ export default function StudentResearchPapers() {
     setSemanticHasMore(false);
     setOpenAlexPage(1);
     setOpenAlexHasMore(false);
+    setArxivOffset(0);
+    setArxivHasMore(false);
+    setPlosOffset(0);
+    setPlosHasMore(false);
     setSourceWarnings([]);
     void fetchWorks(activeQuery, activeYear, nextSort[0] || "relevance", "*", false);
   };
@@ -487,7 +609,7 @@ export default function StudentResearchPapers() {
   };
 
   const loadMore = () => {
-    if (!activeQuery || (!nextCursor && !semanticHasMore && !openAlexHasMore)) return;
+    if (!activeQuery || (!nextCursor && !semanticHasMore && !openAlexHasMore && !arxivHasMore && !plosHasMore)) return;
     void fetchWorks(activeQuery, activeYear, sortMode[0] || "relevance", nextCursor || "done", true);
   };
 
