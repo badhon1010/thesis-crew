@@ -20,7 +20,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { auth } from "@/firebase/auth";
 import { db } from "@/firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where, serverTimestamp } from "firebase/firestore";
+import { collection, doc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
 
 interface CrossrefAuthor {
   given?: string;
