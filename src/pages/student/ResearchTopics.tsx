@@ -28,11 +28,33 @@ export default function StudentResearchTopics() {
   const [categoryFilter, setCategoryFilter] = useState("All Categories");
   const [sortBy, setSortBy] = useState("bestMatch");
 
-  const normalizeCategory = (category: string) => {
-    return category.trim().split(/\s+/).map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+  const mapCategories = (rawCategory: string): string[] => {
+    const text = rawCategory.toLowerCase();
+    const matchedCategories: string[] = [];
+    
+    if (/\b(ai|artificial intelligence)\b/.test(text)) matchedCategories.push("Artificial Intelligence (AI)");
+    if (/\b(ml|machine learning)\b/.test(text)) matchedCategories.push("Machine Learning (ML)");
+    if (/\b(cybersecurity|network defence|network defense|cyber security)\b/.test(text)) matchedCategories.push("Cybersecurity & Network Defense");
+    if (/\b(nlp|natural language processing)\b/.test(text)) matchedCategories.push("Natural Language Processing (NLP)");
+    if (/\b(iot|internet of things)\b/.test(text)) matchedCategories.push("Internet of Things (IoT)");
+    if (/\b(hci|human computer interaction|human-computer interaction)\b/.test(text)) matchedCategories.push("Human-Computer Interaction (HCI)");
+    if (/\b(se|software engineering)\b/.test(text)) matchedCategories.push("Software Engineering");
+    if (/\b(data science|data analytics|big data)\b/.test(text)) matchedCategories.push("Data Science");
+    if (/\b(bioinformatics)\b/.test(text)) matchedCategories.push("Bioinformatics");
+    if (/\b(blockchain|web3)\b/.test(text)) matchedCategories.push("Blockchain");
+    if (/\b(computer vision|cv|image processing)\b/.test(text)) matchedCategories.push("Computer Vision");
+    
+    if (matchedCategories.length === 0) {
+      matchedCategories.push(rawCategory.trim().split(/\s+/).map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' '));
+    }
+    
+    return matchedCategories;
   };
 
-  const categories = ["All Categories", ...Array.from(new Set(topics.map(t => normalizeCategory(t.category))))];
+  const categoriesSet = new Set<string>();
+  topics.forEach(t => mapCategories(t.category).forEach(c => categoriesSet.add(c)));
+  const sortedCategories = Array.from(categoriesSet).sort((a, b) => a.localeCompare(b));
+  const categories = ["All Categories", ...sortedCategories];
 
   useEffect(() => {
     if (topics.length > 0 && Object.keys(studentProfile).length > 0) {
@@ -93,7 +115,8 @@ export default function StudentResearchTopics() {
     const matchesSearch = topic.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           topic.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           topic.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = categoryFilter === "All Categories" || normalizeCategory(topic.category) === categoryFilter;
+    const mappedCats = mapCategories(topic.category);
+    const matchesCategory = categoryFilter === "All Categories" || mappedCats.includes(categoryFilter);
     
     return matchesSearch && matchesCategory;
   }).sort((a, b) => {
