@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useRef, useState, useEffect, type FormEvent } from "react";
 import { useLocation } from "react-router-dom";
 import {
   ArrowDownWideNarrow,
@@ -12,8 +12,14 @@ import {
   LoaderCircle,
   ShieldAlert,
   Search,
+  Bookmark,
+  BookmarkCheck,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { auth } from "@/firebase/auth";
+import { db } from "@/firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { collection, doc, setDoc, deleteDoc, onSnapshot, query, where, serverTimestamp } from "firebase/firestore";
 
 interface CrossrefAuthor {
   given?: string;
@@ -352,6 +358,92 @@ export default function StudentResearchPapers() {
   const [freeTextLinks, setFreeTextLinks] = useState<Record<string, { url?: string; loading?: boolean; checked?: boolean }>>({});
   const requestRef = useRef<AbortController | null>(null);
 
+  const [activeTab, setActiveTab] = useState<"search" | "saved">("search");
+  const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [savedPapers, setSavedPapers] = useState<CrossrefWork[]>([]);
+  const [savedPaperIds, setSavedPaperIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setCurrentUser(user.uid);
+      } else {
+        setCurrentUser(null);
+        setSavedPapers([]);
+        setSavedPaperIds(new Set());
+      }
+    });
+    return () => unsubscribeAuth();
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const q = collection(db, `users/${currentUser}/savedPapers`);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const papers: CrossrefWork[] = [];
+      const ids = new Set<string>();
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.paperString) {
+          try {
+            papers.push(JSON.parse(data.paperString) as CrossrefWork);
+            ids.add(doc.id);
+          } catch (e) {
+            console.error("Failed to parse saved paper string", e);
+          }
+        } else if (data.paper) {
+          papers.push(data.paper as CrossrefWork);
+          ids.add(doc.id);
+        }
+      });
+      setSavedPapers(papers.sort((a, b) => {
+        return getWorkDateValue(b) - getWorkDateValue(a);
+      }));
+      setSavedPaperIds(ids);
+    });
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  const getPaperId = (work: CrossrefWork) => {
+    return work.DOI || work.semanticScholarId || work.URL || work.title?.[0] || "unknown";
+  };
+
+  const toggleBookmark = async (work: CrossrefWork) => {
+    if (!currentUser) {
+      alert("User not logged in or auth not initialized.");
+      return;
+    }
+    const paperId = getPaperId(work);
+    const safeId = paperId.replace(/\//g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!safeId) {
+      alert("Invalid paper ID generated.");
+      return;
+    }
+    
+    const docRef = doc(db, `users/${currentUser}/savedPapers`, safeId);
+    
+    if (savedPaperIds.has(safeId)) {
+      try {
+        await deleteDoc(docRef);
+      } catch (err) {
+        console.error("Failed to remove bookmark", err);
+        alert(`Error removing bookmark: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    } else {
+      try {
+        await setDoc(docRef, {
+          userId: currentUser,
+          paperId: safeId,
+          paperString: JSON.stringify(work),
+          savedAt: serverTimestamp()
+        });
+      } catch (err) {
+        console.error("Failed to bookmark", err);
+        alert(`Error saving bookmark: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  };
+
   const fetchWorks = async (queryText: string, year: string, sort: SortMode, cursor: string, append: boolean) => {
     if (!queryText.trim()) return;
     requestRef.current?.abort();
@@ -639,6 +731,8 @@ export default function StudentResearchPapers() {
     return 0;
   });
 
+  const displayWorks = activeTab === "saved" ? savedPapers : sortedWorks;
+
   const findFreeFullText = async (work: CrossrefWork, key: string) => {
     const title = work.title?.[0] || "research paper";
     if (!work.DOI) {
@@ -674,53 +768,72 @@ export default function StudentResearchPapers() {
           </div>
         </section>
 
-        <form onSubmit={(event) => runSearch(event)} className="mb-7 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818] sm:p-4">
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <label className="relative min-w-0 flex-1">
-              <span className="sr-only">Search research papers</span>
-              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-              <input
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                placeholder="Search a topic, paper title, author, or DOI"
-                className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-12 pr-4 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 dark:border-[#333] dark:bg-[#101010] dark:text-white dark:focus:border-indigo-400 dark:focus:bg-[#151515]"
-              />
-            </label>
-            <button type="submit" disabled={!searchInput.trim() || loading} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60">
-              {loading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-              Search papers
-            </button>
-          </div>
-          <div className="mt-3 flex flex-col gap-3 border-t border-slate-100 pt-3 dark:border-[#2A2A2A] sm:flex-row sm:items-center">
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-              <ArrowDownWideNarrow className="h-4 w-4" /> Refine results
-            </div>
-            <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-              <CalendarDays className="h-4 w-4" /> Year
-              <input type="number" min={EARLIEST_YEAR} max={CURRENT_YEAR} value={yearInput} onChange={(event) => setYearInput(event.target.value)} placeholder="Last 10 years" aria-label={`Publication year, ${EARLIEST_YEAR} to ${CURRENT_YEAR}`} className="h-9 w-32 rounded-lg border border-slate-200 bg-white px-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 dark:border-[#333] dark:bg-[#101010] dark:text-slate-200" />
-            </label>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 sm:ml-auto">
-              <span>Sort by</span>
-              <button type="button" title="Ranks by topic relevance, field-and-year-normalized citation impact, recency, and metadata; retraction signals are demoted." onClick={() => { setSortMode([]); if (activeQuery) { setWorks([]); setNextCursor(null); setSemanticOffset(0); setSemanticHasMore(false); setOpenAlexPage(1); setOpenAlexHasMore(false); setSourceWarnings([]); void fetchWorks(activeQuery, activeYear, "relevance", "*", false); } }} aria-pressed={sortMode.length === 0} className={`h-9 rounded-lg border px-3 text-xs font-medium ${sortMode.length === 0 ? "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300" : "border-slate-200 bg-white text-slate-600 dark:border-[#333] dark:bg-[#101010] dark:text-slate-300"}`}>Smart</button>
-              {(["newest", "cited"] as const).map((criterion) => <label key={criterion} className={`inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-xs font-medium transition-colors ${sortMode.includes(criterion) ? "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-[#333] dark:bg-[#101010] dark:text-slate-300 dark:hover:bg-[#181818]"}`}>
-                <div className="relative flex items-center justify-center">
-                  <input type="checkbox" checked={sortMode.includes(criterion)} onChange={() => handleSortChange(criterion)} className="peer sr-only" />
-                  <div className="h-4 w-4 rounded-[4px] border border-slate-300 bg-white transition-colors peer-checked:border-indigo-600 peer-checked:bg-indigo-600 dark:border-slate-600 dark:bg-[#181818] dark:peer-checked:border-indigo-500 dark:peer-checked:bg-indigo-500"></div>
-                  <svg className="pointer-events-none absolute h-3 w-3 stroke-white opacity-0 transition-opacity peer-checked:opacity-100" viewBox="0 0 16 16" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3.5 8 6.5 11 12.5 4"></polyline>
-                  </svg>
+        <div className="mb-6 flex space-x-2 border-b border-slate-200 dark:border-[#2A2A2A]">
+          <button
+            onClick={() => setActiveTab("search")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "search" ? "border-indigo-500 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400" : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"}`}
+          >
+            Search Papers
+          </button>
+          <button
+            onClick={() => setActiveTab("saved")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "saved" ? "border-indigo-500 text-indigo-600 dark:border-indigo-400 dark:text-indigo-400" : "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300"}`}
+          >
+            Saved Papers ({savedPapers.length})
+          </button>
+        </div>
+
+        {activeTab === "search" && (
+          <>
+            <form onSubmit={(event) => runSearch(event)} className="mb-7 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-[#2A2A2A] dark:bg-[#181818] sm:p-4">
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <label className="relative min-w-0 flex-1">
+                  <span className="sr-only">Search research papers</span>
+                  <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={searchInput}
+                    onChange={(event) => setSearchInput(event.target.value)}
+                    placeholder="Search a topic, paper title, author, or DOI"
+                    className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-12 pr-4 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 dark:border-[#333] dark:bg-[#101010] dark:text-white dark:focus:border-indigo-400 dark:focus:bg-[#151515]"
+                  />
+                </label>
+                <button type="submit" disabled={!searchInput.trim() || loading} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60">
+                  {loading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                  Search papers
+                </button>
+              </div>
+              <div className="mt-3 flex flex-col gap-3 border-t border-slate-100 pt-3 dark:border-[#2A2A2A] sm:flex-row sm:items-center">
+                <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                  <ArrowDownWideNarrow className="h-4 w-4" /> Refine results
                 </div>
-                {criterion === "newest" ? "Newest" : "Most cited"}
-                <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${sortMode.includes(criterion) && sortMode.length > 1 ? "bg-indigo-200 text-indigo-800 dark:bg-indigo-400/20 dark:text-indigo-200" : "hidden"}`}>{sortMode.indexOf(criterion) + 1}</span>
-              </label>)}
-            </div>
-          </div>
-        </form>
+                <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                  <CalendarDays className="h-4 w-4" /> Year
+                  <input type="number" min={EARLIEST_YEAR} max={CURRENT_YEAR} value={yearInput} onChange={(event) => setYearInput(event.target.value)} placeholder="Last 10 years" aria-label={`Publication year, ${EARLIEST_YEAR} to ${CURRENT_YEAR}`} className="h-9 w-32 rounded-lg border border-slate-200 bg-white px-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 dark:border-[#333] dark:bg-[#101010] dark:text-slate-200" />
+                </label>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 sm:ml-auto">
+                  <span>Sort by</span>
+                  <button type="button" title="Ranks by topic relevance, field-and-year-normalized citation impact, recency, and metadata; retraction signals are demoted." onClick={() => { setSortMode([]); if (activeQuery) { setWorks([]); setNextCursor(null); setSemanticOffset(0); setSemanticHasMore(false); setOpenAlexPage(1); setOpenAlexHasMore(false); setSourceWarnings([]); void fetchWorks(activeQuery, activeYear, "relevance", "*", false); } }} aria-pressed={sortMode.length === 0} className={`h-9 rounded-lg border px-3 text-xs font-medium ${sortMode.length === 0 ? "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300" : "border-slate-200 bg-white text-slate-600 dark:border-[#333] dark:bg-[#101010] dark:text-slate-300"}`}>Smart</button>
+                  {(["newest", "cited"] as const).map((criterion) => <label key={criterion} className={`inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-xs font-medium transition-colors ${sortMode.includes(criterion) ? "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-[#333] dark:bg-[#101010] dark:text-slate-300 dark:hover:bg-[#181818]"}`}>
+                    <div className="relative flex items-center justify-center">
+                      <input type="checkbox" checked={sortMode.includes(criterion)} onChange={() => handleSortChange(criterion)} className="peer sr-only" />
+                      <div className="h-4 w-4 rounded-[4px] border border-slate-300 bg-white transition-colors peer-checked:border-indigo-600 peer-checked:bg-indigo-600 dark:border-slate-600 dark:bg-[#181818] dark:peer-checked:border-indigo-500 dark:peer-checked:bg-indigo-500"></div>
+                      <svg className="pointer-events-none absolute h-3 w-3 stroke-white opacity-0 transition-opacity peer-checked:opacity-100" viewBox="0 0 16 16" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3.5 8 6.5 11 12.5 4"></polyline>
+                      </svg>
+                    </div>
+                    {criterion === "newest" ? "Newest" : "Most cited"}
+                    <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold ${sortMode.includes(criterion) && sortMode.length > 1 ? "bg-indigo-200 text-indigo-800 dark:bg-indigo-400/20 dark:text-indigo-200" : "hidden"}`}>{sortMode.indexOf(criterion) + 1}</span>
+                  </label>)}
+                </div>
+              </div>
+            </form>
 
-        {error && <div role="alert" className="mb-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">{error}</div>}
-        {sourceWarnings.length > 0 && <div role="status" className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">Some search sources are temporarily unavailable; results may be incomplete. {sourceWarnings.join(" · ")}</div>}
+            {error && <div role="alert" className="mb-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">{error}</div>}
+            {sourceWarnings.length > 0 && <div role="status" className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">Some search sources are temporarily unavailable; results may be incomplete. {sourceWarnings.join(" · ")}</div>}
+          </>
+        )}
 
-        {!activeQuery && (
+        {activeTab === "search" && !activeQuery && (
           <section className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#2A2A2A] dark:bg-[#181818]">
             <div className="flex items-start gap-4">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300"><FileSearch className="h-5 w-5" /></div>
@@ -735,27 +848,31 @@ export default function StudentResearchPapers() {
           </section>
         )}
 
-        {activeQuery && (
+        {(activeTab === "saved" || activeQuery) && (
           <section aria-live="polite">
             <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">Search results</p>
-                <h2 className="mt-1 text-lg font-bold text-slate-900 dark:text-white">{activeQuery}{activeYear ? ` · ${activeYear}` : ""}</h2>
+                <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
+                  {activeTab === "saved" ? "Saved Papers" : "Search results"}
+                </p>
+                <h2 className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
+                  {activeTab === "saved" ? "Your Reading List" : `${activeQuery}${activeYear ? ` · ${activeYear}` : ""}`}
+                </h2>
               </div>
-              {!loading && <p className="text-sm text-slate-500 dark:text-slate-400">{works.length} unique papers loaded</p>}
+              {!loading && <p className="text-sm text-slate-500 dark:text-slate-400">{displayWorks.length} papers</p>}
             </div>
 
-            {loading && works.length === 0 ? (
+            {loading && displayWorks.length === 0 && activeTab === "search" ? (
               <div className="space-y-3">{[0, 1, 2].map((item) => <div key={item} className="h-44 animate-pulse rounded-2xl border border-slate-200 bg-white dark:border-[#2A2A2A] dark:bg-[#181818]" />)}</div>
-            ) : works.length === 0 && !error ? (
+            ) : displayWorks.length === 0 && !error ? (
               <div className="rounded-2xl border border-dashed border-slate-300 p-12 text-center dark:border-[#333]">
                 <FileSearch className="mx-auto h-8 w-8 text-slate-400" />
-                <p className="mt-3 font-semibold text-slate-800 dark:text-white">No papers found</p>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Try a shorter keyword or remove the year filter.</p>
+                <p className="mt-3 font-semibold text-slate-800 dark:text-white">{activeTab === "saved" ? "No saved papers" : "No papers found"}</p>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{activeTab === "saved" ? "Papers you bookmark will appear here." : "Try a shorter keyword or remove the year filter."}</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {sortedWorks.map((work, index) => {
+                {displayWorks.map((work, index) => {
                   const title = work.title?.[0] || "Untitled work";
                   const paperUrl = getPaperUrl(work);
                   const hasPdf = !!work.link?.some((link) => link["content-type"]?.toLowerCase().includes("pdf") && link.URL);
@@ -767,6 +884,11 @@ export default function StudentResearchPapers() {
                   const correctionUpdates = updates.filter((update) => (update.type || "").toLowerCase() === "correction");
                   const knownAuthors = !!work.author?.some((author) => author.name || author.given || author.family);
                   const knownAbstract = !!work.abstract?.trim();
+                  
+                  const paperId = getPaperId(work);
+                  const safeId = paperId.replace(/\//g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+                  const isSaved = currentUser ? savedPaperIds.has(safeId) : false;
+
                   return (
                     <article key={`${work.DOI || title}-${index}`} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-indigo-200 hover:shadow-md dark:border-[#2A2A2A] dark:bg-[#181818] dark:hover:border-indigo-500/30 sm:p-6">
                       <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
@@ -820,14 +942,23 @@ export default function StudentResearchPapers() {
                         {freeTextLinks[copyKey]?.url && <a href={freeTextLinks[copyKey].url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-emerald-200 px-3 text-xs font-semibold text-emerald-800 hover:bg-emerald-50 dark:border-emerald-500/20 dark:text-emerald-300 dark:hover:bg-emerald-500/10">Open free version <ArrowUpRight className="h-3.5 w-3.5" /></a>}
                         {work.DOI && <a href={getDoiUrl(work.DOI)} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#222]">DOI <ArrowUpRight className="h-3.5 w-3.5" /></a>}
                         <button onClick={() => void handleCopyCitation(work)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 dark:border-[#333] dark:text-slate-300 dark:hover:bg-[#222]"><Copy className="h-3.5 w-3.5" />{copiedDoi === copyKey ? "Citation copied" : "Copy citation"}</button>
+                        
+                        <button
+                          type="button"
+                          onClick={() => toggleBookmark(work)}
+                          className={`ml-auto inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition ${isSaved ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:border-indigo-500/30 dark:bg-indigo-500/20 dark:text-indigo-300" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-[#333] dark:bg-[#181818] dark:text-slate-300 dark:hover:bg-[#222]"}`}
+                        >
+                          {isSaved ? <BookmarkCheck className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
+                          {isSaved ? "Saved" : "Save"}
+                        </button>
                       </div>
                     </article>
                   );
                 })}
-                {(nextCursor || semanticHasMore || openAlexHasMore) && <div className="flex justify-center py-4"><button onClick={loadMore} disabled={loadingMore} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 dark:border-[#333] dark:bg-[#181818] dark:text-slate-200 dark:hover:bg-[#222]">{loadingMore && <LoaderCircle className="h-4 w-4 animate-spin" />}Load more papers</button></div>}
+                {activeTab === "search" && (nextCursor || semanticHasMore || openAlexHasMore) && <div className="flex justify-center py-4"><button onClick={loadMore} disabled={loadingMore} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60 dark:border-[#333] dark:bg-[#181818] dark:text-slate-200 dark:hover:bg-[#222]">{loadingMore && <LoaderCircle className="h-4 w-4 animate-spin" />}Load more papers</button></div>}
               </div>
             )}
-            <p className="mt-5 text-center text-[11px] text-slate-400">Search results combine Crossref and OpenAlex, with Semantic Scholar included when reachable; duplicate records are merged by DOI or title and year. Abstract and full-text availability vary by source and publisher.</p>
+            {activeTab === "search" && <p className="mt-5 text-center text-[11px] text-slate-400">Search results combine Crossref and OpenAlex, with Semantic Scholar included when reachable; duplicate records are merged by DOI or title and year. Abstract and full-text availability vary by source and publisher.</p>}
           </section>
         )}
       </div>
