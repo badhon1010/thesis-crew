@@ -218,7 +218,18 @@ export default function StudentDashboard() {
   return <DashboardLayout role="student"><div className="mx-auto max-w-6xl px-2 sm:px-4">
     <div className="mb-12 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
       <div>
-        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-[#3B82F6]"><Clock3 className="h-4 w-4" /><span>{formattedDate}</span><span className="text-slate-300 dark:text-slate-600">•</span><div className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-600 dark:bg-[#3B82F6]" /><span className="tabular-nums">{formattedTime}</span></div></div>
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <div className="inline-flex items-center gap-2 rounded-full border-2 border-indigo-200 bg-indigo-50 px-4 py-1.5 dark:border-indigo-500/30 dark:bg-indigo-500/10">
+            <div className="h-2 w-2 animate-pulse rounded-full bg-indigo-600 dark:bg-indigo-400" />
+            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">STUDENT WORKSPACE</span>
+          </div>
+          <div className="flex items-center gap-2 rounded-full border-2 border-slate-200 bg-slate-50 px-4 py-1.5 dark:border-[#2A2A2A] dark:bg-[#0F0F0F]">
+            <Clock3 className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{formattedDate}</span>
+            <span className="text-slate-400">•</span>
+            <span className="text-xs font-bold tabular-nums text-slate-900 dark:text-white">{formattedTime}</span>
+          </div>
+        </div>
         <h1 className="text-4xl font-semibold tracking-tighter text-slate-900 dark:text-white">{greeting}, {userName}.</h1>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Live research opportunities and profile insights from your workspace.</p>
       </div>

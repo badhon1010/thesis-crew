@@ -1094,7 +1094,7 @@ export default function ResearchGroupManagement() {
         }}
         onSave={handleSavePublication}
         editingPublication={editingPublication}
-        defaultAuthors={teamMembers.map((m) => m.studentName)}
+        defaultAuthors={[...teamMembers.map((m) => m.studentName), topic?.supervisorName].filter((name): name is string => !!name)}
       />
 
       <div className="mx-auto max-w-7xl px-2 sm:px-4">

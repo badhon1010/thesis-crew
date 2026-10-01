@@ -2678,6 +2678,7 @@ export default function StudentGroupDetails() {
         }}
         onSave={handleSavePublication}
         editingPublication={editingPublication as any}
+        defaultAuthors={[...teamMembers.map((m) => m.studentName), topic?.supervisorName].filter((name): name is string => !!name)}
       />
 
       <ConfirmModal
