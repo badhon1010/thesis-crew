@@ -14,6 +14,7 @@ import {
   Search,
   Bookmark,
   BookmarkCheck,
+  X,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { auth } from "@/firebase/auth";
@@ -456,8 +457,9 @@ export default function StudentResearchPapers() {
     }
     setError("");
 
-    const fromYear = year ? Number(year) : EARLIEST_YEAR;
-    const untilYear = year ? Number(year) : CURRENT_YEAR;
+    const CURRENT_YEAR = new Date().getFullYear();
+    const fromYear = year ? (CURRENT_YEAR - Number(year) + 1) : EARLIEST_YEAR;
+    const untilYear = CURRENT_YEAR;
     try {
       const sourceErrors: string[] = [];
       let crossrefWorks: CrossrefWork[] = [];
@@ -731,6 +733,23 @@ export default function StudentResearchPapers() {
     return 0;
   });
 
+  const clearSearch = () => {
+    setSearchInput("");
+    setActiveQuery("");
+    setWorks([]);
+    setSemanticOffset(0);
+    setSemanticHasMore(false);
+    setOpenAlexPage(1);
+    setOpenAlexHasMore(false);
+    setArxivOffset(0);
+    setArxivHasMore(false);
+    setPlosOffset(0);
+    setPlosHasMore(false);
+    setSourceWarnings([]);
+    setNextCursor(null);
+    requestRef.current?.abort();
+  };
+
   const displayWorks = activeTab === "saved" ? savedPapers : sortedWorks;
 
   const findFreeFullText = async (work: CrossrefWork, key: string) => {
@@ -794,21 +813,47 @@ export default function StudentResearchPapers() {
                     value={searchInput}
                     onChange={(event) => setSearchInput(event.target.value)}
                     placeholder="Search a topic, paper title, author, or DOI"
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-12 pr-4 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 dark:border-[#333] dark:bg-[#101010] dark:text-white dark:focus:border-indigo-400 dark:focus:bg-[#151515]"
+                    className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-12 pr-12 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 dark:border-[#333] dark:bg-[#101010] dark:text-white dark:focus:border-indigo-400 dark:focus:bg-[#151515]"
                   />
+                  {searchInput && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchInput("")}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      aria-label="Clear search input"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </label>
                 <button type="submit" disabled={!searchInput.trim() || loading} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60">
                   {loading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                   Search papers
                 </button>
+                {activeQuery && (
+                  <button type="button" onClick={clearSearch} className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-[#333] dark:bg-[#181818] dark:text-slate-200 dark:hover:bg-[#222]">
+                    Clear
+                  </button>
+                )}
               </div>
               <div className="mt-3 flex flex-col gap-3 border-t border-slate-100 pt-3 dark:border-[#2A2A2A] sm:flex-row sm:items-center">
                 <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
                   <ArrowDownWideNarrow className="h-4 w-4" /> Refine results
                 </div>
                 <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                  <CalendarDays className="h-4 w-4" /> Year
-                  <input type="number" min={EARLIEST_YEAR} max={CURRENT_YEAR} value={yearInput} onChange={(event) => setYearInput(event.target.value)} placeholder="Last 10 years" aria-label={`Publication year, ${EARLIEST_YEAR} to ${CURRENT_YEAR}`} className="h-9 w-32 rounded-lg border border-slate-200 bg-white px-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 dark:border-[#333] dark:bg-[#101010] dark:text-slate-200" />
+                  <CalendarDays className="h-4 w-4" /> Published
+                  <select
+                    value={yearInput}
+                    onChange={(event) => setYearInput(event.target.value)}
+                    aria-label="Publication date range"
+                    className="h-9 w-32 rounded-lg border border-slate-200 bg-white px-2.5 text-sm text-slate-800 outline-none focus:border-indigo-500 dark:border-[#333] dark:bg-[#101010] dark:text-slate-200"
+                  >
+                    <option value="">Any time</option>
+                    <option value="1">This year</option>
+                    <option value="2">Last 2 years</option>
+                    <option value="5">Last 5 years</option>
+                    <option value="10">Last 10 years</option>
+                  </select>
                 </label>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 sm:ml-auto">
                   <span>Sort by</span>
@@ -856,7 +901,7 @@ export default function StudentResearchPapers() {
                   {activeTab === "saved" ? "Saved Papers" : "Search results"}
                 </p>
                 <h2 className="mt-1 text-lg font-bold text-slate-900 dark:text-white">
-                  {activeTab === "saved" ? "Your Reading List" : `${activeQuery}${activeYear ? ` · ${activeYear}` : ""}`}
+                  {activeTab === "saved" ? "Your Reading List" : `${activeQuery}${activeYear ? (activeYear === "1" ? " · This year" : ` · Last ${activeYear} years`) : ""}`}
                 </h2>
               </div>
               {!loading && <p className="text-sm text-slate-500 dark:text-slate-400">{displayWorks.length} papers</p>}
