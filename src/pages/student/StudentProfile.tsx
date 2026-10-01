@@ -134,7 +134,7 @@ export default function StudentProfile() {
   };
 
   const handleSkillKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === ',') {
+    if (e.key === 'Enter') {
       e.preventDefault();
       if (skillInput.trim()) {
         addSkills(skillInput);
@@ -143,12 +143,7 @@ export default function StudentProfile() {
   };
 
   const handleSkillChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    if (val.includes(',')) {
-      addSkills(val);
-    } else {
-      setSkillInput(skillInput === "" ? val.trimStart() : val);
-    }
+    setSkillInput(e.target.value);
   };
 
   const handleAddSkill = (e?: React.MouseEvent) => {

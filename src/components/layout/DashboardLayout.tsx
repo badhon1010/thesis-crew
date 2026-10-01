@@ -2,6 +2,8 @@ import { type ReactNode, useState, useEffect } from "react";
 import { auth } from "@/firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getFirestore, onSnapshot } from "firebase/firestore";
+import { rtdb } from "@/firebase/database";
+import { ref, onValue, onDisconnect, set, serverTimestamp } from "firebase/database";
 import { Sidebar } from "./Sidebar";
 import { ThemeToggle } from "../common/ThemeToggle";
 import { Menu } from "lucide-react";
@@ -29,11 +31,27 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
   useEffect(() => {
     const db = getFirestore();
     let unsubscribeDoc: (() => void) | undefined;
+    let unsubscribeConnected: (() => void) | undefined;
+    let currentUserStatusRef: any = null;
     
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (unsubscribeDoc) {
         unsubscribeDoc();
         unsubscribeDoc = undefined;
+      }
+      
+      // If user logs out, set them offline immediately
+      if (!user && currentUserStatusRef) {
+        set(currentUserStatusRef, {
+          state: 'offline',
+          last_changed: serverTimestamp(),
+        });
+        currentUserStatusRef = null;
+      }
+
+      if (unsubscribeConnected) {
+        unsubscribeConnected();
+        unsubscribeConnected = undefined;
       }
       
       if (user) {
@@ -46,6 +64,27 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
             setPhotoURL(docSnap.data().photoURL);
           }
         });
+
+        // Setup RTDB Presence
+        currentUserStatusRef = ref(rtdb, `/status/${user.uid}`);
+        const connectedRef = ref(rtdb, '.info/connected');
+        
+        unsubscribeConnected = onValue(connectedRef, (snap) => {
+          if (snap.val() === false) {
+            return;
+          }
+          
+          onDisconnect(currentUserStatusRef).set({
+            state: 'offline',
+            last_changed: serverTimestamp(),
+          }).then(() => {
+            set(currentUserStatusRef, {
+              state: 'online',
+              last_changed: serverTimestamp(),
+            });
+          });
+        });
+
       } else {
         setPhotoURL(null);
       }
@@ -54,6 +93,13 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
     return () => {
       unsubscribeAuth();
       if (unsubscribeDoc) unsubscribeDoc();
+      if (unsubscribeConnected) unsubscribeConnected();
+      if (currentUserStatusRef) {
+        set(currentUserStatusRef, {
+          state: 'offline',
+          last_changed: serverTimestamp(),
+        });
+      }
     };
   }, []);
 

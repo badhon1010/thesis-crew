@@ -211,7 +211,7 @@ export default function Register() {
             </div>
           )}
 
-          <form onSubmit={handleRegister}>
+          <form onSubmit={handleRegister} autoComplete="off">
             <div className="grid gap-6 sm:grid-cols-2">
               <Field
                 label="Full name *"
@@ -366,6 +366,7 @@ function Field({
           onChange={onChange}
           onKeyDown={onKeyDown}
           required={required}
+          autoComplete={isPassword ? "new-password" : "off"}
           className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
         />
         {isPassword && (

@@ -2,11 +2,13 @@ import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { 
   collection, query, where, onSnapshot, orderBy, 
-  addDoc, serverTimestamp, doc, updateDoc, deleteDoc
+  addDoc, serverTimestamp, doc, updateDoc, deleteDoc, arrayRemove
 } from "firebase/firestore";
 import { db } from "@/firebase/firestore";
 import { auth } from "@/firebase/auth";
+import { rtdb } from "@/firebase/database";
 import { onAuthStateChanged } from "firebase/auth";
+import { ref, onValue } from "firebase/database";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ConfirmModal } from "@/components/common/ConfirmModal";
 import { StudentProfileModal } from "@/components/common/StudentProfileModal";
@@ -31,6 +33,7 @@ interface ChatRoom {
   participantNames: Record<string, string>;
   lastMessage?: string;
   updatedAt?: any;
+  unreadBy?: string[];
 }
 
 const QUICK_STARTERS = [
@@ -57,7 +60,10 @@ export default function StudentMessages() {
   const [editContent, setEditContent] = useState("");
   const [deleteMessageId, setDeleteMessageId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteConversationId, setDeleteConversationId] = useState<string | null>(null);
+  const [isDeletingConversation, setIsDeletingConversation] = useState(false);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [onlineStatuses, setOnlineStatuses] = useState<Record<string, boolean>>({});
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
@@ -112,7 +118,7 @@ export default function StudentMessages() {
       setChatRooms(rooms);
       
       // If we came from a "Message Author" link, find or create that chat room
-      if (targetUserId && targetUserId !== currentUserId) {
+      if (targetUserId && targetUserId !== currentUserId && !activeChatId) {
         const existingRoom = rooms.find(r => r.participants.includes(targetUserId));
         if (existingRoom) {
           setActiveChatId(existingRoom.id);
@@ -128,6 +134,39 @@ export default function StudentMessages() {
 
     return () => unsubscribe();
   }, [currentUserId, targetUserId, activeChatId]);
+
+  // Mark as read when active chat changes
+  useEffect(() => {
+    if (!currentUserId || !activeChatId) return;
+    const currentRoom = chatRooms.find(r => r.id === activeChatId);
+    if (currentRoom && currentRoom.unreadBy?.includes(currentUserId)) {
+      updateDoc(doc(db, "directMessages", activeChatId), {
+        unreadBy: arrayRemove(currentUserId)
+      }).catch(console.error);
+    }
+  }, [activeChatId, chatRooms, currentUserId]);
+
+  // 1.5 Listen for RTDB online status of all peers
+  useEffect(() => {
+    if (!currentUserId || chatRooms.length === 0) return;
+    const peerIds = [...new Set(chatRooms.flatMap(r => r.participants.filter(id => id !== currentUserId)))];
+    if (targetUserId && !peerIds.includes(targetUserId)) {
+      peerIds.push(targetUserId);
+    }
+
+    const unsubscribes = peerIds.map(id => {
+      const statusRef = ref(rtdb, `/status/${id}`);
+      return onValue(statusRef, (snapshot) => {
+        const val = snapshot.val();
+        setOnlineStatuses(prev => ({
+          ...prev,
+          [id]: val?.state === "online"
+        }));
+      });
+    });
+
+    return () => unsubscribes.forEach(unsub => unsub());
+  }, [chatRooms, currentUserId, targetUserId]);
 
   // 2. Fetch Peer Profiles dynamically to ensure we always have their real names and details
   useEffect(() => {
@@ -199,7 +238,8 @@ export default function StudentMessages() {
             [targetId]: targetUserName
           },
           updatedAt: serverTimestamp(),
-          lastMessage: text
+          lastMessage: text,
+          unreadBy: [targetId]
         });
         roomId = newRoomRef.id;
         setActiveChatId(roomId);
@@ -207,9 +247,12 @@ export default function StudentMessages() {
         // Clear the URL param so it doesn't try to recreate
         navigate("/student/messages", { replace: true });
       } else {
+        const activeRoom = chatRooms.find(r => r.id === roomId);
+        const otherParticipants = activeRoom ? activeRoom.participants.filter(id => id !== currentUserId) : [];
         await updateDoc(doc(db, "directMessages", roomId), {
           updatedAt: serverTimestamp(),
-          lastMessage: text
+          lastMessage: text,
+          unreadBy: otherParticipants
         });
       }
 
@@ -304,6 +347,22 @@ export default function StudentMessages() {
     if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
     
     return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+  };
+
+  const handleDeleteConversation = async () => {
+    if (!deleteConversationId) return;
+    setIsDeletingConversation(true);
+    try {
+      await deleteDoc(doc(db, "directMessages", deleteConversationId));
+      setDeleteConversationId(null);
+      if (activeChatId === deleteConversationId) {
+        setActiveChatId(null);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsDeletingConversation(false);
+    }
   };
 
   const activeRoom = chatRooms.find(r => r.id === activeChatId);
@@ -455,7 +514,9 @@ export default function StudentMessages() {
                             photoURL={peerProfiles[targetUserId || ""]?.photoURL}
                             className="h-10 w-10 text-sm shadow-2xs"
                           />
-                          <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-indigo-500 dark:border-[#181818]" />
+                          {onlineStatuses[targetUserId || ""] && (
+                            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500 dark:border-[#181818]" />
+                          )}
                         </div>
                         <div className="overflow-hidden min-w-0 flex-1">
                           <div className="flex items-center justify-between">
@@ -484,7 +545,14 @@ export default function StudentMessages() {
                     return (
                       <button
                         key={room.id}
-                        onClick={() => setActiveChatId(room.id)}
+                        onClick={() => {
+                          setActiveChatId(room.id);
+                          if (targetUserId) {
+                            searchParams.delete("userId");
+                            searchParams.delete("name");
+                            navigate({ search: searchParams.toString() }, { replace: true });
+                          }
+                        }}
                         className={`group relative flex w-full items-center gap-3 p-3.5 text-left transition-all ${
                           isActive 
                             ? "bg-indigo-50/80 dark:bg-indigo-500/10 border-l-4 border-indigo-600 pl-3 shadow-2xs" 
@@ -498,31 +566,40 @@ export default function StudentMessages() {
                             photoURL={peer?.photoURL}
                             className="h-10 w-10 text-sm shadow-2xs"
                           />
-                          <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500 dark:border-[#141414]" />
+                          {peerId && onlineStatuses[peerId] && (
+                            <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500 dark:border-[#141414]" />
+                          )}
                         </div>
 
                         <div className="overflow-hidden min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-1">
                             <h3 className={`truncate text-sm font-semibold ${
-                              isActive ? "text-indigo-700 dark:text-indigo-300" : "text-slate-900 dark:text-white"
+                              isActive ? "text-indigo-700 dark:text-indigo-300" : 
+                              (room.unreadBy?.includes(currentUserId) ? "text-slate-900 dark:text-white font-bold" : "text-slate-900 dark:text-white")
                             }`}>
                               {peerName}
                             </h3>
-                            {room.updatedAt && (
-                              <span className="shrink-0 text-[10px] font-medium text-slate-400 dark:text-slate-500">
-                                {formatSidebarTime(room.updatedAt)}
-                              </span>
-                            )}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {room.unreadBy?.includes(currentUserId) && !isActive && (
+                                <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+                              )}
+                              {room.updatedAt && (
+                                <span className={`text-[10px] font-medium ${room.unreadBy?.includes(currentUserId) && !isActive ? "text-rose-500 font-bold" : "text-slate-400 dark:text-slate-500"}`}>
+                                  {formatSidebarTime(room.updatedAt)}
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           {peer?.department && (
-                            <span className="inline-block truncate text-[11px] font-medium text-indigo-600/80 dark:text-indigo-400/80">
+                            <span className={`inline-block truncate text-[11px] font-medium ${room.unreadBy?.includes(currentUserId) && !isActive ? "text-rose-500/80" : "text-indigo-600/80 dark:text-indigo-400/80"}`}>
                               {peer.department}
                             </span>
                           )}
 
                           <p className={`truncate text-xs mt-0.5 ${
-                            isActive ? "text-slate-600 dark:text-slate-300 font-medium" : "text-slate-500 dark:text-slate-400"
+                            isActive ? "text-slate-600 dark:text-slate-300 font-medium" : 
+                            (room.unreadBy?.includes(currentUserId) ? "text-slate-900 dark:text-white font-semibold" : "text-slate-500 dark:text-slate-400")
                           }`}>
                             {room.lastMessage || "No messages yet"}
                           </p>
@@ -564,7 +641,9 @@ export default function StudentMessages() {
                         photoURL={activePeer?.photoURL}
                         className="h-10 w-10 text-sm shadow-2xs hover:opacity-90 transition"
                       />
-                      <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500 dark:border-[#181818]" />
+                      {activePeerId && onlineStatuses[activePeerId] && (
+                        <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500 dark:border-[#181818]" />
+                      )}
                     </div>
 
                     <div className="min-w-0">
@@ -595,6 +674,13 @@ export default function StudentMessages() {
                       >
                         <User className="h-3.5 w-3.5 text-indigo-500" />
                         <span className="hidden sm:inline">View Profile</span>
+                      </button>
+                      <button
+                        onClick={() => activeChatId && setDeleteConversationId(activeChatId)}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 hover:border-rose-300 transition dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-400 dark:hover:bg-rose-500/20 shadow-2xs"
+                        title="Delete conversation"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   )}
@@ -771,6 +857,17 @@ export default function StudentMessages() {
         description="Are you sure you want to delete this message? This action cannot be undone."
         confirmText="Yes, delete it"
         isLoading={isDeleting}
+      />
+
+      {/* Conversation Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!deleteConversationId}
+        onClose={() => setDeleteConversationId(null)}
+        onConfirm={handleDeleteConversation}
+        title="Delete Conversation"
+        description="Are you sure you want to delete this conversation? This will permanently remove the chat history for both participants."
+        confirmText="Delete Conversation"
+        isLoading={isDeletingConversation}
       />
 
       {/* Student Profile Modal */}

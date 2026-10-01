@@ -126,6 +126,24 @@
   padding: 0.875rem;
 }
 
+.dashboard-sidebar-badge {
+  position: absolute;
+  top: 50%;
+  right: 1rem;
+  transform: translateY(-50%);
+  transition:
+    right var(--sidebar-motion-duration) var(--sidebar-motion-easing),
+    top var(--sidebar-motion-duration) var(--sidebar-motion-easing),
+    transform var(--sidebar-motion-duration) var(--sidebar-motion-easing);
+  z-index: 10;
+}
+
+.dashboard-sidebar[data-sidebar-collapsed="true"] .dashboard-sidebar-badge {
+  top: 0.35rem;
+  right: 0.35rem;
+  transform: none;
+}
+
 .dashboard-sidebar-link.shadow-sm {
   box-shadow: 0 0 8px 0 rgb(15 23 42 / 0.12) !important;
 }

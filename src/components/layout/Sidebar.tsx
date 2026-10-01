@@ -20,6 +20,9 @@ import {
 } from "lucide-react";
 import { auth } from "../../firebase/auth";
 import { signOut } from "firebase/auth";
+import { db } from "../../firebase/firestore";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { useEffect } from "react";
 
 interface SidebarProps {
   role: "student" | "teacher" | "admin";
@@ -67,6 +70,19 @@ export function Sidebar({ role, isOpen, onClose, isCollapsed, onToggleCollapse }
   const navigate = useNavigate();
   const [labelPhase, setLabelPhase] = useState<SidebarLabelPhase>(isCollapsed ? "closed" : "open");
   const previousCollapsed = useRef(isCollapsed);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    const q = query(
+      collection(db, "directMessages"),
+      where("unreadBy", "array-contains", auth.currentUser.uid)
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setUnreadMessageCount(snapshot.docs.length);
+    });
+    return () => unsubscribe();
+  }, [auth.currentUser?.uid]);
 
   useLayoutEffect(() => {
     if (previousCollapsed.current === isCollapsed) {
@@ -181,7 +197,7 @@ export function Sidebar({ role, isOpen, onClose, isCollapsed, onToggleCollapse }
                 to={link.path}
                 onClick={onClose}
                 title={isCollapsed ? link.name : undefined}
-                className={`dashboard-sidebar-link group flex items-center rounded-xl text-sm font-semibold transition-colors duration-200 ${
+                className={`dashboard-sidebar-link relative group flex items-center rounded-xl text-sm font-semibold transition-colors duration-200 ${
                   isActive
                     ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300 shadow-[0_0_8px_rgba(0,0,0,0.15)] dark:shadow-[0_0_8px_rgba(0,0,0,0.35)]"
                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/40 dark:hover:text-white"
@@ -194,7 +210,14 @@ export function Sidebar({ role, isOpen, onClose, isCollapsed, onToggleCollapse }
                       : "text-slate-400 group-hover:text-slate-600 dark:text-slate-500 dark:group-hover:text-slate-300"
                   }`}
                 />
-                <SidebarLabel text={link.name} isCollapsed={isCollapsed} />
+                <div className="flex-1 flex items-center justify-between min-w-0">
+                  <SidebarLabel text={link.name} isCollapsed={isCollapsed} />
+                  {link.name === "Messages" && unreadMessageCount > 0 && (
+                    <span className="dashboard-sidebar-badge flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white shadow-sm ring-2 ring-transparent dark:ring-transparent transition-[ring] duration-300">
+                      {unreadMessageCount > 99 ? "99+" : unreadMessageCount}
+                    </span>
+                  )}
+                </div>
               </Link>
             );
           })}
