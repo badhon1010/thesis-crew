@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Check, ChevronDown, FlaskConical } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, FlaskConical, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ThemeToggle } from "../../components/common/ThemeToggle";
@@ -6,7 +6,7 @@ import { ToastAlert } from "../../components/common/ToastAlert";
 import { validateUiuEmail } from "../../utils/emailValidation";
 import { auth } from "../../firebase/auth";
 import { db } from "../../firebase/firestore";
-import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
+import { createUserWithEmailAndPassword, signOut, sendEmailVerification } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { DEPARTMENTS } from "../../constants/departments";
 
@@ -55,6 +55,15 @@ export default function Register() {
       return;
     }
 
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters long.");
+      return;
+    }
+    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
+      setError("Password must contain at least one uppercase letter, one lowercase letter, and one number.");
+      return;
+    }
+
     const emailCheck = validateUiuEmail(email, role);
     if (!emailCheck.isValid) {
       setError(emailCheck.message || "Invalid university email format.");
@@ -89,10 +98,11 @@ export default function Register() {
       }
 
       await setDoc(doc(db, "users", user.uid), userData);
+      await sendEmailVerification(user);
       await signOut(auth);
 
       // Trigger 3-second success toast notification
-      setToastMessage("Account registered successfully! Redirecting...");
+      setToastMessage("Account registered successfully! Please check your university email to verify your account.");
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Failed to create account. Please try again.");
@@ -221,26 +231,29 @@ export default function Register() {
               />
 
               <SelectField
-                label="Department"
+                label="Department *"
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
                 options={DEPARTMENTS}
                 placeholder="Select Department"
+                required
               />
 
               {role === "student" ? (
                 <Field
-                  label="University ID"
+                  label="University ID *"
                   placeholder="Enter your ID"
                   value={universityId}
                   onChange={(e) => setUniversityId(e.target.value)}
+                  required
                 />
               ) : (
                 <Field
-                  label="Designation"
+                  label="Designation *"
                   placeholder="Assistant Professor"
                   value={designation}
                   onChange={(e) => setDesignation(e.target.value)}
+                  required
                 />
               )}
 
@@ -336,21 +349,35 @@ function Field({
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   required?: boolean;
 }) {
+  const [show, setShow] = useState(false);
+  const isPassword = type === "password";
+
   return (
     <div>
       <label className="mb-2 block text-sm font-semibold text-slate-800 dark:text-slate-200">
         {label}
       </label>
 
-      <input
-        type={type}
-        placeholder={placeholder}
-        value={value}
-        onChange={onChange}
-        onKeyDown={onKeyDown}
-        required={required}
-        className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
-      />
+      <div className="relative">
+        <input
+          type={isPassword && show ? "text" : type}
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+          onKeyDown={onKeyDown}
+          required={required}
+          className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-white dark:placeholder:text-slate-500"
+        />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setShow(!show)}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+          >
+            {show ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
