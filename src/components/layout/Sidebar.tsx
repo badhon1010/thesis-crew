@@ -213,7 +213,7 @@ export function Sidebar({ role, isOpen, onClose, isCollapsed, onToggleCollapse }
                 <div className="flex-1 flex items-center justify-between min-w-0">
                   <SidebarLabel text={link.name} isCollapsed={isCollapsed} />
                   {link.name === "Messages" && unreadMessageCount > 0 && (
-                    <span className="dashboard-sidebar-badge flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white shadow-sm ring-2 ring-transparent dark:ring-transparent transition-[ring] duration-300">
+                    <span className="dashboard-sidebar-badge flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white shadow-sm ring-2 ring-transparent dark:ring-transparent">
                       {unreadMessageCount > 99 ? "99+" : unreadMessageCount}
                     </span>
                   )}

@@ -129,10 +129,10 @@
 .dashboard-sidebar-badge {
   position: absolute;
   top: 50%;
-  right: 1rem;
+  left: 8.5rem;
   transform: translateY(-50%);
   transition:
-    right var(--sidebar-motion-duration) var(--sidebar-motion-easing),
+    left var(--sidebar-motion-duration) var(--sidebar-motion-easing),
     top var(--sidebar-motion-duration) var(--sidebar-motion-easing),
     transform var(--sidebar-motion-duration) var(--sidebar-motion-easing);
   z-index: 10;
@@ -140,7 +140,7 @@
 
 .dashboard-sidebar[data-sidebar-collapsed="true"] .dashboard-sidebar-badge {
   top: 0.35rem;
-  right: 0.35rem;
+  left: 2.25rem;
   transform: none;
 }
 
