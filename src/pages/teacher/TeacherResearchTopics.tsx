@@ -16,6 +16,35 @@ export default function TeacherResearchTopics() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "closed">("all");
+  const [categoryFilter, setCategoryFilter] = useState("All Categories");
+
+  const mapCategories = (rawCategory: string): string[] => {
+    const text = rawCategory.toLowerCase();
+    const matchedCategories: string[] = [];
+    
+    if (/\b(ai|artificial intelligence)\b/.test(text)) matchedCategories.push("Artificial Intelligence (AI)");
+    if (/\b(ml|machine learning)\b/.test(text)) matchedCategories.push("Machine Learning (ML)");
+    if (/\b(cybersecurity|network defence|network defense|cyber security)\b/.test(text)) matchedCategories.push("Cybersecurity & Network Defense");
+    if (/\b(nlp|natural language processing)\b/.test(text)) matchedCategories.push("Natural Language Processing (NLP)");
+    if (/\b(iot|internet of things)\b/.test(text)) matchedCategories.push("Internet of Things (IoT)");
+    if (/\b(hci|human computer interaction|human-computer interaction)\b/.test(text)) matchedCategories.push("Human-Computer Interaction (HCI)");
+    if (/\b(se|software engineering)\b/.test(text)) matchedCategories.push("Software Engineering");
+    if (/\b(data science|data analytics|big data)\b/.test(text)) matchedCategories.push("Data Science");
+    if (/\b(bioinformatics)\b/.test(text)) matchedCategories.push("Bioinformatics");
+    if (/\b(blockchain|web3)\b/.test(text)) matchedCategories.push("Blockchain");
+    if (/\b(computer vision|cv|image processing)\b/.test(text)) matchedCategories.push("Computer Vision");
+    
+    if (matchedCategories.length === 0) {
+      matchedCategories.push(rawCategory.trim().split(/\s+/).map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' '));
+    }
+    
+    return matchedCategories;
+  };
+
+  const categoriesSet = new Set<string>();
+  topics.forEach(t => mapCategories(t.category).forEach(c => categoriesSet.add(c)));
+  const sortedCategories = Array.from(categoriesSet).sort((a, b) => a.localeCompare(b));
+  const categories = ["All Categories", ...sortedCategories];
   const [deleteTopicId, setDeleteTopicId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -105,7 +134,10 @@ export default function TeacherResearchTopics() {
         matchesStatus = closed;
       }
 
-      return matchesSearch && matchesStatus;
+      const mappedCats = mapCategories(t.category);
+      const matchesCategory = categoryFilter === "All Categories" || mappedCats.includes(categoryFilter);
+
+      return matchesSearch && matchesStatus && matchesCategory;
     })
     .sort((a, b) => {
       const now = new Date();
@@ -187,6 +219,15 @@ export default function TeacherResearchTopics() {
 
           <div className="relative flex items-center gap-2">
             <Filter className="hidden h-4 w-4 text-slate-400 sm:block" />
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none dark:border-[#2A2A2A] dark:bg-[#181818] dark:text-slate-300 sm:w-auto"
+            >
+              {categories.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
